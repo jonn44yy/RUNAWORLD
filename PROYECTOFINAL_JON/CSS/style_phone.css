@@ -1,0 +1,246 @@
+/* 
+   style_phone.css — runaworld mobile
+   todo lo que hace que el juego no sea un desastre en movil.
+   oculta el layout de escritorio y sustituye las sidebars por
+   drawers deslizantes, una topbar fija y una barra de stats abajo.
+
+   indice por orden de aparicion:
+     1. reset de escritorio (ocultar elementos solo-movil en desktop)
+     2. ocultacion del layout de escritorio en movil
+     3. reposicionamiento del centro y las secciones
+     4. topbar fija superior con titulo y usuario
+     5. barra de stats fija inferior
+     6. botones flotantes de abrir drawers
+     7. overlay de fondo al abrir un drawer
+     8. drawer de navegacion (izquierda)
+     9. drawer de runas (derecha)
+     10. ajustes de boost-notif en movil
+   odio el css de movil pero alguien tenia que hacerlo XD
+*/
+
+/* ---- RESET EN ESCRITORIO ---- */
+
+/* oculta todos los elementos exclusivos de movil en pantallas grandes. !hi al responsive */
+@media (min-width: 769px) {
+    #mobile-topbar,
+    #mobile-nav-drawer,
+    #mobile-runas-drawer,
+    #mobile-overlay,
+    #mobile-stats-bar,
+    #btn-menu-nav,
+    #btn-menu-runas { display: none !important; }
+}
+
+
+/* ---- SOLO MOVIL ---- */
+
+@media (max-width: 768px) {
+
+    /* evita el scroll doble en movil y el efecto rebote de ios. mecachis con safari */
+    body { overflow: hidden; overscroll-behavior: none; }
+
+    /* oculta el header y las sidebars de escritorio en movil */
+    #header          { display: none !important; }
+    #sidebar         { display: none !important; }
+    #panel-col-stats { display: none !important; }
+    #boosts-activos  { display: none !important; }
+    #panel-mis-runas { display: none; }
+
+    /* el layout ocupa el ancho completo de la pantalla */
+    #layout { width: 100vw !important; min-width: 0 !important; display: block !important; }
+
+    /* el centro queda fijo entre la topbar y la stats bar, con scroll interno */
+    #centro {
+        position: fixed !important;
+        top: 52px !important; left: 0 !important;
+        right: 0 !important; bottom: 70px !important;
+        width: 100vw !important; min-width: 0 !important;
+        height: auto !important;
+        overflow-y: auto !important; overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+        padding: 0 !important;
+        display: block !important;
+    }
+
+    /* todas las secciones ocupan el ancho completo con padding reducido */
+    .seccion { width: 100% !important; max-width: 100% !important; padding: 12px 14px !important; }
+
+    /* sistema de tabs igual que en escritorio: solo la activa se muestra */
+    .seccion               { display: none !important; }
+    .seccion.activa        { display: block !important; }
+
+    /* la seccion de tirada se centra verticalmente en toda la pantalla disponible */
+    #seccion-tirada.activa {
+        display: flex !important; flex-direction: column !important;
+        align-items: center !important; justify-content: center !important;
+        min-height: calc(100dvh - 122px) !important; padding: 16px !important;
+    }
+
+    /* la zona del boton de tirar, centrada y con ancho maximo para no quedar gigante */
+    #zona-tirada {
+        display: flex !important; flex-direction: column !important;
+        align-items: center !important; width: 100% !important;
+        max-width: 360px !important; gap: 18px !important;
+    }
+
+    /* ajustes de texto y tamano del boton de tirar y el de desbloquear en movil */
+    .tirada-coste { font-size: 0.7rem; letter-spacing: 3px; text-align: center; }
+    #btn-tirar { font-size: 1.15rem !important; padding: 20px 0 !important; width: 100% !important; letter-spacing: 6px !important; }
+    #btn-desbloquear { font-size: 0.62rem !important; padding: 10px 14px !important; width: 100% !important; }
+
+    /* la grid de mejoras de la tienda pasa a una sola columna en movil */
+    .mejoras-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+
+    /* la seccion de coleccion ocupa toda la pantalla disponible entre topbar y stats bar */
+    #seccion-coleccion, .seccion-coleccion-full {
+        min-height: calc(100dvh - 122px) !important;
+        height: calc(100dvh - 122px) !important;
+        padding: 4px !important; overflow: hidden !important;
+    }
+
+
+    /* ---- TOPBAR SUPERIOR ---- */
+
+    /* barra superior fija con fondo oscuro semitransparente y blur */
+    #mobile-topbar {
+        position: fixed; top: 0; left: 0; right: 0; height: 52px;
+        background: rgba(6,7,10,0.97); border-bottom: 1px solid rgba(255,215,0,0.12);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 16px; z-index: 8000;
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* nombre del juego en la topbar en dorado y espaciado */
+    .topbar-title { font-family: 'Oswald', sans-serif; font-size: 0.95rem; letter-spacing: 5px; color: #ffd700; text-transform: uppercase; }
+
+    /* nombre del usuario en la topbar, en gris con el nombre en dorado */
+    .topbar-user { font-family: 'Oswald', sans-serif; font-size: 0.62rem; letter-spacing: 2px; color: rgba(180,180,200,0.65); text-transform: uppercase; }
+    .topbar-user strong { color: #ffd700; }
+
+
+    /* ---- BARRA DE STATS INFERIOR ---- */
+
+    /* barra inferior fija con las estadisticas del jugador (coins, points, suerte) */
+    #mobile-stats-bar {
+        position: fixed; bottom: 0; left: 0; right: 0; height: 70px;
+        background: rgba(6,7,10,0.97); border-top: 1px solid rgba(255,215,0,0.1);
+        display: flex; align-items: center; justify-content: space-around;
+        padding: 0 8px; z-index: 8000;
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* contenedor de cada estadistica en la barra inferior, centrado en columna */
+    .mob-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+
+    /* valor de la estadistica en dorado, con overflow ellipsis para numeros grandes */
+    .mob-val { font-family: 'Oswald', sans-serif; font-size: 0.82rem; color: #ffd700; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
+
+    /* variante de valor en plata para estadisticas que no son coins */
+    .mob-val.silver { color: #dde4f0; }
+
+    /* tasa de produccion por segundo bajo el valor, en gris muy tenue */
+    .mob-rate { font-family: 'Oswald', sans-serif; font-size: 0.5rem; color: rgba(180,180,200,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
+
+    /* separador vertical entre estadisticas en la barra inferior */
+    .mob-sep { width: 1px; height: 30px; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+
+
+    /* ---- BOTONES FLOTANTES DE DRAWERS ---- */
+
+    /* botones redondos flotantes sobre la stats bar para abrir los drawers */
+    #btn-menu-nav, #btn-menu-runas {
+        position: fixed; bottom: 80px; width: 44px; height: 44px; border-radius: 50%;
+        background: rgba(6,7,10,0.95); cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 8100; -webkit-tap-highlight-color: transparent; transition: transform 0.12s;
+    }
+
+    /* boton de navegacion a la izquierda con borde dorado */
+    #btn-menu-nav { left: 14px; border: 1px solid rgba(255,215,0,0.3); box-shadow: 0 0 12px rgba(255,215,0,0.1); }
+
+    /* boton de runas a la derecha con borde purpura */
+    #btn-menu-runas { right: 14px; border: 1px solid rgba(160,80,255,0.35); box-shadow: 0 0 12px rgba(160,80,255,0.12); }
+
+    /* ambos botones se encogen al pulsarlos para dar feedback tactil */
+    #btn-menu-nav:active, #btn-menu-runas:active { transform: scale(0.9); }
+
+    /* icono svg dentro de los botones flotantes */
+    #btn-menu-nav svg, #btn-menu-runas svg { width: 20px; height: 20px; }
+
+
+    /* ---- OVERLAY ---- */
+
+    /* fondo oscuro semitransparente que aparece detras de cualquier drawer abierto */
+    #mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 8900; display: none; touch-action: none; }
+
+    /* clase que activa la visibilidad del overlay */
+    #mobile-overlay.visible { display: block; }
+
+
+    /* ---- DRAWER DE NAVEGACIÓN (izquierda) ---- */
+
+    /* drawer de navegacion que entra desde la izquierda al pulsarlo */
+    #mobile-nav-drawer {
+        position: fixed; top: 0; left: -270px; bottom: 0; width: 255px;
+        background: rgba(6,7,10,0.99); border-right: 1px solid rgba(255,215,0,0.1);
+        z-index: 9100; transition: left 0.26s cubic-bezier(0.4,0,0.2,1);
+        display: flex; flex-direction: column; padding-top: 16px;
+    }
+
+    /* estado abierto del drawer de navegacion: visible en pantalla */
+    #mobile-nav-drawer.open { left: 0; }
+
+    /* titulo de seccion dentro de un drawer */
+    .drawer-titulo { font-family: 'Oswald', sans-serif; font-size: 0.58rem; letter-spacing: 4px; color: rgba(255,215,0,0.3); text-transform: uppercase; padding: 0 18px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 4px; }
+
+    /* boton de navegacion dentro del drawer izquierdo, igual que el nav-btn de escritorio */
+    .mob-nav { display: flex; align-items: center; gap: 12px; padding: 15px 18px; background: none; border: none; border-left: 2px solid transparent; color: rgba(180,180,200,0.6); font-family: 'Oswald', sans-serif; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; text-align: left; width: 100%; transition: color 0.15s, background 0.15s, border-color 0.15s; -webkit-tap-highlight-color: transparent; }
+
+    /* estado activo del boton de navegacion movil: dorado con acento izquierdo */
+    .mob-nav.active, .mob-nav:active { color: #ffd700; background: rgba(255,215,0,0.04); border-left-color: #ffd700; }
+
+    /* variante peligrosa del boton de navegacion movil (ej: borrar progreso) */
+    .mob-nav.danger { color: rgba(255,80,80,0.6); }
+    .mob-nav.danger:active { color: #ff5555; border-left-color: #ff5555; }
+
+    /* espaciador flexible que empuja el boton de peligro al fondo del drawer */
+    .mob-spacer { flex: 1; }
+
+    /* separador horizontal dentro del drawer */
+    .mob-line { height: 1px; background: rgba(255,255,255,0.05); margin: 4px 18px; }
+
+
+    /* ---- DRAWER DE RUNAS (derecha) ---- */
+
+    /* drawer de runas que entra desde la derecha al pulsarlo */
+    #mobile-runas-drawer {
+        position: fixed; top: 0; right: -290px; bottom: 0; width: 275px;
+        background: rgba(6,7,10,0.99); border-left: 1px solid rgba(160,80,255,0.12);
+        z-index: 9100; transition: right 0.26s cubic-bezier(0.4,0,0.2,1);
+        display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* estado abierto del drawer de runas: visible en pantalla */
+    #mobile-runas-drawer.open { right: 0; }
+
+    /* titulo del drawer de runas en purpura tenue */
+    #mobile-runas-drawer .drawer-titulo { color: rgba(160,80,255,0.5); padding: 16px 16px 12px; border-bottom: 1px solid rgba(160,80,255,0.07); }
+
+    /* zona scrolleable del drawer de runas */
+    #mobile-runas-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+    /* el panel de runas dentro del drawer se muestra como bloque normal */
+    #panel-mis-runas-mobile { display: block !important; height: auto !important; }
+
+
+    /* ---- BOOST NOTIF EN MOVIL ---- */
+
+    /* en movil la notificacion de boost pierde el posicionamiento fijo y fluye en el DOM */
+    .boost-notif {
+        position: relative !important; bottom: auto !important; left: auto !important;
+        right: auto !important; top: auto !important; transform: none !important;
+        margin: 4px 8px !important;
+    }
+
+}

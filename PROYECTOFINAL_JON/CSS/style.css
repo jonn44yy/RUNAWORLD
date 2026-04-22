@@ -1,0 +1,2287 @@
+@import url('https:/*fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+/*
+    style.css — runaworld
+    todo lo visual del juego: layout, sidebar, runas, coleccion, tienda, ajustes, animaciones.
+    si algo parpadea, brilla o se mueve, probablemente esta aqui.
+
+indice por orden de aparicion:
+    1. variables globales (colores, fuentes, medidas)
+    2. reset y base del body
+    3. header y layout central
+    4. sidebar izquierdo (stats + nav)
+    5. seccion central y titulos de seccion
+    6. boton tirar runa + particulas
+    7. resultado de tirada y colores por rareza
+    8. neon overlay y particulas de evento
+    9. explosion mitica
+    10. panel derecho (coleccion de runas)
+    11. tienda (mejoras)
+    12. ajustes, modal de borrar y formulario de contacto
+    13. responsive
+    14. animacion de intro
+    15. boosts activos y runa flotante
+    16. coleccion completa (lista, canvas, stats)
+    17. panel runas expandible con probabilidades
+
+lenguaje interno para los poco entendidos (va por vosotros profesores):
+    --bg / --bg2         = fondos oscuros del layout
+    rareza-*             = clases que colorean el resultado segun lo que salio
+    neon-overlay         = el marco de pantalla que aparece en tiradas especiales
+    mitica-overlay       = la explosion de pantalla completa para la mitica
+    boost-card           = las pastillitas de estado que flotan a la izquierda
+    runa-flotante        = la runita clickable que aparece volando por la pantalla
+    col-runa-btn         = cada boton de la lista de la coleccion
+    ajuste-input-grupo   = cada bloque de configuracion en ajustes
+
+    empece style.css cuando me di cuenta que tener los estilos en el html
+    era una idea horrible. gg al que aguante leyendo todo esto
+*/
+
+
+/* ---- VARIABLES GLOBALES ---- */
+
+/* define todos los colores, fuentes y medidas del layout como variables CSS */
+:root {
+    --bg:           #08090d;
+    --bg2:          #0e1018;
+    --panel:        rgba(14, 16, 24, 0.95);
+    --border:       rgba(255, 200, 50, 0.25);
+    --gold:         #ffd700;
+    --gold-dim:     #d4a800;
+    --gold-glow:    rgba(255, 215, 0, 0.5);
+    --silver:       #dde4f0;
+    --silver-dim:   #8a96aa;
+    --red:          #ff3344;
+    --divine:       #FFFACD;
+    --divine-glow:  rgba(255,250,180,0.9);
+    --red-glow:     rgba(255, 51, 68, 0.5);
+
+    /* colores de rareza, de menos a mas rara. mecachis como escala */
+    --comun:        #c8d4e8;
+    --poco-comun:   #44ff44;
+    --rara:         #33aaff;
+    --epica:        #dd55ff;
+    --legendaria:   #ffaa00;
+    --mitica:       #ff2244;
+
+    --font-title:   'Oswald', sans-serif;
+    --font-body:    'Crimson Pro', serif;
+
+    --sidebar-w:    240px;
+    --right-w:      300px;
+    --header-h:     130px;
+}
+
+/* reset universal de margenes, paddings y box-sizing. odio esto pero hay que hacerlo */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+/* fondo oscuro con dos gradientes radiales sutiles (dorado arriba, violeta abajo izquierda) */
+body {
+    background-color: var(--bg);
+    background-image:
+        radial-gradient(ellipse 80% 50% at 50% -5%, rgba(255,200,0,0.08) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 40% at 10% 85%, rgba(100,50,200,0.08) 0%, transparent 60%);
+    color: var(--silver);
+    font-family: var(--font-body);
+    font-size: 1.15rem;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ---- HEADER ---- */
+
+/* contenedor del header, centrado y con margen para no solapar con las sidebars */
+#header {
+    text-align: center;
+    padding: 30px 20px 14px;
+    margin-left: var(--sidebar-w);
+    margin-right: var(--right-w);
+}
+
+/* titulo principal del juego en dorado con glow */
+#header h1 {
+    font-family: var(--font-title);
+    font-size: clamp(2.8rem, 7vw, 5rem);
+    font-weight: 700;
+    letter-spacing: 12px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-shadow: 0 0 25px var(--gold-glow), 0 0 70px rgba(255,215,0,0.2);
+    line-height: 1;
+}
+
+/* texto de bienvenida en cursiva bajo el titulo */
+#header .bienvenido {
+    font-family: var(--font-body);
+    font-weight: 300;
+    font-style: italic;
+    color: var(--silver-dim);
+    font-size: 1.1rem;
+    margin-top: 8px;
+    letter-spacing: 2px;
+}
+
+/* nombre del usuario en el saludo, sin cursiva y un poco mas brillante */
+#header .bienvenido strong {
+    color: var(--silver);
+    font-style: normal;
+    font-weight: 400;
+}
+
+/* linea decorativa dorada debajo del header, desvanecida en los extremos */
+#header::after {
+    content: '';
+    display: block;
+    width: 240px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 16px auto 0;
+    opacity: 0.6;
+}
+
+/* ---- LAYOUT ---- */
+
+/* contenedor central con margenes para dejar espacio a ambas sidebars fijas */
+#layout {
+    display: block;
+    margin-left: var(--sidebar-w);
+    margin-right: var(--right-w);
+}
+
+/* ---- SIDEBAR IZQUIERDO ---- */
+
+/* sidebar izquierda fija con fondo de cristal esmerilado, ocupa toda la altura */
+#sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    padding: 22px 18px;
+    gap: 6px;
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    z-index: 100;
+    overflow-y: auto;
+}
+
+/*  bloque de una estadistica (icono + valor + tasa), con borde al hacer hover */
+.stat-block {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid transparent;
+    transition: border-color 0.3s;
+    margin-bottom: 6px;
+}
+
+/* borde visible al pasar el raton por un stat-block */
+.stat-block:hover { border-color: var(--border); }
+
+/* icono cuadrado de la estadistica */
+.stat-icon { width: 40px; height: 40px; flex-shrink: 0; }
+
+/* contenedor de texto dentro del stat-block */
+.stat-info { display: flex; flex-direction: column; }
+
+/* numero grande del valor de la estadistica */
+.stat-value {
+    font-family: var(--font-title);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* variantes de color para el valor de la estadistica (coins o points) */
+.stat-value.gold   { color: var(--gold);   text-shadow: 0 0 12px var(--gold-glow); }
+.stat-value.silver { color: var(--silver); text-shadow: 0 0 6px rgba(200,220,255,0.3); }
+
+/* texto pequeño con la tasa de produccion por segundo */
+.stat-rate {
+    font-size: 0.82rem;
+    color: var(--silver-dim);
+    letter-spacing: 0.5px;
+    margin-top: 3px;
+}
+
+/* linea separadora degradada dentro del sidebar */
+.sidebar-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 10px 0;
+}
+
+/* contenedor del menu de navegacion, crece para ocupar el espacio sobrante */
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+/* boton de navegacion del sidebar, transparente por defecto */
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--silver-dim);
+    font-family: var(--font-title);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+/* estado hover y activo del boton de navegacion, con acento dorado a la izquierda */
+.nav-btn:hover,
+.nav-btn.active {
+    background: rgba(255,215,0,0.1);
+    color: var(--gold);
+    border-left: 2px solid var(--gold);
+    padding-left: 14px;
+}
+
+/* variante peligrosa del boton de navegacion (ej: borrar progreso) */
+.nav-btn.danger { color: #ff6677; margin-top: auto; }
+
+/* estado hover del boton de peligro, con acento rojo */
+.nav-btn.danger:hover {
+    background: rgba(255,51,68,0.12);
+    color: var(--red);
+    border-left: 2px solid var(--red);
+}
+
+/* icono inline dentro de cada boton de navegacion */
+.nav-icon { font-size: 1.1rem; width: 20px; text-align: center; }
+
+/* ---- CENTRO ---- */
+
+/* contenedor principal del contenido central, columna centrada con gap */
+#centro {
+    padding: 35px 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+/* cada seccion del centro esta oculta por defecto */
+.seccion { width: 100%; max-width: 720px; display: none; }
+
+/* la seccion activa se muestra. gg sistema de tabs XD */
+.seccion.activa { display: block; }
+
+/* titulo de cada seccion con linea decorativa que se extiende hasta el borde */
+.seccion-titulo {
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* linea que se extiende a la derecha del titulo de seccion */
+.seccion-titulo::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ---- BOTÓN TIRAR RUNA ---- */
+
+/* zona completa de la tirada, centrada y con overflow oculto para las particulas */
+#zona-tirada {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 50px 0 30px;
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* contenedor del resultado especial con altura maxima y scroll interno */
+#resultado-especial {
+    width: 100%;
+    max-width: 520px;
+    max-height: 300px;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+}
+
+/* wrapper del nombre de la runa revelada, con word-break para nombres largos */
+.runa-reveal {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+/* boton principal de tirar, con forma de paralelogramo cortado y borde dorado */
+#btn-tirar {
+    position: relative;
+    padding: 26px 80px;
+    font-family: var(--font-title);
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    color: var(--gold);
+    background: transparent;
+    border: 2px solid var(--gold);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    clip-path: polygon(14px 0%, 100% 0%, calc(100% - 14px) 100%, 0% 100%);
+}
+
+/* borde exterior decorativo del boton tirar, ligeramente desplazado */
+#btn-tirar::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    background: transparent;
+    border: 1px solid rgba(255,215,0,0.25);
+    clip-path: polygon(14px 0%, 100% 0%, calc(100% - 14px) 100%, 0% 100%);
+    transition: all 0.3s;
+}
+
+/* hover del boton tirar: se rellena de dorado y escala ligeramente */
+#btn-tirar:hover {
+    background: var(--gold);
+    color: #000;
+    box-shadow: 0 0 50px var(--gold-glow), 0 0 100px rgba(255,215,0,0.15);
+    transform: scale(1.05);
+}
+
+/* click del boton tirar: se encoge un poco */
+#btn-tirar:active { transform: scale(0.97); }
+
+/* estado idle del boton cuando lleva un rato sin pulsarse, pulsa solo con glow */
+#btn-tirar.idle-glow {
+    animation: idleGlow 2s ease-in-out infinite alternate;
+    transform: scale(1.07);
+}
+
+/* animacion de pulsacion del glow en estado idle */
+@keyframes idleGlow {
+    from { box-shadow: 0 0 25px var(--gold-glow); }
+    to   { box-shadow: 0 0 70px var(--gold-glow), 0 0 130px rgba(255,215,0,0.25); }
+}
+
+/* particula dorada pequeña que sale disparada del boton al tirar */
+.particula-btn {
+    position: fixed;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+    pointer-events: none;
+    z-index: 5000;
+    animation: particulaBtn 1.4s ease-out forwards;
+}
+
+/* animacion de la particula: vuela en una direccion y desaparece */
+@keyframes particulaBtn {
+    0%   { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}
+
+/* texto de coste de la tirada debajo del boton */
+.tirada-coste {
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    letter-spacing: 4px;
+    color: var(--silver-dim);
+    text-transform: uppercase;
+}
+
+/* ---- RESULTADO DE TIRADA ----  */
+
+/* zona donde aparece el resultado, con altura minima para no saltar el layout */
+#resultado-tirada {
+    min-height: 130px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+/* contenedor del nombre de la runa revelada, con animacion de entrada */
+.runa-reveal {
+    text-align: center;
+    padding: 28px 48px;
+    border-radius: 6px;
+    animation: revealEntrada 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* animacion de entrada del resultado: sube y escala desde abajo */
+@keyframes revealEntrada {
+    from { opacity: 0; transform: translateY(20px) scale(0.93); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* nombre grande de la runa obtenida */
+.runa-nombre {
+    font-family: var(--font-title);
+    font-size: 2.4rem;
+    font-weight: 700;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+}
+
+/* etiqueta de rareza bajo el nombre de la runa */
+.runa-rareza-label {
+    font-family: var(--font-title);
+    font-size: 0.8rem;
+    letter-spacing: 7px;
+    text-transform: uppercase;
+    opacity: 0.75;
+    margin-top: 6px;
+}
+
+/* texto del bonus que otorga la runa */
+.runa-bonus {
+    font-size: 1rem;
+    color: var(--silver-dim);
+    margin-top: 10px;
+}
+
+/* contenedor del resultado especial centrado, sin altura minima fija */
+#resultado-especial {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+}
+
+/* colores y efectos visuales de cada rareza. me da de problemas esto */
+.rareza-comun       { color: var(--comun);      border: 1px solid rgba(200,212,232,0.2); background: rgba(200,212,232,0.04); }
+.rareza-poco_comun  { color: var(--poco-comun); border: 1px solid rgba(68,255,68,0.25);  background: rgba(68,255,68,0.05);   }
+.rareza-rara        { color: var(--rara);       border: 1px solid rgba(51,170,255,0.35); background: rgba(51,170,255,0.07);  text-shadow: 0 0 15px rgba(51,170,255,0.6); }
+.rareza-epica       { color: var(--epica);      border: 1px solid rgba(221,85,255,0.35); background: rgba(221,85,255,0.07);  text-shadow: 0 0 15px rgba(221,85,255,0.6); }
+.rareza-legendaria  { color: var(--legendaria); border: 1px solid rgba(255,170,0,0.5);   background: rgba(255,170,0,0.08);   text-shadow: 0 0 25px rgba(255,170,0,0.9);  animation: glowLeg 1.5s ease-in-out infinite alternate; }
+.rareza-mitica      { color: var(--mitica);     border: 1px solid rgba(255,34,68,0.55);  background: rgba(255,34,68,0.09);   text-shadow: 0 0 30px rgba(255,34,68,0.95); animation: glowMit 1s ease-in-out infinite alternate; }
+.rareza-divina      { color: var(--divine);     border: 1px solid rgba(255,250,180,0.6);  background: rgba(255,250,180,0.07); text-shadow: 0 0 30px rgba(255,250,180,0.95), 0 0 60px rgba(255,220,100,0.5); animation: glowDiv 2s ease-in-out infinite alternate; }
+
+/* glow pulsante para rareza legendaria */
+@keyframes glowLeg {
+    from { text-shadow: 0 0 12px rgba(255,170,0,0.6); }
+    to   { text-shadow: 0 0 35px rgba(255,170,0,1), 0 0 70px rgba(255,170,0,0.5); }
+}
+
+/* glow pulsante para rareza divina, mas lento y mas blanco */
+@keyframes glowDiv {
+    from { text-shadow: 0 0 20px rgba(255,250,180,0.7), 0 0 40px rgba(255,220,100,0.4); }
+    to   { text-shadow: 0 0 50px rgba(255,250,180,1),   0 0 100px rgba(255,220,100,0.7), 0 0 150px rgba(255,200,50,0.3); }
+}
+
+/* glow pulsante para rareza mitica, mas rapido y rojo */
+@keyframes glowMit {
+    from { text-shadow: 0 0 18px rgba(255,34,68,0.7); }
+    to   { text-shadow: 0 0 50px rgba(255,34,68,1), 0 0 100px rgba(255,34,68,0.6); }
+}
+
+/* ---- NEON OVERLAY ---- */
+
+/* marco de pantalla completa con neon para tiradas especiales, invisible por defecto */
+.neon-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9000;
+    opacity: 0;
+    transition: opacity 0.4s;
+}
+
+/* clase que activa la visibilidad del neon overlay */
+.neon-overlay.visible { opacity: 1; }
+
+/* cada una de las 4 barras del borde neon */
+.neon-line {
+    position: absolute;
+    border-radius: 3px;
+}
+
+/* posicion y dimension de cada barra del marco neon */
+.neon-overlay .neon-top    { top: 0;    left: 0; right: 0;  height: 5px; }
+.neon-overlay .neon-bottom { bottom: 0; left: 0; right: 0;  height: 5px; }
+.neon-overlay .neon-left   { left: 0;   top: 0;  bottom: 0; width: 5px;  }
+.neon-overlay .neon-right  { right: 0;  top: 0;  bottom: 0; width: 5px;  }
+
+/* neon dorado con pulso rapido para tirada legendaria */
+.neon-overlay.leg .neon-line {
+    background: var(--legendaria);
+    box-shadow: 0 0 25px var(--legendaria), 0 0 60px rgba(255,170,0,0.7), 0 0 100px rgba(255,170,0,0.3);
+    animation: neonPulse 0.6s ease-in-out infinite alternate;
+}
+
+/* neon rojo con pulso mas agresivo para tirada mitica */
+.neon-overlay.mit .neon-line {
+    background: var(--mitica);
+    box-shadow: 0 0 25px var(--mitica), 0 0 60px rgba(255,34,68,0.7), 0 0 100px rgba(255,34,68,0.3);
+    animation: neonPulse 0.35s ease-in-out infinite alternate;
+}
+
+/* animacion de parpadeo del neon overlay */
+@keyframes neonPulse {
+    from { opacity: 0.65; }
+    to   { opacity: 1; }
+}
+
+/* particula circular de evento especial, vuela y desaparece */
+.event-particula {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9001;
+    animation: eventPart var(--dur, 2s) ease-out forwards;
+}
+
+/* animacion de vuelo de la particula de evento */
+@keyframes eventPart {
+    0%   { opacity: 1; transform: translate(0,0) scale(1); }
+    80%  { opacity: 0.8; }
+    100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0); }
+}
+
+/* ---- EXPLOSIÓN MÍTICA ---- */
+
+/* pantalla completa negra para la animacion de runa mitica, oculta por defecto */
+#mitica-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+}
+
+/* clase que activa la explosion mitica */
+#mitica-overlay.visible { display: flex; }
+
+/* estrella roja gigante que gira y escala hasta llenar la pantalla */
+.estrella-mitica {
+    font-size: 5rem;
+    color: var(--mitica);
+    text-shadow: 0 0 40px var(--mitica), 0 0 100px rgba(255,34,68,0.8);
+    animation: estrellaGira 3s ease-in-out forwards;
+    transform-origin: center center;
+    display: inline-block;
+}
+
+/* animacion de la estrella: aparece pequena, gira tres vueltas y desaparece enorme */
+@keyframes estrellaGira {
+    0%   { transform: scale(0.1) rotate(0deg);   opacity: 1; filter: brightness(6); }
+    70%  { transform: scale(4) rotate(720deg);   opacity: 1; filter: brightness(3); }
+    85%  { transform: scale(6) rotate(900deg);   opacity: 1; filter: brightness(5); }
+    100% { transform: scale(10) rotate(1080deg); opacity: 0; filter: brightness(8); }
+}
+
+/* ---- PANEL DERECHO ---- */
+
+/* panel derecho fijo con la coleccion de runas obtenidas, scroll y barra fina dorada */
+#panel-derecho {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--right-w);
+    height: 100vh;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+    padding: 22px 16px;
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    z-index: 100;
+    scrollbar-width: thin;
+    scrollbar-color: var(--gold-dim) transparent;
+}
+
+/* scrollbar webkit del panel derecho, fina y dorada */
+#panel-derecho::-webkit-scrollbar { width: 4px; }
+#panel-derecho::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+
+/* titulo de cada panel del lado derecho */
+.panel-titulo {
+    font-family: var(--font-title);
+    font-size: 0.8rem;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* agrupacion de runas por tipo dentro del panel derecho */
+.grupo-runas { margin-bottom: 22px; }
+
+/* cabecera de un grupo de runas con borde izquierdo y fondo tenue */
+.grupo-nombre {
+    font-family: var(--font-title);
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+    margin-bottom: 10px;
+    padding: 5px 10px;
+    background: rgba(255,255,255,0.04);
+    border-left: 2px solid var(--border);
+}
+
+/* tarjeta individual de una runa en el panel derecho */
+.runa-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+/* al hacer hover la tarjeta de runa se desplaza ligeramente a la derecha */
+.runa-card:hover {
+    background: rgba(255,255,255,0.07);
+    transform: translateX(4px);
+}
+
+/* nombre de la runa en la tarjeta del panel derecho */
+.runa-card-nombre {
+    font-family: var(--font-title);
+    font-size: 0.9rem;
+    letter-spacing: 1.5px;
+    font-weight: 500;
+}
+
+/* cantidad de esa runa obtenida, en gris italica */
+.runa-card-cantidad {
+    font-size: 0.9rem;
+    color: var(--silver-dim);
+    font-style: italic;
+}
+
+/* color del borde y nombre de cada rareza en las tarjetas del panel derecho */
+.runa-card.comun      { border-left-color: var(--comun);      }
+.runa-card.comun      .runa-card-nombre { color: var(--comun); }
+.runa-card.poco_comun { border-left-color: var(--poco-comun); }
+.runa-card.poco_comun .runa-card-nombre { color: var(--poco-comun); }
+.runa-card.rara       { border-left-color: var(--rara);       }
+.runa-card.rara       .runa-card-nombre { color: var(--rara); }
+.runa-card.epica      { border-left-color: var(--epica);      }
+.runa-card.epica      .runa-card-nombre { color: var(--epica); }
+.runa-card.legendaria { border-left-color: var(--legendaria); }
+.runa-card.legendaria .runa-card-nombre { color: var(--legendaria); text-shadow: 0 0 8px rgba(255,170,0,0.6); }
+.runa-card.mitica     { border-left-color: var(--mitica);     }
+.runa-card.mitica     .runa-card-nombre { color: var(--mitica); text-shadow: 0 0 8px rgba(255,34,68,0.6); }
+
+/* ---- TIENDA ----  */
+
+/* grid de mejoras de la tienda, columnas adaptativas con minimo 210px */
+.mejoras-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 16px;
+}
+
+/* tarjeta de una mejora en la tienda con borde dorado y hover que sube la card */
+.mejora-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+}
+
+/* linea dorada en el top de la mejora-card que aparece al hacer hover */
+.mejora-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* hover de la mejora: sube, sombra mas profunda y borde dorado visible */
+.mejora-card:hover {
+    border-color: rgba(255,215,0,0.5);
+    background: rgba(255,255,255,0.07);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 35px rgba(0,0,0,0.5);
+}
+
+/* muestra la linea superior al hacer hover en la mejora */
+.mejora-card:hover::before { opacity: 1; }
+
+/* nombre de la mejora en dorado y negrita */
+.mejora-card-nombre {
+    font-family: var(--font-title);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--gold);
+}
+
+/* descripcion de la mejora en gris claro */
+.mejora-card-desc {
+    font-size: 0.9rem;
+    color: var(--silver-dim);
+    line-height: 1.5;
+    flex: 1;
+}
+
+/* texto pequeño con el nivel actual de la mejora */
+.mejora-card-nivel {
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    color: var(--silver-dim);
+}
+
+/* precio de la mejora en dorado grande */
+.mejora-card-coste {
+    font-family: var(--font-title);
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--gold);
+}
+
+/* cuando la mejora esta al maximo el coste se muestra en gris con texto MAX */
+.mejora-card-coste.max {
+    color: var(--silver-dim);
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+}
+
+/* boton de comprar mejora, estilo outline dorado */
+.btn-comprar {
+    padding: 11px;
+    font-family: var(--font-title);
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+/* hover del boton comprar: se rellena de dorado */
+.btn-comprar:hover:not(:disabled) {
+    background: var(--gold);
+    color: #000;
+    font-weight: 700;
+}
+
+/* boton comprar deshabilitado cuando no hay fondos suficientes */
+.btn-comprar:disabled {
+    border-color: #333;
+    color: #444;
+    cursor: not-allowed;
+}
+
+/* ---- AJUSTES ---- */
+
+/* la seccion de ajustes activa se muestra como columna con gap */
+#seccion-ajustes.activa {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* boton generico de ajuste, fondo tenue con borde sutil */
+.ajuste-btn {
+    padding: 16px 22px;
+    font-family: var(--font-title);
+    font-size: 0.9rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--silver);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+/* hover del boton de ajuste, un poco mas brillante */
+.ajuste-btn:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.3);
+    color: #fff;
+}
+
+/* variante peligrosa del boton de ajuste (borrar progreso, etc) */
+.ajuste-btn.danger { border-color: rgba(255,51,68,0.35); color: #ff6677; }
+.ajuste-btn.danger:hover { background: rgba(255,51,68,0.1); border-color: var(--red); color: var(--red); }
+
+/* ---- MODAL ---- */
+
+/* fondo oscuro semitransparente del modal de confirmacion de borrado */
+#modal-borrar {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    background: rgba(0,0,0,0.88);
+    backdrop-filter: blur(10px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+/* clase que activa el modal */
+#modal-borrar.visible { display: flex; }
+
+/* caja de contenido del modal centrada, con borde rojo y sombra de aviso */
+#modal-contenido {
+    background: var(--bg2);
+    border: 1px solid rgba(255,51,68,0.45);
+    border-radius: 8px;
+    padding: 44px;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 0 80px rgba(255,51,68,0.18);
+}
+
+/* titulo del modal de borrado en rojo con glow */
+#modal-contenido h3 {
+    font-family: var(--font-title);
+    font-size: 1.5rem;
+    color: var(--red);
+    letter-spacing: 5px;
+    margin-bottom: 18px;
+    text-shadow: 0 0 20px var(--red-glow);
+}
+
+/* texto explicativo del modal de borrado */
+#modal-contenido p {
+    color: var(--silver-dim);
+    font-size: 1rem;
+    margin-bottom: 12px;
+    line-height: 1.7;
+}
+
+/* texto importante dentro del modal, en blanco */
+#modal-contenido strong { color: var(--silver); }
+
+/* input donde el usuario debe escribir la palabra de confirmacion para borrar */
+#input-confirmacion {
+    width: 100%;
+    padding: 14px;
+    margin: 14px 0;
+    background: #000;
+    border: 1px solid rgba(255,51,68,0.4);
+    color: #fff;
+    font-family: var(--font-title);
+    letter-spacing: 3px;
+    text-align: center;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+/* focus del input de confirmacion: borde y glow rojos */
+#input-confirmacion:focus { outline: none; border-color: var(--red); box-shadow: 0 0 12px var(--red-glow); }
+
+/* fila de botones del modal en horizontal con gap */
+.modal-btns { display: flex; gap: 12px; margin-top: 18px; }
+
+/* estilo base compartido de los botones del modal */
+.modal-btns button {
+    flex: 1;
+    padding: 14px;
+    font-family: var(--font-title);
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+/* boton de confirmar el borrado, outline rojo */
+.btn-confirmar-borrar { background: transparent; border: 1px solid var(--red); color: var(--red); }
+.btn-confirmar-borrar:hover { background: var(--red); color: #fff; }
+
+/* boton de cancelar, outline gris */
+.btn-cancelar { background: transparent; border: 1px solid var(--border); color: var(--silver-dim); }
+.btn-cancelar:hover { border-color: var(--silver-dim); color: var(--silver); }
+
+/* mensaje de error de confirmacion dentro del modal */
+#msg-confirmacion { color: var(--red); font-size: 0.85rem; min-height: 22px; margin-top: 6px; }
+
+/* ---- FORMULARIO CONTACTO ----  */
+
+/* contenedor de la seccion de contacto en columna con gap */
+#seccion-contacto { display: flex; flex-direction: column; gap: 16px; }
+
+/* grupo de label + input del formulario */
+.form-grupo { display: flex; flex-direction: column; gap: 8px; }
+
+/* etiqueta de cada campo del formulario en dorado tenue y pequeno */
+.form-label {
+    font-family: var(--font-title);
+    font-size: 0.72rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+}
+
+/* estilo base de inputs, selects y textareas del formulario. mierda tener que repetirlo */
+.form-input, .form-select, .form-textarea {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--silver);
+    padding: 12px 16px;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    border-radius: 4px;
+    transition: border-color 0.2s;
+    width: 100%;
+}
+
+/* focus de los campos del formulario: borde dorado mas visible */
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    border-color: var(--gold-dim);
+    background: rgba(255,255,255,0.06);
+}
+
+/* textarea redimensionable verticalmente con altura minima */
+.form-textarea { resize: vertical; min-height: 110px; }
+
+/* fondo del select cuando se despliega, hereda el color oscuro del sitio */
+.form-select option { background: var(--bg2); }
+
+/* contador de caracteres restantes del textarea, alineado a la derecha */
+.contador-chars { font-size: 0.8rem; color: var(--silver-dim); text-align: right; }
+
+/* boton de enviar el formulario, outline dorado igual que el resto del juego */
+.btn-enviar {
+    padding: 15px;
+    font-family: var(--font-title);
+    font-size: 0.85rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+/* hover del boton enviar: relleno dorado */
+.btn-enviar:hover { background: var(--gold); color: #000; }
+
+/* mensaje de estado del formulario (vacio, error o exito) */
+.form-msg { font-size: 0.9rem; padding: 8px 0; min-height: 26px; }
+.form-msg.error { color: var(--red); }
+.form-msg.exito { color: var(--poco-comun); }
+
+/* ---- RESPONSIVE ----  */
+
+/* en pantallas medianas se reducen los anchos de las sidebars y el padding central */
+@media (max-width: 1100px) {
+    :root { --right-w: 240px; --sidebar-w: 200px; }
+    #centro { padding: 25px 30px; }
+}
+
+/* en movil las sidebars se vuelven estaticas y ocupan el ancho completo */
+@media (max-width: 800px) {
+    #layout { margin-left: 0; margin-right: 0; }
+    #header { margin-left: 0; margin-right: 0; }
+    #sidebar, #panel-derecho {
+        position: static; height: auto; width: 100%;
+        border: none; border-bottom: 1px solid var(--border);
+    }
+    #centro { padding: 20px; }
+}
+
+
+/* ---- ANIMACIÓN DE ENTRADA ---- */
+
+/* overlay de pantalla completa de la intro que se desvanece en 3.5 segundos */
+#intro-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    background: #08090d;
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: introFade 3.5s ease forwards;
+    pointer-events: none;
+}
+
+/* animacion del fondo de la intro: opaco hasta el 60%, luego desaparece */
+@keyframes introFade {
+    0%   { opacity: 1; }
+    60%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* contenedor del texto de la intro que escala ligeramente al salir */
+#intro-content {
+    text-align: center;
+    animation: introContent 3.5s ease forwards;
+}
+
+/* animacion del contenido de la intro: aparece, se queda y desaparece escalado */
+@keyframes introContent {
+    0%   { opacity: 0; transform: scale(0.95); }
+    20%  { opacity: 1; transform: scale(1); }
+    70%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.03); }
+}
+
+/* titulo principal de la pantalla de intro, enorme y dorado */
+#intro-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(3rem, 10vw, 7rem);
+    font-weight: 700;
+    letter-spacing: 14px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-shadow:
+        0 0 30px var(--gold-glow),
+        0 0 80px rgba(255,215,0,0.3),
+        0 0 150px rgba(255,215,0,0.1);
+    line-height: 1;
+}
+
+/* tagline en cursiva debajo del titulo de la intro, aparece con retraso */
+#intro-tagline {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(0.9rem, 2vw, 1.3rem);
+    letter-spacing: 4px;
+    color: var(--silver-dim);
+    margin-top: 16px;
+    animation: taglineAppear 3.5s ease forwards;
+}
+
+/* la tagline aparece a mitad de la intro y desaparece al final */
+@keyframes taglineAppear {
+    0%   { opacity: 0; transform: translateY(8px); }
+    35%  { opacity: 0; transform: translateY(8px); }
+    55%  { opacity: 1; transform: translateY(0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* runa de fondo en la intro que gira lentamente mientras se muestra el titulo */
+#intro-runa {
+    position: absolute;
+    width: min(70vw, 70vh);
+    height: min(70vw, 70vh);
+    opacity: 0;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.9))
+            drop-shadow(0 0 60px rgba(255,215,0,0.6))
+            drop-shadow(0 0 100px rgba(255,215,0,0.3));
+    animation: runaIntro 3.5s ease forwards;
+}
+
+/* animacion de la runa de la intro: aparece girando y se va*/
+@keyframes runaIntro {
+    0%   { opacity: 0;    transform: rotate(0deg)  scale(0.9); }
+    20%  { opacity: 1;    transform: rotate(15deg) scale(1);   }
+    70%  { opacity: 1;    transform: rotate(55deg) scale(1);   }
+    100% { opacity: 0;    transform: rotate(70deg) scale(1.05);}
+}
+
+
+/* boton para desbloquear una nueva runa, bloqueado por defecto hasta cumplir requisitos */
+#btn-desbloquear {
+    padding: 14px 36px;
+    font-family: var(--font-title);
+    font-size: 0.82rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid rgba(255,170,0,0.4);
+    color: var(--legendaria);
+    cursor: not-allowed;
+    border-radius: 3px;
+    opacity: 0.6;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+/* hover del boton desbloquear: un poco menos opaco para indicar que en algun momento funcionara LOL */
+#btn-desbloquear:hover { border-color: var(--legendaria); opacity: 0.8; }
+
+/* mensaje de error flotante de la tienda, oculto por defecto
+#msg-tienda {
+    font-family: var(--font-title);
+    font-size: 0.82rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--red);
+    text-align: center;
+    padding: 10px 0;
+    min-height: 36px;
+    text-shadow: 0 0 10px var(--red-glow);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* clase que hace visible el mensaje de error de la tienda */
+#msg-tienda.visible { opacity: 1; }
+
+/* contenedor de un grupo de inputs en ajustes con fondo tenue y borde */
+.ajuste-input-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 20px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+/* etiqueta de un input de ajustes en dorado tenue */
+.ajuste-label {
+    font-family: var(--font-title);
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+}
+
+/* texto de ayuda en italica debajo de la etiqueta de ajuste */
+.ajuste-label-hint {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    color: var(--silver-dim);
+    font-style: italic;
+}
+
+/* fila horizontal con input + boton en ajustes */
+.ajuste-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* input de configuracion en ajustes, fondo muy oscuro con borde dorado tenue */
+.ajuste-input {
+    flex: 1;
+    padding: 11px 14px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    color: var(--silver);
+    font-family: var(--font-title);
+    font-size: 1rem;
+    letter-spacing: 2px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+/* focus del input de ajuste: borde dorado mas visible */
+.ajuste-input:focus { border-color: var(--gold-dim); }
+
+/* boton de accion junto al input de ajuste (ej: guardar) */
+.ajuste-input-btn {
+    padding: 11px 20px;
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+/* hover del boton de ajuste: relleno dorado */
+.ajuste-input-btn:hover { background: var(--gold); color: #000; }
+
+/* mensaje de resultado bajo el input de ajuste, verde por defecto */
+.ajuste-msg { font-size: 0.82rem; min-height: 20px; color: var(--poco-comun); }
+.ajuste-msg.error { color: var(--red); }
+
+/* boton del desplegable de contactar al admin, con flecha que rota al abrirse */
+#contacto-toggle {
+    width: 100%;
+    padding: 16px 22px;
+    font-family: var(--font-title);
+    font-size: 0.9rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--silver);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* hover del boton del desplegable de contacto */
+#contacto-toggle:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.3); }
+
+/* la flecha del desplegable de contacto gira 180 grados al abrirse */
+#contacto-toggle .flecha { transition: transform 0.3s; }
+#contacto-toggle.abierto .flecha { transform: rotate(180deg); }
+
+/* contenido oculto del desplegable de contacto al admin */
+#contacto-contenido {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    margin-top: -4px;
+}
+
+/* cuando el desplegable de contacto esta abierto se muestra en flex */
+#contacto-contenido.abierto { display: flex; }
+
+/* wrapper del input de archivo, necesario para el truco de ocultar el input nativo. mecachis */
+.file-input-wrapper { position: relative; }
+
+/* input de archivo nativo invisible que cubre toda la label */
+.file-input-wrapper input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+}
+
+/* label que actua visualmente como el boton de subir archivo */
+.file-input-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    color: var(--silver-dim);
+    font-family: var(--font-title);
+    font-size: 0.75rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* hover de la label de archivo: borde y texto dorados */
+.file-input-label:hover { border-color: var(--gold-dim); color: var(--gold-dim); }
+
+/* icono del boton de subir archivo */
+.file-icon { font-size: 1.2rem; }
+
+/* nombre del archivo seleccionado, sin mayusculas y en plata */
+.file-nombre { font-style: italic; font-size: 0.85rem; letter-spacing: 0; text-transform: none; color: var(--silver); }
+
+/* contenedor del resultado especial con scroll interno y scrollbar dorada fina */
+#resultado-especial {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--legendaria) transparent;
+}
+
+/* ----- COLECCIÓN ----  */
+
+/* layout principal de la coleccion: columna izquierda + canvas central + stats derecha */
+.coleccion-layout {
+    display: flex;
+    gap: 20px;
+    height: 100%;
+    min-height: 500px;
+    padding: 10px 0;
+}
+
+/* columna izquierda de la lista de runas en la coleccion, ancho fijo */
+.coleccion-lista {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+/* titulo de la lista de la coleccion en gris tenue y mayusculas */
+.coleccion-lista-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+    padding: 0 4px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+/* boton de cada runa en la lista de la coleccion */
+.col-runa-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s;
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.82rem;
+    letter-spacing: 1px;
+}
+
+/* runas no desbloqueadas en la lista, desaturadas y sin cursor interactivo */
+.col-runa-btn.bloqueada {
+    opacity: 0.35;
+    cursor: default;
+    filter: grayscale(1);
+}
+
+/* estilos por rareza de los botones de runa en la coleccion (legendaria) */
+.col-runa-btn.legendaria {
+    border-left-color: rgba(255,215,0,0.35);
+}
+.col-runa-btn.legendaria:hover,
+.col-runa-btn.legendaria.sel {
+    background: rgba(255,215,0,0.07);
+    border-left-color: var(--gold);
+}
+.col-runa-btn.legendaria .col-runa-nombre { color: var(--gold); }
+
+/* estilos por rareza de los botones de runa en la coleccion (mitica) */
+.col-runa-btn.mitica {
+    border-left-color: rgba(255,34,68,0.35);
+}
+.col-runa-btn.mitica:hover,
+.col-runa-btn.mitica.sel {
+    background: rgba(255,34,68,0.07);
+    border-left-color: var(--red);
+}
+.col-runa-btn.mitica .col-runa-nombre { color: var(--red); }
+
+/* nombre de la runa dentro del boton de la lista */
+.col-runa-nombre { font-size: 0.82rem; letter-spacing: 1px; }
+
+/* contenedor derecho del boton de runa (cantidad + candado) */
+.col-runa-right  { display: flex; align-items: center; gap: 6px; }
+
+/* contador de cantidad de esa runa */
+.col-runa-cantidad {
+    font-size: 0.72rem;
+    color: var(--silver-dim);
+    letter-spacing: 1px;
+}
+
+/* icono de candado para runas bloqueadas */
+.col-candado { font-size: 0.9rem; }
+
+/* contenedor del canvas central de la coleccion con borde y fondo casi transparente */
+.coleccion-canvas-wrap {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.01);
+    min-height: 340px;
+}
+
+/* canvas donde se renderiza la runa seleccionada en la coleccion */
+#col-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* texto de ayuda centrado en el canvas cuando no hay runa seleccionada */
+.col-canvas-hint {
+    position: absolute;
+    color: var(--silver-dim);
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* panel de stats derecho de la coleccion sin padding propio */
+#panel-col-stats { padding: 0; }
+
+/* titulo del panel de stats de la runa seleccionada */
+.col-stats-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+    color: var(--gold);
+}
+
+/* columna de filas de stats de la runa seleccionada */
+#col-stats-contenido { display: flex; flex-direction: column; gap: 12px; }
+
+/* fila de un stat de la coleccion con separador inferior */
+.col-stat-fila {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,200,50,0.08);
+}
+
+/* etiqueta del stat en mayusculas pequenas y gris */
+.col-stat-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+}
+
+/* valor del stat en plata legible */
+.col-stat-valor {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    color: var(--silver);
+}
+
+/* miniatura de la imagen de la runa en el panel de stats */
+.col-stat-imagen {
+    margin-top: 10px;
+    text-align: center;
+}
+.col-stat-imagen img {
+    max-width: 80px;
+    max-height: 80px;
+    opacity: 0.85;
+    border: 1px solid var(--border);
+}
+
+/* ---- COLECCIÓN — mejoras de diseño ---- */
+
+/* titulo de la lista con sobrescritura de tamaño y espaciado para que se vea mejor */
+.coleccion-lista-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1rem !important;
+    letter-spacing: 5px !important;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+    padding: 0 4px 12px !important;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.2;
+}
+
+/* el boton de runa tiene overflow hidden para recortar el canvas de neon interior */
+.col-runa-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+/* canvas de efecto neon dentro del boton de runa, absolutamente posicionado */
+.col-btn-neon {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* nombre y lado derecho del boton de runa por encima del canvas de neon */
+.col-runa-btn .col-runa-nombre,
+.col-runa-btn .col-runa-right {
+    position: relative;
+    z-index: 1;
+}
+
+/* boton de runa desbloqueada con borde rectangular visible y padding ajustado */
+.col-runa-btn.desbloqueada {
+    border: 1px solid transparent;
+    border-radius: 2px;
+    margin-bottom: 6px;
+    padding: 12px 14px;
+    transition: background 0.2s;
+}
+
+/* borde y fondo para runa legendaria desbloqueada y su estado hover/seleccionado */
+.col-runa-btn.desbloqueada.legendaria {
+    border-color: rgba(255,215,0,0.25);
+    background: rgba(255,215,0,0.03);
+}
+.col-runa-btn.desbloqueada.legendaria:hover,
+.col-runa-btn.desbloqueada.legendaria.sel {
+    background: rgba(255,215,0,0.06);
+    border-color: rgba(255,215,0,0.5);
+}
+
+/* borde y fondo para runa mitica desbloqueada y su estado hover/seleccionado */
+.col-runa-btn.desbloqueada.mitica {
+    border-color: rgba(255,34,68,0.25);
+    background: rgba(255,34,68,0.03);
+}
+.col-runa-btn.desbloqueada.mitica:hover,
+.col-runa-btn.desbloqueada.mitica.sel {
+    background: rgba(255,34,68,0.06);
+    border-color: rgba(255,34,68,0.5);
+}
+
+/* flash rojo brillante en el boton de mitica cuando se obtiene una nueva */
+.col-runa-btn.mitica-flash {
+    background: rgba(255,34,68,0.85) !important;
+    border-color: #ff2244 !important;
+    transition: background 0.06s, color 0.06s;
+}
+.col-runa-btn.mitica-flash .col-runa-nombre {
+    color: #fff !important;
+    text-shadow: 0 0 8px #fff;
+    transition: color 0.06s;
+}
+.col-runa-btn.mitica-flash .col-runa-cantidad {
+    color: rgba(255,255,255,0.8) !important;
+}
+
+/* transicion suave de vuelta al estado normal tras el flash de mitica */
+.col-runa-btn.mitica:not(.mitica-flash) {
+    transition: background 0.5s ease-out, border-color 0.5s ease-out;
+}
+.col-runa-btn.mitica:not(.mitica-flash) .col-runa-nombre {
+    transition: color 0.5s ease-out, text-shadow 0.5s ease-out;
+}
+
+/* columna central de la coleccion que contiene el canvas y el boton de animacion */
+.coleccion-centro {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* el canvas se expande para ocupar el espacio disponible */
+.coleccion-canvas-wrap {
+    flex: 1;
+}
+
+/* fila de botones de animacion bajo el canvas de la coleccion */
+#btn-anim-row {
+    display: flex;
+    gap: 5%;
+    width: 100%;
+}
+
+/* boton de ver animacion de la runa, solo bordes superior e inferior, sin laterales */
+.btn-ver-anim {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    padding: 12px 20px;
+    border-radius: 0;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    border-left: none;
+    border-right: none;
+    cursor: pointer;
+    background: transparent;
+    flex: 4;
+    transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+
+/* variantes de color del boton ver animacion segun la rareza de la runa */
+.btn-ver-anim-legendaria {
+    color: var(--gold);
+}
+.btn-ver-anim-legendaria:hover {
+    background: rgba(255,215,0,0.08);
+    box-shadow: 0 0 20px var(--gold-glow);
+}
+
+.btn-ver-anim-mitica {
+    color: var(--red);
+}
+.btn-ver-anim-mitica:hover {
+    background: rgba(255,34,68,0.08);
+    box-shadow: 0 0 20px var(--red-glow);
+}
+.btn-ver-anim-divina {
+    color: var(--divine);
+}
+.btn-ver-anim-divina:hover {
+    background: rgba(255,250,180,0.08);
+    box-shadow: 0 0 20px var(--divine-glow);
+}
+
+/* boton toggle de animacion para la rareza divina */
+.btn-toggle-anim-divina {
+    color: var(--divine);
+    border-color: rgba(255,250,180,0.25);
+}
+
+/* ---- COLECCIÓN — Rediseño completo layout + rarezas comunes ---- */
+
+/* la seccion de coleccion ocupa toda la altura disponible de la ventana */
+.seccion-coleccion-full {
+    flex-direction: column;
+    padding: 0 !important;
+    overflow: hidden;
+    height: calc(100vh - 160px);
+    max-width: none !important;
+}
+.seccion-coleccion-full.activa {
+    display: flex;
+}
+
+/* el layout interno de la coleccion full ocupa toda la altura disponible */
+.seccion-coleccion-full .coleccion-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 0;
+    height: 100%;
+}
+
+/* columna izquierda scrolleable de la coleccion full con scrollbar dorada fina */
+.coleccion-columna-lista {
+    width: 210px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 16px 12px 16px 0;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,215,0,0.2) transparent;
+}
+.coleccion-columna-lista::-webkit-scrollbar { width: 3px; }
+.coleccion-columna-lista::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.2); border-radius: 2px; }
+
+/* bloque de contador global de runas en la parte superior de la lista */
+.col-contador {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 4px 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+}
+
+/* etiqueta del contador global */
+.col-contador-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.58rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+}
+
+/* numero grande del contador de runas obtenidas */
+.col-contador-num {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+    color: var(--gold);
+    line-height: 1;
+}
+
+/* separador entre el numero y el total en el contador */
+.col-contador-sep { color: var(--silver-dim); margin: 0 2px; font-size: 1rem; }
+
+/* texto de ayuda junto al numero del contador */
+.col-contador-txt {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--silver-dim);
+    text-transform: uppercase;
+    margin-left: 4px;
+}
+
+/* cabecera de subseccion dentro de la lista (ej: Especiales / Comunes) */
+.col-seccion-header {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.58rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+    padding: 6px 4px 6px;
+    border-bottom: 1px solid rgba(255,200,50,0.1);
+    margin-bottom: 4px;
+}
+
+/* margen extra en los botones de runas especiales (legendaria/mitica) de la lista */
+.col-especial {
+    margin-bottom: 5px;
+}
+
+/* boton de runa comun en la lista de la coleccion, con borde izquierdo de color */
+.col-runa-comun {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 4px;
+    border-left: 2px solid transparent;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+
+/* runa comun bloqueada en la lista: desaturada y sin interaccion */
+.col-runa-comun.bloqueada {
+    opacity: 0.32;
+    cursor: default;
+    filter: grayscale(1);
+}
+
+/* estilos de cada rareza para el boton de runa comun en la lista */
+.col-runa-comun.comun {
+    border-left-color: rgba(140,140,140,0.2);
+}
+.col-runa-comun.comun:hover, .col-runa-comun.comun.sel {
+    background: rgba(140,140,140,0.06);
+    border-left-color: rgba(140,140,140,0.5);
+}
+.col-runa-comun.poco_comun {
+    border-left-color: rgba(50,200,80,0.25);
+}
+.col-runa-comun.poco_comun:hover, .col-runa-comun.poco_comun.sel {
+    background: rgba(50,200,80,0.06);
+    border-left-color: rgba(50,200,80,0.6);
+}
+.col-runa-comun.rara {
+    border-left-color: rgba(60,140,255,0.25);
+}
+.col-runa-comun.rara:hover, .col-runa-comun.rara.sel {
+    background: rgba(60,140,255,0.06);
+    border-left-color: rgba(60,140,255,0.6);
+}
+.col-runa-comun.epica {
+    border-left-color: rgba(160,80,255,0.25);
+}
+.col-runa-comun.epica:hover, .col-runa-comun.epica.sel {
+    background: rgba(160,80,255,0.06);
+    border-left-color: rgba(160,80,255,0.6);
+}
+
+/* minicanvas del simbolo de la runa dentro del boton de runa comun */
+.col-comun-canvas { flex-shrink: 0; }
+
+/* info textual de la runa comun (nombre + rareza) */
+.col-comun-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+}
+
+/* nombre de la runa comun en la lista, con overflow elipsis para nombres largos */
+.col-comun-nombre {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+    color: var(--silver);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* rareza de la runa comun en texto pequeno bajo el nombre */
+.col-comun-rareza {
+    font-size: 0.62rem;
+    letter-spacing: 1px;
+    color: var(--silver-dim);
+}
+
+/* color del nombre de la runa segun su rareza en la lista comun */
+.col-runa-comun.comun      .col-comun-nombre { color: rgba(160,160,160,0.7); }
+.col-runa-comun.poco_comun .col-comun-nombre { color: rgba(50,200,80,0.85); }
+.col-runa-comun.rara       .col-comun-nombre { color: rgba(60,140,255,0.9); }
+.col-runa-comun.epica      .col-comun-nombre { color: rgba(160,80,255,0.9); }
+
+/* subtexto del multiplicador de puntos bajo el valor de un stat */
+.col-stat-pts {
+    font-size: 0.65rem;
+    color: var(--silver-dim);
+    letter-spacing: 1px;
+    margin-top: 1px;
+}
+
+/* columna central de la coleccion full: canvas + botones, con padding interno */
+.coleccion-centro {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 0 16px 16px;
+    min-width: 0;
+}
+
+/* wrapper del canvas en la coleccion full, crece para llenar el espacio disponible */
+.coleccion-canvas-wrap {
+    flex: 1;
+    min-height: 200px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.01);
+}
+
+/* canvas absolutamente posicionado dentro de su wrapper */
+#col-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* ---- PANEL RUNAS — cards expandibles con probabilidad ----  */
+
+/* tarjeta de runa en el panel de runas, expandible al hacer click */
+.runa-card-btn {
+    cursor: pointer;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    transition: none;
+    border: 1px solid rgba(255,200,50,0.18);
+    border-left: 2px solid rgba(255,200,50,0.3);
+    border-radius: 2px;
+    background: rgba(255,255,255,0.02);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* hover de la tarjeta de runa en el panel, sin cambio de borde para no molestar */
+.runa-card-btn:hover {
+    background: rgba(255,200,50,0.03) !important;
+    border-color: inherit !important;
+}
+
+/* tarjeta de runa expandida en el panel, fondo y borde dorado mas intenso */
+.runa-card-btn.expandida {
+    background: rgba(255,200,50,0.07) !important;
+    border-color: rgba(255,200,50,0.55) !important;
+}
+
+/* tarjeta de runa bloqueada en el panel: desaturada y con bordes muy tenues */
+.runa-bloqueada {
+    opacity: 0.32;
+    filter: grayscale(0.7);
+    border-left-color: rgba(255,255,255,0.1) !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+.runa-bloqueada:hover { background: transparent !important; border-color: rgba(255,255,255,0.06) !important; }
+
+/* fila principal de la tarjeta de runa: nombre a la izquierda, accesorios a la derecha */
+.runa-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+/* contenedor derecho de la tarjeta de runa (candado + flecha) */
+.runa-card-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* icono de candado en las runas bloqueadas del panel */
+.runa-card-candado { font-size: 0.8rem; opacity: 0.7; }
+
+/* flecha indicadora de expansion de la tarjeta, rota al expandirse */
+.runa-card-flecha {
+    font-size: 0.7rem;
+    color: var(--silver-dim);
+    transition: transform 0.18s;
+    margin-left: 2px;
+}
+
+/* seccion colapsada con las probabilidades de la runa, se expande con max-height */
+.runa-card-prob {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.22s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* cuando la tarjeta esta expandida se muestra la seccion de probabilidades con separador */
+.runa-card-btn.expandida .runa-card-prob {
+    border-top: 1px solid rgba(255,200,50,0.12);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+/* fila de una probabilidad: etiqueta a la izquierda, valor a la derecha */
+.prob-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+}
+.prob-label { color: var(--silver-dim); letter-spacing: 0.5px; }
+.prob-val   { color: var(--silver); font-family: var(--font-title); letter-spacing: 1px; }
+
+/* fila de probabilidad de suerte con el valor en dorado */
+.prob-suerte .prob-val { color: var(--gold); }
+
+/* subtitulo pequeno dentro del titulo de un panel */
+.panel-titulo-sub {
+    font-size: 0.65rem;
+    color: var(--silver-dim);
+    letter-spacing: 2px;
+    font-weight: 400;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* ---- SIDEBAR — suerte y bulk stats ---- */
+
+/* fuerza el color dorado en el display de suerte del sidebar. !hi al que lea esto */
+#suerte-display { color: var(--gold) !important; }
+
+/* boton de modo de display activo, relleno dorado cuando esta seleccionado */
+.ajuste-input-btn.active {
+    background: var(--gold);
+    color: #000;
+    border-color: var(--gold);
+}
+
+/* ---- BONUS GRUPO — notificación ---- */
+
+/* tarjeta de bonus de grupo cuando esta activa, con borde y fondo dorado tenue */
+.bonus-grupo-notif {
+    border-color: var(--gold) !important;
+    background: rgba(255,215,0,0.06) !important;
+}
+
+/* borde izquierdo de cada tarjeta en el panel de runas segun su rareza */
+.runa-card-btn.mitica      { border-left-color: var(--mitica); }
+.runa-card-btn.legendaria  { border-left-color: var(--legendaria); }
+.runa-card-btn.epica       { border-left-color: var(--epica); }
+.runa-card-btn.rara        { border-left-color: var(--rara); }
+.runa-card-btn.poco_comun  { border-left-color: var(--poco-comun); }
+.runa-card-btn.comun       { border-left-color: var(--comun); }
+
+/* ---- ZONA TIRADA WRAPPER — sin cambiar layout, boosts en fixed ---- */
+
+/* wrapper transparente al layout, solo existe para agrupar elementos del DOM */
+#zona-tirada-wrapper {
+    display: contents; /* transparente al layout */
+}
+
+/* columna fija de boosts activos a la izquierda del centro, sin capturar eventos */
+#zona-boosts {
+    position: fixed;
+    left: calc(var(--sidebar-w) + 16px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 50;
+    pointer-events: none;
+}
+
+/* contenedor de las tarjetas de boost activas, recupera los eventos del raton */
+#boosts-activos {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: all;
+}
+
+/* tarjeta individual de un boost activo con color segun el tipo de boost */
+.boost-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 3px;
+    border-left: 3px solid currentColor;
+    background: rgba(255,255,255,0.03);
+    font-family: var(--font-title);
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    animation: boostEntrada 0.3s ease;
+}
+
+/* animacion de entrada de una boost card: desliza desde la izquierda */
+@keyframes boostEntrada {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* colores de cada tipo de boost segun lo que afecta */
+.boost-coins_seg  { color: var(--gold);      border-color: var(--gold); }
+.boost-points_seg { color: var(--silver);    border-color: var(--silver); }
+.boost-suerte     { color: var(--poco-comun);border-color: var(--poco-comun); }
+
+/* nombre del boost en la tarjeta, ocupa el espacio sobrante */
+.boost-nombre { flex: 1; }
+
+/* temporizador del boost en negrita con ancho minimo para no saltar al cambiar digitos */
+.boost-timer  {
+    font-size: 0.8rem;
+    font-weight: 700;
+    opacity: 0.9;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* notificacion de boost activo fija arriba a la derecha de la pantalla */
+.boost-notif {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    left: auto;
+    transform: none;
+    background: rgba(8,9,13,0.95);
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: var(--font-title);
+    border-radius: 4px;
+    z-index: 9800;
+    pointer-events: none;
+    transition: opacity 0.4s, padding 0.3s, font-size 0.3s;
+}
+
+/* estado expandido de la notificacion de boost con texto completo */
+.boost-notif.boost-notif-expand {
+    padding: 12px 22px;
+    font-size: 0.82rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* estado compacto de la notificacion de boost con icono y timer */
+.boost-notif.boost-notif-compact {
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.75rem;
+}
+
+/* icono de la notificacion de boost compacta */
+.boost-notif-icono { font-size: 1rem; } 
+
+/* numero de boosts acumulados en negrita en la notificacion */
+.boost-notif-multi { font-weight: bold; letter-spacing: 1px; }
+
+/* timer miniatura dentro de la notificacion compacta, en gris */
+.boost-notif-timer-mini { color: var(--silver-dim); font-size: 0.68rem; margin-left: 4px; }
+
+/* texto de la notificacion de boost en mayusculas y con espaciado */
+.boost-notif-texto { letter-spacing: 2px; text-transform: uppercase; font-size: 0.8rem; }
+
+/* ---- RUNA FLOTANTE ---- */
+
+/* runa que aparece flotando por la pantalla, clickable para obtener un boost */
+#runa-flotante {
+    position: fixed;
+    width: 90px;
+    height: 90px;
+    z-index: 9700;
+    cursor: pointer;
+    transform: translate(-50%, -50%) scale(0.4);
+    transition: none;
+    --boost-color: #a050ff;
+}
+
+/* el svg de la runa flotante ocupa todo el contenedor */
+#runa-flotante svg {
+    width: 100%;
+    height: 100%;
+    color: #a050ff;
+}
+
+/* etiqueta de texto bajo la runa flotante con glow morado */
+#runa-flotante-label {
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-title);
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #a050ff;
+    white-space: nowrap;
+    text-shadow: 0 0 8px #a050ff;
+}
+
+/* ---- BONUS DE GRUPO EN COLECCIÓN */
+
+/* tarjeta de bonus de grupo en la coleccion, con borde izquierdo de color */
+.col-bonus-grupo {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 3px;
+    border-left: 2px solid;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* bonus de grupo pendiente de completar: borde y fondo grises */
+.col-bonus-grupo.pendiente {
+    border-color: rgba(140,140,140,0.3);
+    background: rgba(140,140,140,0.04);
+}
+
+/* bonus de grupo ya conseguido: borde verde pulsante con animacion de loop */
+.col-bonus-grupo.conseguido {
+    border-color: rgba(50,200,80,0.6);
+    background: rgba(50,200,80,0.05);
+    animation: bonusPulse 3s ease-in-out infinite;
+}
+
+/* animacion de pulsacion del borde verde del bonus de grupo conseguido */
+@keyframes bonusPulse {
+    0%,100% { border-color: rgba(50,200,80,0.4); }
+    50%      { border-color: rgba(50,200,80,0.9); }
+}
+
+/* nombre del bonus de grupo en gris tenue y mayusculas */
+.col-bonus-grupo-nombre {
+    font-family: var(--font-title);
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+}
+
+/* descripcion del efecto del bonus de grupo */
+.col-bonus-grupo-desc {
+    font-size: 0.82rem;
+    color: var(--silver);
+}
+
+/* check verde cuando el bonus de grupo esta conseguido */
+.col-bonus-check   { font-size: 0.72rem; color: #32c850; letter-spacing: 1px; }
+
+/* texto de pendiente en gris cuando el bonus no esta completado */
+.col-bonus-pending { font-size: 0.72rem; color: var(--silver-dim); letter-spacing: 1px; }
+
+/* ---- BOTÓN TOGGLE ANIMACIONES ---- */
+
+/* boton para activar o desactivar la animacion de una rareza, bordes top y bottom solo */
+.btn-toggle-anim {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    padding: 12px 10px;
+    border-radius: 0;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    border-left: none;
+    border-right: none;
+    cursor: pointer;
+    background: transparent;
+    flex: 1;
+    transition: background 0.25s, color 0.25s;
+    white-space: nowrap;
+}
+
+/* estado desactivado del toggle de animacion, muy opaco para indicar que esta off */
+.btn-toggle-anim.anim-off {
+    opacity: 0.35;
+}
+
+/* color dorado del toggle de animacion para la rareza legendaria */
+.btn-toggle-anim-legendaria {
+    color: var(--gold);
+}
+.btn-toggle-anim-legendaria:hover { background: rgba(255,215,0,0.08); }
+
+/* color rojo del toggle de animacion para la rareza mitica */
+.btn-toggle-anim-mitica {
+    color: var(--red);
+}
+.btn-toggle-anim-mitica:hover { background: rgba(255,34,68,0.08); }
+
+
+/* ideas futuras / TODO de este archivo:
+    - unificar las clases de rareza en un mixin o algo (si alguien sabe como hacerlo en css puro, por favor)
+    - el responsive de movil esta a medias, las sidebars en estatico quedan raras
+    - revisar todos los z-index y hacer una escala oficial (ahora mismo son numeros al azar)
+    - las animaciones de intro podrian tener una clase .sin-intro para saltarselas (ajuste de rendimiento)
+    - el boost-notif tiene demasiados estados, se podria simplificar con custom properties
+    - dark mode ya lo tenemos, pero podria valer la pena un modo de alto contraste para accesibilidad
+*/

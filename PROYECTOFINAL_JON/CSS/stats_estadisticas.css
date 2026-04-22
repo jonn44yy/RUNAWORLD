@@ -1,0 +1,115 @@
+/* estadisticas — menu de stats del jugador
+   estilo simple y cercano al resto del juego, nada fancy.
+   ira al final de style.css */
+
+/* cada bloque es una tarjetita gris oscura con un titulo arriba y filas debajo.
+   uso el mismo borde que los bloques de ajustes para que no desentone */
+.stats-bloque {
+    background: rgba(60, 120, 255, 0.03);
+    border: 1px solid rgba(255, 200, 50, 0.12);
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.stats-bloque-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #ffd700;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+    opacity: 0.85;
+}
+
+/* la tabla es un flex column donde cada fila tiene label a la izquierda
+   y valor a la derecha. simple pero legible */
+.stats-tabla {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stats-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 4px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+    font-size: 0.92rem;
+}
+
+.stats-fila:last-child { border-bottom: none; }
+
+.stats-label {
+    color: rgba(221, 228, 240, 0.75);
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+}
+
+.stats-valor {
+    color: #dde4f0;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1rem;
+    letter-spacing: 1px;
+}
+
+/* destacada: para totales tipo "total runas obtenidas" con fondo amarillento */
+.stats-fila-destacada {
+    background: rgba(255, 215, 0, 0.04);
+    border-radius: 3px;
+    padding: 10px 8px;
+}
+
+.stats-fila-destacada .stats-valor {
+    color: #ffd700;
+    font-size: 1.1rem;
+}
+
+/* los labels de rareza tienen el mismo color que uso en el resto del juego.
+   asi la palabra "Miticas" sale en rojo como la mitica, "Legendarias" en dorado, etc */
+.stats-label-rareza.rareza-eterna     { color: rgba(180, 130, 255, 0.9); }
+.stats-label-rareza.rareza-divina     { color: #fffff0; }
+.stats-label-rareza.rareza-mitica     { color: #ff2244; }
+.stats-label-rareza.rareza-legendaria { color: #ffaa00; }
+.stats-label-rareza.rareza-epica      { color: rgba(160, 80, 255, 0.85); }
+.stats-label-rareza.rareza-rara       { color: rgba(60, 140, 255, 0.85); }
+.stats-label-rareza.rareza-poco_comun { color: rgba(50, 200, 80, 0.85); }
+.stats-label-rareza.rareza-comun      { color: rgba(200, 200, 200, 0.7); }
+
+/* bloque de "proximamente" (logros), mas apagado para que se note que no esta listo */
+.stats-proximamente {
+    opacity: 0.5;
+}
+
+.stats-proximamente-txt {
+    color: rgba(180, 180, 200, 0.5);
+    text-align: center;
+    padding: 14px;
+    font-style: italic;
+    font-size: 0.88rem;
+}
+
+/* movil: mismos bloques pero mas compactos. el seccion-estadisticas lo maneja
+   style_phone.css (ya tiene la regla .seccion.activa). solo ajusto paddings */
+@media (max-width: 768px) {
+    .stats-bloque {
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+    .stats-bloque-titulo {
+        font-size: 0.7rem;
+        letter-spacing: 3px;
+        margin-bottom: 8px;
+    }
+    .stats-fila {
+        font-size: 0.85rem;
+        padding: 6px 2px;
+    }
+    .stats-label { font-size: 0.8rem; }
+    .stats-valor { font-size: 0.9rem; }
+    .stats-fila-destacada .stats-valor { font-size: 1rem; }
+}

@@ -1,0 +1,375 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
+
+/* boton mandala de tirada.
+   IMPORTANTE: el style.css viejo tiene reglas para #btn-tirar (el boton
+   hexagonal antiguo con clip-path). esas reglas peleaban con estas y rompian
+   todo. aqui uso #btn-tirar.rune-btn para ganar en especificidad (110 > 100)
+   y !important en los campos que colisionan directo con las reglas viejas.
+
+   lo ideal seria borrar las reglas viejas de style.css pero asi funciona
+   aunque el usuario no las borre. las reglas a borrar son las que empiezan
+   con #btn-tirar { padding, clip-path, background, border... etc } */
+
+/* reset total del button nativo y de las reglas viejas (padding, clip-path, border) */
+#btn-tirar.rune-btn {
+    position: relative !important;
+    width: 230px !important;
+    height: 230px !important;
+    padding: 0 !important;
+    margin: 40px 0 30px !important;
+    background: transparent !important;
+    border: none !important;
+    clip-path: none !important;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    display: inline-block;
+    box-shadow: none !important;
+    color: inherit !important;
+    /* permito transicion solo de transform para el scale del active.
+       el resto de transiciones estan en cada hijo con sus tiempos */
+    transition: transform 0.12s ease !important;
+    flex-shrink: 0;
+    font-size: 0;
+    letter-spacing: 0;
+}
+
+/* animaciones.js le pone la clase idle-glow, que viene del css viejo con
+   scale(1.07). lo anulo, el core ya pulsa solo */
+#btn-tirar.rune-btn.idle-glow {
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+#btn-tirar.rune-btn::before,
+#btn-tirar.rune-btn::after {
+    content: none !important;
+    display: none !important;
+}
+
+/* hover y active: solo con raton real. en movil el tap deja hover pegado y
+   el css viejo rellenaba el fondo amarillo, por eso todo amarillo en movil */
+@media (hover: hover) {
+    #btn-tirar.rune-btn:hover {
+        background: transparent !important;
+        color: inherit !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+#btn-tirar.rune-btn:active {
+    transform: none !important;
+}
+
+#btn-tirar.rune-btn:focus-visible {
+    box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.3) !important;
+    border-radius: 50%;
+}
+
+/* anillo externo del mandala, rotacion lenta */
+#btn-tirar.rune-btn .rune-mandala-out {
+    position: absolute;
+    inset: -36px;
+    width: auto;
+    height: auto;
+    animation: rune-mand-rot 35s linear infinite;
+    pointer-events: none;
+    transition: filter 0.3s;
+}
+
+/* anillo interno reverse */
+#btn-tirar.rune-btn .rune-mandala-in {
+    position: absolute;
+    inset: -10px;
+    width: auto;
+    height: auto;
+    animation: rune-mand-rot 18s linear infinite reverse;
+    pointer-events: none;
+    transition: filter 0.3s;
+}
+
+/* core central: circulo dorado */
+#btn-tirar.rune-btn .rune-core {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #1c1400, #060608 72%);
+    border: 2px solid rgba(255, 215, 0, 0.45);
+    box-shadow:
+        inset 0 0 50px rgba(255, 215, 0, 0.13),
+        0 0 35px rgba(255, 215, 0, 0.18);
+    transition: transform 0.07s ease, box-shadow 0.25s, border-color 0.25s;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* pulso de energia dentro del core */
+#btn-tirar.rune-btn .rune-energy {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 32%, rgba(255, 215, 0, 0.16), transparent 62%);
+    animation: rune-energ-pulse 2.8s ease-in-out infinite;
+    pointer-events: none;
+    display: block;
+}
+
+/* orbita: 16 runas girando */
+#btn-tirar.rune-btn .rune-orbit {
+    position: absolute;
+    inset: -14px;
+    border-radius: 50%;
+    animation: rune-mand-rot 15s linear infinite;
+    pointer-events: none;
+    display: block;
+    transition: filter 0.3s;
+}
+#btn-tirar.rune-btn .rune-orbit span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform-origin: 0 -98px;
+    font-family: 'Cinzel', 'Crimson Pro', serif;
+    font-size: 13px;
+    color: rgba(255, 215, 0, 0.7);
+    pointer-events: none;
+    font-weight: 400;
+    letter-spacing: normal;
+}
+
+/* simbolo central grande (ᚱ) */
+#btn-tirar.rune-btn .rune-symbol {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel', 'Crimson Pro', serif;
+    font-size: 4.8rem;
+    color: var(--gold, #ffd700);
+    text-shadow:
+        0 0 22px rgba(255, 215, 0, 0.9),
+        0 0 55px rgba(255, 215, 0, 0.4);
+    pointer-events: none;
+    transition: transform 0.07s, text-shadow 0.25s;
+    font-weight: 400;
+    letter-spacing: normal;
+    width: 100%;
+    height: 100%;
+}
+
+/* hint pulsante exterior (el anillo que grita "clickeame") */
+#btn-tirar.rune-btn .rune-click-hint {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 215, 0, 0.25);
+    pointer-events: none;
+    animation: rune-click-pulse 2s ease-in-out infinite;
+    display: block;
+    background: transparent;
+}
+
+/* hover effects solo con raton */
+@media (hover: hover) {
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-core {
+        border-color: rgba(255, 215, 0, 0.8);
+        box-shadow:
+            inset 0 0 60px rgba(255, 215, 0, 0.22),
+            0 0 50px rgba(255, 215, 0, 0.35);
+    }
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-symbol {
+        text-shadow:
+            0 0 30px rgba(255, 215, 0, 1),
+            0 0 70px rgba(255, 215, 0, 0.55);
+    }
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-mandala-out,
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-mandala-in,
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-orbit {
+        filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.3));
+    }
+    #btn-tirar.rune-btn:hover:not(:disabled) .rune-click-hint {
+        border-color: rgba(255, 215, 0, 0.5);
+    }
+}
+
+/* active: feedback tactil al pulsar
+   antes el core hacia scale(0.91) y el simbolo scale(0.87), pero el anillo
+   exterior NO se movia y quedaba feo, como si tapara las runas. ahora escalo
+   el boton entero con un chute de 0.96, asi todo se mueve junto y queda bien */
+#btn-tirar.rune-btn:active:not(:disabled) {
+    transform: scale(0.96);
+    transition: transform 0.07s ease;
+}
+#btn-tirar.rune-btn:active:not(:disabled) .rune-core {
+    box-shadow:
+        inset 0 0 60px rgba(255, 215, 0, 0.28),
+        0 0 60px rgba(255, 215, 0, 0.38);
+}
+
+/* disabled: tirada.js hace .disabled=true durante la animacion de tirada
+   para que no se spamee clicks. NO pongo cursor: not-allowed aqui porque
+   dibuja el icono de prohibido feo cada vez que clickas, solo bajo un pelin
+   el brillo para que se note sutilmente que esta procesando */
+#btn-tirar.rune-btn:disabled {
+    cursor: pointer;
+    opacity: 0.7;
+}
+#btn-tirar.rune-btn:disabled .rune-core {
+    border-color: rgba(255, 215, 0, 0.2);
+    box-shadow: inset 0 0 30px rgba(255, 215, 0, 0.05);
+}
+#btn-tirar.rune-btn:disabled .rune-click-hint {
+    animation: none;
+    border-color: rgba(255, 215, 0, 0.1);
+}
+
+/* keyframes */
+@keyframes rune-mand-rot {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+@keyframes rune-energ-pulse {
+    0%, 100% { opacity: 0.45; transform: scale(1);   }
+    50%      { opacity: 1;    transform: scale(1.1); }
+}
+@keyframes rune-click-pulse {
+    0%   { transform: scale(1);    opacity: 0.7; }
+    100% { transform: scale(1.25); opacity: 0;   }
+}
+
+/* movil */
+@media (max-width: 768px) {
+    #btn-tirar.rune-btn {
+        width: 170px !important;
+        height: 170px !important;
+        margin: 28px 0 20px !important;
+    }
+    #btn-tirar.rune-btn .rune-mandala-out { inset: -26px; }
+    #btn-tirar.rune-btn .rune-mandala-in  { inset: -8px; }
+    #btn-tirar.rune-btn .rune-orbit       { inset: -10px; }
+    #btn-tirar.rune-btn .rune-orbit span {
+        transform-origin: 0 -72px !important;
+        font-size: 10px;
+    }
+    #btn-tirar.rune-btn .rune-symbol { font-size: 3.4rem; }
+}
+
+/* pantallas muy pequenas */
+@media (max-width: 360px) {
+    #btn-tirar.rune-btn {
+        width: 140px !important;
+        height: 140px !important;
+    }
+    #btn-tirar.rune-btn .rune-mandala-out { inset: -20px; }
+    #btn-tirar.rune-btn .rune-orbit span {
+        transform-origin: 0 -58px !important;
+        font-size: 9px;
+    }
+    #btn-tirar.rune-btn .rune-symbol { font-size: 2.8rem; }
+}
+
+/* particulas runicas que salen volando al clickar el boton.
+   se crean desde animaciones.js (lanzarParticulasBoton), se spawnean en el
+   centro del boton y se alejan por css con transform usando las variables
+   --dx y --dy que les pone el js. si el jugador desactiva la animacion en
+   ajustes, el js sale temprano y no aparece nada */
+.runa-particula {
+    position: fixed;
+    pointer-events: none;
+    z-index: 5000;
+    color: var(--gold, #ffd700);
+    font-family: 'Cinzel', 'Crimson Pro', serif;
+    font-weight: 400;
+    text-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
+    transform: translate(-50%, -50%);
+    animation: runa-particula-fly 1s ease-out forwards;
+    /* que no se vea como texto seleccionable */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+@keyframes runa-particula-fly {
+    0% {
+        transform: translate(-50%, -50%) translate(0, 0) scale(0.6);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+        transform: translate(-50%, -50%) translate(0, 0) scale(1);
+    }
+    100% {
+        transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) scale(0.8);
+        opacity: 0;
+    }
+}
+
+/* toggle switch para los ajustes de rendimiento. es el clasico interruptor
+   estilo ios. on = dorado, off = gris apagado. sobreescribe al input checkbox
+   nativo que queda oculto */
+.toggle-rendimiento {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: rgba(255, 215, 0, 0.02);
+    border: 1px solid rgba(255, 215, 0, 0.12);
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+.toggle-rendimiento-label {
+    color: rgba(221, 228, 240, 0.85);
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.88rem;
+    letter-spacing: 1px;
+}
+
+/* el input checkbox se esconde pero sigue siendo interactivo */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+    flex-shrink: 0;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* el slider es la pista gris con el circulito que se mueve */
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: rgba(80, 80, 90, 0.6);
+    transition: 0.25s;
+    border-radius: 22px;
+}
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: #dde4f0;
+    transition: 0.25s;
+    border-radius: 50%;
+}
+
+/* cuando esta activado, pista dorada y circulito a la derecha */
+.toggle-switch input:checked + .toggle-slider {
+    background: rgba(255, 215, 0, 0.5);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(22px);
+    background: #ffd700;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+}

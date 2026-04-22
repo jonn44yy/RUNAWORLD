@@ -1,0 +1,177 @@
+/*
+   stats_panel.css — runaworld
+   panel de estadisticas del jugador en la seccion de ajustes.
+   muestra metricas generales del juego y la lista de probabilidades
+   de cada boost con su rareza, duracion y porcentaje de aparicion.
+
+   indice por orden de aparicion:
+     1. contenedor principal del panel de stats
+     2. titulos y subtitulos del panel
+     3. grid de estadisticas generales
+     4. lista de boosts con probabilidades
+     5. responsive para movil
+   este archivo va pegado al final de style.css segun el comentario original.
+   HDPT con tener que separarlo, pero gg que al menos esta organizado
+*/
+/* ---- PANEL PRINCIPAL ---- */
+
+/* contenedor del panel de estadisticas, fondo azulado muy tenue con borde dorado */
+.stats-panel {
+    background: rgba(60,120,255,0.04);
+    border: 1px solid rgba(255,215,0,0.12);
+    border-radius: 6px;
+    padding: 22px 20px;
+    margin-bottom: 30px;
+}
+
+/* titulo principal del panel en dorado centrado y en mayusculas */
+.stats-panel-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: #ffd700;
+    text-align: center;
+    margin-bottom: 20px;
+    opacity: 0.9;
+}
+
+/* subtitulo de subseccion dentro del panel, en purpura tenue */
+.stats-panel-sub {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(160,80,255,0.8);
+    text-align: center;
+    margin: 26px 0 14px;
+}
+
+
+/* ---- GRID DE ESTADÍSTICAS ---- */
+
+/* grid adaptativo de celdas de estadistica, minimo 140px por celda */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+/* celda individual de una estadistica con fondo muy oscuro */
+.stat-item {
+    background: rgba(8,9,13,0.6);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 4px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* etiqueta de la estadistica en gris muy tenue y letra pequena */
+.stat-item-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.58rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(180,180,200,0.55);
+}
+
+/* valor numerico de la estadistica en plata legible */
+.stat-item-valor {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.15rem;
+    color: #dde4f0;
+    letter-spacing: 1px;
+}
+
+
+/* ---- LISTA DE BOOSTS CON PROBABILIDADES ---- */
+
+/* contenedor de todos los grupos de boosts con probabilidades */
+.stats-boost-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* grupo de boosts (ej: monedas, puntos, suerte) con fondo oscuro */
+.stats-boost-grupo {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 4px;
+    padding: 12px 14px;
+}
+
+/* titulo de cada grupo de boosts en azul claro con separador inferior */
+.stats-boost-grupo-titulo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #6a9fff;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+/* fila de un boost individual: rareza | nombre | duracion | porcentaje */
+.stats-boost-fila {
+    display: grid;
+    grid-template-columns: 100px 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 0.88rem;
+}
+
+/* fila de boost no desbloqueado, mas transparente para indicar que no esta disponible */
+.stats-boost-fila.bloqueado { opacity: 0.7; }
+
+/* etiqueta de rareza del boost con borde del color de la rareza */
+.stats-boost-rareza {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border: 1px solid;
+    border-radius: 2px;
+    text-align: center;
+}
+
+/* nombre del boost en plata */
+.stats-boost-nombre {
+    color: #dde4f0;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 1px;
+}
+
+/* duracion del boost en gris muy tenue */
+.stats-boost-dur {
+    font-size: 0.75rem;
+    color: rgba(180,180,200,0.5);
+    font-family: 'Oswald', sans-serif;
+}
+
+/* porcentaje de aparicion del boost, alineado a la derecha */
+.stats-boost-pct {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.95rem;
+    min-width: 50px;
+    text-align: right;
+}
+
+
+/* ---- RESPONSIVE ---- */
+
+/* en movil el grid pasa a dos columnas y las filas de boost se reorganizan en dos filas */
+@media (max-width: 768px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .stats-boost-fila {
+        grid-template-columns: 90px 1fr auto;
+        font-size: 0.8rem;
+    }
+    .stats-boost-dur { grid-column: 2; grid-row: 2; font-size: 0.7rem; }
+    .stats-boost-nombre { font-size: 0.85rem; }
+}
