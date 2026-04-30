@@ -79,12 +79,25 @@ if (isset($_SESSION["errores"])) {
             <div class="admin-form-grupo">
                 <label class="admin-form-label">Tipo</label>
                 <select name="tipo" class="admin-form-select" required>
-                    <option value="coins_seg">Coins/seg (+X por nivel)</option>
-                    <option value="coins_seg_multi">Multiplicador Coins/seg (xN al total)</option>
-                    <option value="points_seg">Points/seg (+X por nivel)</option>
-                    <option value="points_seg_multi">Multiplicador Points/seg (xN al total)</option>
-                    <option value="suerte">Suerte (+X por nivel)</option>
-                    <option value="bulk">Bulk (+1 runa extra por tirada)</option>
+                    <optgroup label="Coins">
+                        <option value="coins_seg">Coins/seg (+X por nivel)</option>
+                        <option value="coins_seg_multi">Multiplicador Coins/seg (xN al total)</option>
+                        <option value="coins_seg_multi_eterno">Multiplicador Coins/seg ETERNO</option>
+                    </optgroup>
+                    <optgroup label="Points">
+                        <option value="points_seg">Points/seg (+X por nivel)</option>
+                        <option value="points_seg_multi">Multiplicador Points/seg (xN al total)</option>
+                        <option value="points_seg_multi_eterno">Multiplicador Points/seg ETERNO</option>
+                    </optgroup>
+                    <optgroup label="Bulk (runas por tirada)">
+                        <option value="bulk">Bulk (+1 runa por nivel)</option>
+                        <option value="bulk_normal">Bulk normal</option>
+                        <option value="bulk_extra">Bulk extra (+X runas, 1 nivel)</option>
+                    </optgroup>
+                    <optgroup label="Desbloqueo de boosts">
+                        <option value="desbloquear_boost_leg">Desbloquear boost legendario</option>
+                        <option value="desbloquear_boost_div">Desbloquear boost divino</option>
+                    </optgroup>
                 </select>
             </div>
 

@@ -112,7 +112,7 @@ function seleccionarRunaCol(el) {
     if (rareza === "eterna" || rareza === "divina" || rareza === "legendaria" || rareza === "mitica") actualizarEstadoToggle(rareza);
 
     const iframe = document.getElementById("col-iframe");
-    if (iframe) iframe.src = "RUNAS_HTML/" + rareza + ".html";
+    if (iframe) iframe.src = "RUNAS_HTML/RUNAS/" + rareza + ".html";
 
     // panel stats de la derecha. titulo con el nombre y color por rareza
     document.getElementById("col-stats-titulo").textContent = nombre;
@@ -133,11 +133,10 @@ function seleccionarRunaCol(el) {
     const labelRareza = labels[rareza]  || rareza;
     document.getElementById("col-stats-titulo").style.color = colorRareza;
 
-    // probabilidades: getProbBaseStr y getProbStr viven en ui.js y ya
-    // respetan el display_mode (porcentaje / peso) del jugador
+    // 27/04 v3: probabilidad fija (sin "Con tu suerte"). getProbStr y
+    // getProbBaseStr ahora devuelven el mismo valor (la fraccion 1/X)
     const runaId  = parseInt(el.dataset.id);
-    const probBase = getProbBaseStr(runaId);
-    const probSuerte = getProbStr(runaId);
+    const probStr = getProbStr(runaId);
 
     // el html del panel de stats lo pinto con innerHTML. son pocas filas y
     // se repinta solo al seleccionar otra runa, no merece la pena DOM API
@@ -149,12 +148,8 @@ function seleccionarRunaCol(el) {
             <span class="col-stat-valor" style="color:${colorRareza}">${labelRareza}</span>
         </div>
         <div class="col-stat-fila">
-            <span class="col-stat-label">Probabilidad base</span>
-            <span class="col-stat-valor">${probBase}</span>
-        </div>
-        <div class="col-stat-fila">
-            <span class="col-stat-label">Con tu suerte (x${suerte.toFixed(2)})</span>
-            <span class="col-stat-valor" style="color:${colorRareza}">${probSuerte}</span>
+            <span class="col-stat-label">Probabilidad</span>
+            <span class="col-stat-valor" style="color:${colorRareza}">${probStr}</span>
         </div>
         <div class="col-stat-fila">
             <span class="col-stat-label">Multiplicador</span>
@@ -782,7 +777,7 @@ function animarEpicaCanvas() {
 function verAnimacionCompleta() {
     if (!colRunaActual) return;
     const iframe = document.getElementById("col-iframe");
-    if (iframe) iframe.src = "RUNAS_HTML/" + colRunaActual + "_animacion.html";
+    if (iframe) iframe.src = "RUNAS_HTML/RUNAS_ANIMADAS/" + colRunaActual + ".html";
 }
 
 

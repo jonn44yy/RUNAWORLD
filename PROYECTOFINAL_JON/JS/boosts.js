@@ -69,17 +69,57 @@ function obtenerRarezaBoost(boost) {
 }
 
 
+// helper: cuanto sube el peso de un boost segun su rareza si la mejora
+// de desbloqueo correspondiente esta comprada. ANTES (v1) los boosts
+// legendario/divino tenian requiere_mejora_id y solo aparecian si el
+// jugador compraba la mejora — ahora aparecen SIEMPRE pero la mejora
+// de desbloqueo SUBE su probabilidad. la idea: en mid-game ya ves runas
+// raras flotando, comprar la mejora las hace mucho mas frecuentes.
+//
+// los multiplicadores van por rareza, no por boost individual: si compras
+// "Catalizador Legendario" (mejora id=14 en BD v2), TODOS los boosts de
+// rareza "legendario" multiplican peso x5. y "Catalizador Divino" (id=15)
+// multiplica peso x4 a los divinos. ambos efectos son aditivos
+function _multiplicadorPesoBoost(rareza) {
+    // window.RW_INIT.mejoras_desbloqueadas trae los ids de mejoras con nivel >= 1.
+    // los ids 14 (catalizador legendario) y 15 (catalizador divino) son los
+    // que controlan el escalado. si esos ids cambian en BD, cambiar aqui
+    const desbloqueadas = (window.RW_INIT && window.RW_INIT.mejoras_desbloqueadas) || [];
+    const ID_CAT_LEGENDARIO = 14;
+    const ID_CAT_DIVINO     = 15;
+
+    if (rareza === "legendario" && desbloqueadas.includes(ID_CAT_LEGENDARIO)) {
+        return 5;   // 1% base -> ~5% efectivo
+    }
+    if (rareza === "divino" && desbloqueadas.includes(ID_CAT_DIVINO)) {
+        return 4;   // 0.5% base -> ~2% efectivo
+    }
+    return 1;
+}
+
+
 // sortear que boost toca esta vez, ponderado por el peso de cada boost.
 // los boosts raros (divino, legendario) tienen peso bajo, los comunes alto.
-// mecanica clasica de ruleta: suma de pesos, random, y a ver donde cae
+// mecanica clasica de ruleta: suma de pesos, random, y a ver donde cae.
+// v2 (24/04): aplicamos _multiplicadorPesoBoost para escalar legendarios/
+// divinos si el jugador compro la mejora de desbloqueo correspondiente.
+// los boosts siempre aparecen, lo que cambia es la probabilidad
 function sortearBoost() {
     if (!BOOST_TIPOS.length) return null;
-    const pesoTotal = BOOST_TIPOS.reduce((acc, b) => acc + b.peso, 0);
+
+    // calculo pesos efectivos primero (multiplicador segun rareza + mejora)
+    const pesosEfectivos = BOOST_TIPOS.map(b => {
+        const rareza = obtenerRarezaBoost(b);
+        return b.peso * _multiplicadorPesoBoost(rareza);
+    });
+    const pesoTotal = pesosEfectivos.reduce((a, b) => a + b, 0);
+    if (pesoTotal <= 0) return BOOST_TIPOS[0];
+
     let tirada = Math.random() * pesoTotal;
     let acum   = 0;
-    for (const boost of BOOST_TIPOS) {
-        acum += boost.peso;
-        if (tirada <= acum) return boost;
+    for (let i = 0; i < BOOST_TIPOS.length; i++) {
+        acum += pesosEfectivos[i];
+        if (tirada <= acum) return BOOST_TIPOS[i];
     }
     return BOOST_TIPOS[0];
 }
@@ -230,24 +270,12 @@ function clickarRunaFlotante() {
 }
 
 
-// helper por si alguien fuera de este archivo quiere calcular la suerte real
-// con su base. no lo uso yo pero lo dejo expuesto
-function obtenerSuerteReal(base) {
-    return base * multiplicadorRuna;
-}
+// 27/04 v3: obtenerSuerteReal() eliminada, sistema de suerte retirado.
 
 
 // LA FUNCION MAS IMPORTANTE DEL ARCHIVO
-// recalcula coins_ps, points_ps y suerte aplicando la formula (a+b)*c*d:
-//   a = 1 (base del jugador)
-//   b = suerte_shop_add (mejoras compradas en tienda)
-//   c = multiplicador de boosts activos (lo calculo aqui)
-//   d = suerte_grupo (bonus de colecciones completadas)
-//
-// regla de oro: suerte_base_val NUNCA se asigna fuera de aqui. siempre se
-// recompone desde _calcSuerteBase(). si otro archivo la toca directamente,
-// el display se rompe y te vuelves loco debuggeando una semana (te lo digo
-// por experiencia, paso)
+// recalcula coins_ps y points_ps aplicando los multiplicadores de los boosts
+// activos. la parte de suerte fue retirada el 27/04 v3.
 function aplicarBoosts() {
     const ahora = Date.now();
 
@@ -263,39 +291,19 @@ function aplicarBoosts() {
     if (coins_ps_base  === null && typeof coins_ps  !== "undefined" && coins_ps  > 0)  coins_ps_base  = coins_ps;
     if (points_ps_base === null && typeof points_ps !== "undefined" && points_ps >= 0) points_ps_base = points_ps;
 
-    // recomputar suerte base desde sus fuentes (ver comentario de la funcion)
-    if (typeof _calcSuerteBase === "function") {
-        suerte_base_val = _calcSuerteBase();
-    }
-
     // acumular multiplicadores de los boosts activos por tipo
     let mc = 1;  // coins boost (multiplicador de coins/seg)
     let mp = 1;  // points boost (multiplicador de points/seg)
-    let ms = 1;  // suerte boost = la "c" de la formula
 
     boostsActivos.forEach(b => {
         const multi = parseFloat(b.multi) || 1;
         if (b.tipo === "coins_seg")  mc *= multi;
         if (b.tipo === "points_seg") mp *= multi;
-        if (b.tipo === "suerte")     ms *= multi;
+        // 27/04 v3: boosts de suerte eliminados (ya no existen en boost_tipos)
     });
 
     if (coins_ps_base  !== null) coins_ps  = coins_ps_base  * mc;
     if (points_ps_base !== null) points_ps = points_ps_base * mp;
-
-    // suerte = base * c = (1+b)*d * c = (1+b)*c*d ✓
-    if (suerte_base_val !== null && !isNaN(suerte_base_val) && suerte_base_val > 0) {
-        suerte = suerte_base_val * ms;
-    }
-
-    // actualizar el display de suerte en el sidebar
-    const suerteEl = document.getElementById("suerte-display");
-    if (suerteEl) {
-        suerteEl.textContent = "x" + suerte.toFixed(2);
-    }
-
-    // refrescar los porcentajes del panel derecho con la suerte nueva
-    if (typeof recalcularSuertePanel === "function") recalcularSuertePanel();
 
     if (typeof actualizarPantalla === "function") actualizarPantalla();
 }
@@ -386,9 +394,8 @@ function mostrarNotifBoost(boost) {
     const multi    = parseFloat(boost.multiplicador) || 1;
 
     // etiqueta del tipo de boost. en vez de emoji pongo la palabra, que es
-    // mas claro de un vistazo: suerte, puntos o moneda
+    // mas claro de un vistazo: puntos o moneda
     const tipoLabel = {
-        "suerte":     "suerte",
         "points_seg": "puntos",
         "coins_seg":  "moneda"
     }[boost.tipo] || boost.tipo;

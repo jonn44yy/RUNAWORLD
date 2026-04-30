@@ -19,7 +19,7 @@ if (isset($_SESSION["errores"])) {
 
 $stmt = $conexion->prepare("
     SELECT u.id, u.username,
-           j.coins, j.points, j.coins_por_seg, j.points_por_seg, j.suerte
+           j.coins, j.points, j.coins_por_seg, j.points_por_seg
     FROM usuarios u
     LEFT JOIN jugadores j ON u.id = j.usuario_id
     WHERE u.id = ?
@@ -119,12 +119,6 @@ if (!$usuario) die("Usuario no encontrado");
                 <label class="admin-form-label">Points por segundo</label>
                 <input type="number" step="0.0001" name="points_por_seg" class="admin-form-input"
                        value="<?= $usuario["points_por_seg"] ?? 0 ?>">
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Suerte (multiplicador, base 1.00)</label>
-                <input type="number" step="0.01" name="suerte" class="admin-form-input"
-                       value="<?= $usuario["suerte"] ?? 1 ?>">
             </div>
 
             <button type="submit" class="admin-form-submit">Guardar cambios</button>

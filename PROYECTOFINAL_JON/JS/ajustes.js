@@ -44,6 +44,17 @@ function confirmarBorrado() {
         document.getElementById("msg-confirmacion").textContent = "Escribe exactamente: estoy seguro";
         return;
     }
+
+    // CLAVE: parar runa-sync ANTES de mandar el reset.
+    // si no, los clicks que tenia buffereados o una request en vuelo
+    // se aplican sobre la cuenta recien borrada y "vuelven" coins/stats.
+    // reset() incrementa epoch (invalida respuestas en vuelo), vacia el
+    // buffer y para el heartbeat. desde aqui hasta el reload no se
+    // procesa ningun click ni beacon
+    if (window.runaSync && typeof window.runaSync.reset === "function") {
+        window.runaSync.reset();
+    }
+
     fetch("PHP/borrar_progreso.php", { method: "POST" })
     .then(r => r.json())
     .then(data => {
@@ -57,6 +68,12 @@ function confirmarBorrado() {
         } else {
             document.getElementById("msg-confirmacion").textContent = "Error al borrar.";
         }
+    })
+    .catch(err => {
+        // si la red falla a media, igual el reset() ya dejo el cliente
+        // "halted". forzamos reload para que el jugador no se quede atascado
+        console.warn("[borrar] fallo red, recargando", err);
+        location.reload();
     });
 }
 
@@ -105,10 +122,10 @@ function comprarMejora(mejora_id) {
         // esto es importante: no puedo simplemente sumar el valor de la mejora
         // que compre, porque las mejoras tienen multiplicadores que afectan a
         // todo, asi que toca recorrer la lista entera cada vez
+        // 27/04 v3: suerte_add eliminado, las mejoras de suerte ya no existen
         if (data.mejoras) {
             let coins_add    = 0, multi_coins  = 1;
             let points_add   = 0, multi_points = 1;
-            let suerte_add   = 0;
             let bulk_add     = 0;
 
             data.mejoras.forEach(mejora => {
@@ -119,7 +136,6 @@ function comprarMejora(mejora_id) {
                     case "coins_seg_multi":  multi_coins  *= (1 + valor * nivel); break;
                     case "points_seg":       points_add   += valor * nivel;       break;
                     case "points_seg_multi": multi_points *= (1 + valor * nivel); break;
-                    case "suerte":           suerte_add   += valor * nivel;       break;
                     case "bulk":             bulk_add     += nivel;               break;
                 }
             });
@@ -130,7 +146,6 @@ function comprarMejora(mejora_id) {
             _mejora_coins_ps     = (1 + coins_add) * multi_coins;
             _mejora_multi_pts    = multi_points;
             _mejora_points_add   = points_add;
-            _mejora_suerte_multi = (1 + suerte_add);
 
             coins_ps_base = _mejora_coins_ps;
             coins_ps      = _mejora_coins_ps;
@@ -145,14 +160,6 @@ function comprarMejora(mejora_id) {
             bulk_runas = 1 + bulk_add;
             const bulkEl = document.getElementById("bulk-display");
             if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
-
-            // formula suerte (a+b)*c*d: aqui solo actualizo la "b" (mejoras de
-            // tienda). la "d" (bonus de grupo, coleccion) NO se toca, y la "c"
-            // (boosts activos) la aplica aplicarBoosts() recomponiendo todo.
-            // MUY IMPORTANTE no hacer suerte_base_val = algo aqui directo,
-            // porque se pisa la formula y el display se pone en x1.00 (bug
-            // que arrastre una semana entera, ya sabes)
-            suerte_shop_add = suerte_add;
 
             if (typeof aplicarBoosts === "function") aplicarBoosts();
         }
@@ -364,22 +371,35 @@ function enviarMensaje() {
     formData.append("contenido", contenido);
     if (archivo) formData.append("archivo", archivo);
 
-    fetch("PHP/enviar_mensaje.php", { method: "POST", body: formData })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            exitoEl.textContent = "Mensaje enviado correctamente.";
-            // limpiar todo el formulario despues de mandarlo
-            ["msg-tipo","msg-asunto","msg-contenido","msg-archivo"].forEach(id => {
-                document.getElementById(id).value = "";
-            });
-            document.getElementById("contador-chars").textContent = "0 / 500";
-            document.getElementById("file-nombre-label").textContent = "Seleccionar imagen...";
-        } else {
-            errorEl.textContent = data.error;
-        }
-    })
-    .catch(() => { errorEl.textContent = "Error de conexion."; });
+fetch("PHP/enviar_mensaje.php", { method: "POST", body: formData })
+.then(async r => {
+    const text = await r.text();
+
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("Respuesta NO es JSON:", text);
+        throw new Error("Respuesta inválida del servidor");
+    }
+})
+.then(data => {
+    if (data.ok) {
+        exitoEl.textContent = "Mensaje enviado correctamente.";
+        
+        ["msg-tipo","msg-asunto","msg-contenido","msg-archivo"].forEach(id => {
+            document.getElementById(id).value = "";
+        });
+
+        document.getElementById("contador-chars").textContent = "0 / 500";
+        document.getElementById("file-nombre-label").textContent = "Seleccionar imagen...";
+    } else {
+        errorEl.textContent = data.error;
+    }
+})
+.catch(err => {
+    console.error(err);
+    errorEl.textContent = "Error real del servidor (mira consola)";
+});
 }
 
 

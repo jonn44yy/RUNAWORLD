@@ -19,7 +19,6 @@ $etiquetas_tipo = [
     "coins_seg_multi"  => "x Coins/seg",
     "points_seg"       => "Points/seg",
     "points_seg_multi" => "x Points/seg",
-    "suerte"           => "Suerte",
     "bulk"             => "Bulk"
 ];
 
@@ -28,7 +27,6 @@ $colores_tipo = [
     "coins_seg_multi"  => "#ffaa00",
     "points_seg"       => "#c8d8f0",
     "points_seg_multi" => "#6a9fff",
-    "suerte"           => "#44ff88",
     "bulk"             => "#ff7788"
 ];
 

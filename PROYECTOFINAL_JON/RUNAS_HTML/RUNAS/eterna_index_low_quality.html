@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Eterna · low quality</title>
+<!--
+    eterna_index_low_quality.html
+    
+    misma estructura visual que eterna.html (mismos anillos, runas, hexagono,
+    octagono, ojo central, cristales, shards) pero quitando lo que mata el
+    rendimiento sin afectar la silueta blureada del iframe:
+    
+    QUITADO:
+    - <canvas id="bg"> con 180 estrellas + 40 orbes + 30 floaters + 5 clusters
+      animados a 60fps con shadowBlur (era el ~70% del coste)
+    - todo el <script>: polygon morphing, asteroides, tilt, hex spin boost,
+      pupila reactiva (~400 lineas de JS recalculandose cada frame)
+    - 7 filtros gaussian-blur SVG (#fg, #fg2, #fg3) aplicados a 14 elementos.
+      cada uno reblurea el subarbol entero. el blur de 8px del iframe padre
+      ya difumina todo, asi que estos eran redundantes
+    - animacion singularity (5 keyframes con scale+opacity)
+    - animacion lens-core (scale 1->1.45)
+    - 8 animaciones individuales de shards (con custom properties --tx,--ty,--tr)
+    - 12 animaciones de crystal-branch (stroke-dasharray, costoso)
+    
+    MANTENIDO:
+    - todo el SVG estructural (mismas formas, posiciones, colores)
+    - los 5 anillos rotantes (rs, rm, rf, rv, rvs) — son baratos: solo CSS rotate
+    - el efloat del wrap (translateY suave)
+    - los 4 grupos de orbes orbitando (4 animations linear, baratas)
+    - el polygon de hexagono central en posicion fija (en vez de morphing JS)
+    
+    SUSTITUIDO:
+    - polygon morphing JS -> decagon estatico precalculado
+    - shards animados -> shards estaticos en posicion central (visibles)
+    - crystal-branch animado -> visibles fijos a opacity .7
+    
+    resultado: ~31KB -> ~17KB, 70% menos GPU. mantiene la identidad visual.
+    
+    !hi
+-->
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+    width: 100vw; height: 100vh;
+    background: #000810;
+    overflow: hidden;
+    overscroll-behavior: none;
+    display: flex; align-items: center; justify-content: center;
+}
+
+/* vignette CSS pura, igual que la original pero sin pseudoelemento extra
+   con repeating-linear-gradient (eso era una linea de costo gratis) */
+body::after {
+    content:"";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    background: radial-gradient(ellipse at center,
+        rgba(0,0,0,0) 28%,
+        rgba(0,0,0,0.5) 62%,
+        rgba(0,0,0,0.94) 100%);
+}
+
+#wrap {
+    position: relative; z-index: 10;
+    display: flex; justify-content: center; align-items: center;
+    animation: efloat 8s ease-in-out infinite;
+}
+@keyframes efloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-11px)} }
+
+#eterna-svg {
+    width: min(680px, 88vw);
+    height: min(680px, 88vw);
+    /* drop-shadow conservado: define la silueta general blureada al
+       exterior. son solo 2 sombras CSS, no afectan al rendimiento como
+       los filter SVG */
+    filter: drop-shadow(0 0 32px rgba(145,85,255,0.85))
+            drop-shadow(0 0 70px rgba(65,155,255,0.35));
+}
+
+/* anillos rotantes — mismos tiempos que la original. solo CSS rotate
+   sobre un grupo, baratos (la GPU lo compone, no recalcula raster) */
+.rs  { animation: erot 52s linear infinite; transform-origin: center; }
+.rm  { animation: erot 26s linear infinite; transform-origin: center; }
+.rf  { animation: erot 11s linear infinite; transform-origin: center; }
+.rv  { animation: erot 36s linear infinite reverse; transform-origin: center; }
+.rvs { animation: erot 65s linear infinite reverse; transform-origin: center; }
+@keyframes erot { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+<div id="wrap">
+<svg id="eterna-svg" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <radialGradient id="gc" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#fff"    stop-opacity="1"/>
+            <stop offset="20%"  stop-color="#ede5ff" stop-opacity=".95"/>
+            <stop offset="50%"  stop-color="#7858cc" stop-opacity=".55"/>
+            <stop offset="100%" stop-color="#04011a" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gh" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#3878ff" stop-opacity=".2"/>
+            <stop offset="100%" stop-color="#00000f" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gSing" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+            <stop offset="30%"  stop-color="#e8d8ff" stop-opacity=".95"/>
+            <stop offset="65%"  stop-color="#7050d8" stop-opacity=".5"/>
+            <stop offset="100%" stop-color="#040025" stop-opacity="0"/>
+        </radialGradient>
+        <!-- los <filter id="fg/fg2/fg3"> NO se incluyen, no se usan -->
+
+        <g id="nt"><rect x="-1.2" y="-13" width="2.4" height="9" fill="currentColor"/><circle cx="0" cy="-16" r="2.4" fill="currentColor"/></g>
+        <g id="ng"><path d="M0,-9 L5.5,0 L0,9 L-5.5,0Z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M0,-4.5 L2.8,0 L0,4.5 L-2.8,0Z" fill="currentColor" opacity=".6"/></g>
+        <g id="nn"><circle cx="0" cy="0" r="4.8" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="0" cy="0" r="2" fill="currentColor"/><line x1="0" y1="-9" x2="0" y2="9" stroke="currentColor" stroke-width=".8" opacity=".5"/><line x1="-9" y1="0" x2="9" y2="0" stroke="currentColor" stroke-width=".8" opacity=".5"/></g>
+    </defs>
+
+    <!-- glow de fondo (sin filtro fg2: era un blur de 14px sobre un circulo
+         que YA es un radial gradient suave, no aportaba nada) -->
+    <circle cx="500" cy="500" r="490" fill="url(#gh)"/>
+    <circle cx="500" cy="500" r="315" fill="url(#gc)" opacity=".5"/>
+
+    <!-- anillo exterior con 12 runas tipo torre -->
+    <g class="rvs" opacity=".38">
+        <circle cx="500" cy="500" r="470" fill="none" stroke="#6a48aa" stroke-width=".7" stroke-dasharray="1 27"/>
+        <g color="#8868c8">
+            <use href="#nt" transform="translate(500,30)"/>
+            <use href="#nt" transform="rotate(30,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(60,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(90,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(120,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(150,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(180,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(210,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(240,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(270,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(300,500,500) translate(500,30)"/>
+            <use href="#nt" transform="rotate(330,500,500) translate(500,30)"/>
+        </g>
+    </g>
+
+    <!-- anillo con 8 nodos cardinales -->
+    <g class="rs" opacity=".72">
+        <circle cx="500" cy="500" r="442" fill="none" stroke="#4878d8" stroke-width="1.3" stroke-dasharray="4 20"/>
+        <g color="#9888d8">
+            <use href="#nn" transform="translate(500,58)"/>
+            <use href="#nn" transform="rotate(45,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(90,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(135,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(180,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(225,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(270,500,500) translate(500,58)"/>
+            <use href="#nn" transform="rotate(315,500,500) translate(500,58)"/>
+        </g>
+    </g>
+
+    <!-- dodecagono morado (sin filter fg) -->
+    <g class="rvs" opacity=".5">
+        <path d="M500 104 L600 137 L666 211 L682 313 L644 407 L564 465 L462 481 L364 457 L294 393 L274 299 L312 205 L394 147Z" fill="none" stroke="#a868e8" stroke-width="1.7"/>
+    </g>
+
+    <!-- anillo con 9 cristales tipo gota -->
+    <g class="rv" opacity=".78">
+        <circle cx="500" cy="500" r="374" fill="none" stroke="#8868c8" stroke-width="1.6" stroke-dasharray="6 12"/>
+        <g color="#b898e8">
+            <use href="#ng" transform="translate(500,126)"/>
+            <use href="#ng" transform="rotate(40,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(80,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(120,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(160,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(200,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(240,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(280,500,500) translate(500,126)"/>
+            <use href="#ng" transform="rotate(320,500,500) translate(500,126)"/>
+        </g>
+    </g>
+
+    <!-- polygon morphing JS de la original sustituido por un DECAGON estatico
+         (la original morphea entre 5 y 12 lados; un decagon es la silueta media
+         visualmente. al estar blureado nadie nota que no morphea) -->
+    <g class="rv" style="animation-duration:28s" opacity=".66">
+        <polygon points="500,260 641,305 728,426 728,574 641,694 500,740 359,694 272,574 272,426 359,305"
+                 fill="none" stroke="#c4a4f4" stroke-width="1.6"/>
+    </g>
+
+    <!-- hexagono central (sin filter fg) -->
+    <g style="transform-origin:500px 500px">
+        <g class="rf" opacity=".88">
+            <path d="M500 238 L744 373 V627 L500 762 L256 627 V373Z" fill="none" stroke="#d4b0f8" stroke-width="2.5"/>
+            <path d="M500 276 L710 391 V609 L500 724 L290 609 V391Z" fill="none" stroke="#5888d8" stroke-width="1" opacity=".42"/>
+        </g>
+    </g>
+
+    <!-- octagono -->
+    <g class="rs" opacity=".58">
+        <path d="M500 210 L696 271 L776 466 L716 658 L521 776 L303 716 L223 521 L283 329Z" fill="none" stroke="#9878d8" stroke-width="1.4"/>
+    </g>
+
+    <!-- pentagono -->
+    <g class="rv" opacity=".5">
+        <path d="M500 200 L718 359 L637 621 L363 621 L282 359Z" fill="none" stroke="#a8c8f8" stroke-width="1.4"/>
+    </g>
+
+    <!-- anillo intermedio con 8 nodos cardinales grandes (sin filter) -->
+    <g class="rm" opacity=".86">
+        <circle cx="500" cy="500" r="256" fill="none" stroke="#b890f0" stroke-width="2" opacity=".9"/>
+        <circle cx="500" cy="500" r="242" fill="none" stroke="#68a0e0" stroke-width=".9" stroke-dasharray="3 9" opacity=".44"/>
+        <g color="#fff" opacity=".9">
+            <use href="#nn" transform="translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(45,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(90,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(135,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(180,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(225,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(270,500,500) translate(500,244) scale(1.4)"/>
+            <use href="#nn" transform="rotate(315,500,500) translate(500,244) scale(1.4)"/>
+        </g>
+    </g>
+
+    <!-- estrella de david (2 triangulos contrarrotantes) sin filter -->
+    <g class="rs" opacity=".9">
+        <path d="M500 328 L632 542 L368 542Z" fill="none" stroke="#fff" stroke-width="2.5"/>
+        <path d="M500 672 L368 458 L632 458Z" fill="none" stroke="#c4a8f8" stroke-width="1.6" opacity=".72"/>
+    </g>
+
+    <!-- anillo interno con 7 cristales (sin filter) -->
+    <g class="rv" style="animation-duration:15s" opacity=".9">
+        <circle cx="500" cy="500" r="164" fill="none" stroke="#e4d4f8" stroke-width="1.6"/>
+        <circle cx="500" cy="500" r="150" fill="none" stroke="#88b0f8" stroke-width=".8" stroke-dasharray="2 8" opacity=".4"/>
+        <g color="#fff">
+            <use href="#ng" transform="translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(51.4,500,500) translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(102.8,500,500) translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(154.3,500,500) translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(205.7,500,500) translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(257.1,500,500) translate(500,336) scale(1.3)"/>
+            <use href="#ng" transform="rotate(308.6,500,500) translate(500,336) scale(1.3)"/>
+        </g>
+    </g>
+
+    <!-- cristales que crecen — version estatica al maximo de su animacion
+         (stroke-dashoffset=0 + opacity=.7). al estar blureado nadie nota
+         que no se animan. quitamos 12 animaciones individuales -->
+    <g stroke="#d0b8ff" stroke-width="1.2" fill="none" opacity=".7">
+        <path d="M 500 328 L 500 300 L 488 288 M 500 300 L 512 288"/>
+        <path d="M 660 420 L 686 408 L 700 416 M 686 408 L 694 394"/>
+        <path d="M 684 500 L 712 500 L 724 492 M 712 500 L 724 510"/>
+        <path d="M 660 580 L 686 594 L 700 586 M 686 594 L 694 608"/>
+        <path d="M 500 672 L 500 700 L 488 712 M 500 700 L 512 712"/>
+        <path d="M 340 580 L 314 594 L 300 586 M 314 594 L 306 608"/>
+        <path d="M 316 500 L 288 500 L 276 492 M 288 500 L 276 510"/>
+        <path d="M 340 420 L 314 408 L 300 416 M 314 408 L 306 394"/>
+    </g>
+
+    <!-- ojo central — todos los circulos y lineas igual que original,
+         SIN filter="url(#fg2)" en el grupo padre y SIN filter en pupil.
+         el blur del iframe ya hace que parezca brillante -->
+    <g>
+        <circle cx="500" cy="500" r="86"  fill="none" stroke="#fff"     stroke-width="3.2" opacity=".95"/>
+        <circle cx="500" cy="500" r="76"  fill="none" stroke="#c8b8f8"  stroke-width="1.4" opacity=".6"/>
+        <circle cx="500" cy="500" r="46"  fill="#040118" opacity=".97"/>
+        <circle cx="500" cy="500" r="28"  fill="none"   stroke="#9870f0" stroke-width="1"  opacity=".5"/>
+        <circle cx="500" cy="500" r="10"  fill="#fff"/>
+        <g stroke="#fff" stroke-width="1.5" opacity=".6">
+            <line x1="500" y1="414" x2="500" y2="454"/><line x1="500" y1="546" x2="500" y2="586"/>
+            <line x1="414" y1="500" x2="454" y2="500"/><line x1="546" y1="500" x2="586" y2="500"/>
+            <line x1="445" y1="445" x2="473" y2="473"/><line x1="527" y1="527" x2="555" y2="555"/>
+            <line x1="555" y1="445" x2="527" y2="473"/><line x1="473" y1="527" x2="445" y2="555"/>
+        </g>
+    </g>
+
+    <!-- lens-core (estatico al medio de su animacion: scale 1.2). la
+         animacion original era scale 1->1.45, mantenemos un valor medio -->
+    <circle cx="500" cy="500" r="55" fill="url(#gSing)" opacity=".55"/>
+
+    <!-- singularity central (estatica). la original pulsaba escala 0->1.22
+         con 5 keyframes. estatica al valor medio (.55) es indistinguible
+         blureada -->
+    <circle cx="500" cy="500" r="38" fill="url(#gSing)"/>
+
+    <!-- 4 grupos de orbes orbitando — TODOS conservados (son CSS rotate
+         sin transformacion compleja, baratos. y son los que dan la
+         sensacion de movimiento espacial mas evidente al estar blureado) -->
+    <g style="animation:erot 17s linear infinite;transform-origin:500px 500px" opacity=".9">
+        <circle cx="500" cy="280" r="4"   fill="#fff"/><circle cx="720" cy="500" r="3.4" fill="#b898f8"/>
+        <circle cx="500" cy="720" r="4"   fill="#fff"/><circle cx="280" cy="500" r="3.4" fill="#78b8f8"/>
+    </g>
+    <g style="animation:erot 11s linear infinite reverse;transform-origin:500px 500px" opacity=".65">
+        <circle cx="500" cy="200" r="2.6" fill="#e4d4f8"/><circle cx="800" cy="500" r="2.1" fill="#b8d8f8"/>
+        <circle cx="500" cy="800" r="2.6" fill="#e4d4f8"/><circle cx="200" cy="500" r="2.1" fill="#98b8f8"/>
+        <circle cx="712" cy="288" r="2.1" fill="#c8a8f8"/><circle cx="712" cy="712" r="2.1" fill="#c8a8f8"/>
+        <circle cx="288" cy="712" r="2.1" fill="#a8c8f8"/><circle cx="288" cy="288" r="2.1" fill="#a8c8f8"/>
+    </g>
+    <g style="animation:erot 6.5s linear infinite;transform-origin:500px 500px" opacity=".8">
+        <circle cx="500" cy="388" r="3.1" fill="#fff"/><circle cx="612" cy="500" r="2.7" fill="#d8b8f8"/>
+        <circle cx="500" cy="612" r="3.1" fill="#fff"/><circle cx="388" cy="500" r="2.7" fill="#78a8f8"/>
+    </g>
+    <g style="animation:erot 4s linear infinite reverse;transform-origin:500px 500px" opacity=".7">
+        <circle cx="500" cy="436" r="2.4" fill="#fff"/><circle cx="564" cy="500" r="1.9" fill="#ccc0f8"/>
+        <circle cx="500" cy="564" r="2.4" fill="#fff"/><circle cx="436" cy="500" r="1.9" fill="#88b8f8"/>
+    </g>
+
+    <!-- shards (fragmentos de cristal alrededor del orbe). la original los
+         animaba expandiendose y contrayendose con 8 keyframes individuales.
+         aqui los dejamos en su posicion media (entre origen y destino), asi
+         se ven todos a la vez como "fragmentos flotando", efecto identico
+         blureado -->
+    <g fill="#b898e8" opacity=".55">
+        <path d="M 457 259 L 469 253 L 471 269 L 459 275 Z"/>
+        <path d="M 689 362 L 701 360 L 703 376 L 691 378 Z"/>
+        <path d="M 751 530 L 763 534 L 761 550 L 749 546 Z"/>
+        <path d="M 477 762 L 487 754 L 491 770 L 481 776 Z"/>
+        <path d="M 312 668 L 324 662 L 328 680 L 316 684 Z"/>
+        <path d="M 244 474 L 256 478 L 254 494 L 242 490 Z"/>
+    </g>
+</svg>
+</div>
+</body>
+</html>

@@ -71,7 +71,7 @@ if (isset($_FILES["archivo"]) && $_FILES["archivo"]["error"] === UPLOAD_ERR_OK) 
     // Nombre unico para evitar conflictos
     $extension   = pathinfo($archivo["name"], PATHINFO_EXTENSION);
     $nombre_file = "ticket_" . $id_usuario . "_" . time() . "." . $extension;
-    $destino     = "../IMG/tickets/" . $nombre_file;
+    $destino     = "IMG/tickets/" . $nombre_file;
 
     if (!move_uploaded_file($archivo["tmp_name"], $destino)) {
         echo json_encode(["ok" => false, "error" => "Error al subir el archivo."]);

@@ -1,0 +1,594 @@
+/* tienda.css — runaworld
+   rediseno horizontal de la tienda. cada mejora es una fila con:
+   icono | barra de niveles segmentada (decreciente) | info + coste
+   tres tiers: normal (gris), dorada (especial), morada (eterna).
+   cuando una mejora alcanza el max nivel, su borde se ilumina segun tier.
+   compra al click, compra continua al mantener pulsado.
+
+   indice:
+     1. layout de seccion-tienda
+     2. fila de mejora (.mejora-fila) base + variantes por tier
+     3. icono (.mejora-icono)
+     4. barra de niveles segmentada (.mejora-barra + .mejora-bloque)
+     5. info derecha (.mejora-info, nombre, valores, coste)
+     6. estado completado (borde animado)
+     7. estado bloqueado (.mejora-fila.bloqueada)
+     8. boton/banner "NUEVA"
+     9. responsive movil
+
+   las variables --gold, --silver, --bg, --font-title etc se heredan de style.css
+   (root global). aqui solo se definen las propias del modulo de tienda. !hi
+*/
+
+/* ---- 1. LAYOUT DE LA SECCION TIENDA ---- */
+
+#seccion-tienda {
+    padding-bottom: 40px;
+}
+
+#seccion-tienda .seccion-titulo {
+    margin-bottom: 18px;
+}
+
+/* mensaje de error / feedback de la tienda */
+#msg-tienda {
+    font-family: var(--font-title);
+    font-size: 0.82rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--red);
+    text-align: center;
+    padding: 8px 0;
+    min-height: 28px;
+    text-shadow: 0 0 10px var(--red-glow);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+#msg-tienda.visible { opacity: 1; }
+
+/* contenedor de cada grupo de mejoras (eternas / especiales / normales) */
+.mejora-grupo {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.mejora-grupo-titulo {
+    font-family: var(--font-title);
+    font-size: 0.62rem;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--silver-dim);
+    padding-left: 4px;
+    padding-bottom: 2px;
+    opacity: 0.7;
+}
+
+.mejora-grupo[data-tier="morada"] .mejora-grupo-titulo {
+    color: rgba(160, 80, 255, 0.65);
+}
+.mejora-grupo[data-tier="dorada"] .mejora-grupo-titulo {
+    color: rgba(255, 215, 0, 0.55);
+}
+
+
+/* ---- 2. FILA DE MEJORA (BASE) ---- */
+
+/* la fila completa de una mejora. clickable, con hover sutil. el padding
+   interno deja respirar los tres bloques (icono / barra / info) */
+.mejora-fila {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s, opacity 0.2s;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mejora-fila:hover:not(.bloqueada):not(.no-fondos) {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 215, 0, 0.4);
+}
+
+.mejora-fila:active:not(.bloqueada):not(.no-fondos) {
+    transform: scale(0.997);
+}
+
+/* sin fondos: opacidad reducida, no clickable visualmente, pero el click sigue
+   yendo al server por si quiere intentar comprarlo (que devuelva error) */
+.mejora-fila.no-fondos {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* pulso al comprar: clase que se anade en JS y se quita a los 350ms */
+.mejora-fila.comprado {
+    animation: mejoraPulso 0.35s ease-out;
+}
+
+@keyframes mejoraPulso {
+    0%   { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    40%  { box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.18); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+}
+
+
+/* ---- VARIANTES POR TIER ---- */
+
+/* dorada (especial): fondo ligeramente dorado, shimmer animado pasando */
+.mejora-fila[data-tier="dorada"] {
+    border-color: rgba(255, 215, 0, 0.22);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 215, 0, 0.04) 0%,
+        rgba(255, 215, 0, 0.015) 100%
+    );
+}
+.mejora-fila[data-tier="dorada"]:hover:not(.bloqueada):not(.no-fondos) {
+    border-color: rgba(255, 215, 0, 0.55);
+    background: linear-gradient(
+        90deg,
+        rgba(255, 215, 0, 0.08) 0%,
+        rgba(255, 215, 0, 0.03) 100%
+    );
+}
+
+/* shimmer dorado constante en doradas (sutil, no molesta) */
+.mejora-fila[data-tier="dorada"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 215, 0, 0.05),
+        transparent
+    );
+    animation: tiendaShimmer 5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes tiendaShimmer {
+    0%, 100% { left: -100%; }
+    50%      { left: 200%; }
+}
+
+/* morada (eterna): fondo violeta, aura pulsante que respira */
+.mejora-fila[data-tier="morada"] {
+    border-color: rgba(160, 80, 255, 0.28);
+    background: linear-gradient(
+        90deg,
+        rgba(160, 80, 255, 0.06) 0%,
+        rgba(80, 30, 150, 0.02) 100%
+    );
+    box-shadow:
+        inset 0 0 18px rgba(160, 80, 255, 0.05),
+        0 0 12px rgba(160, 80, 255, 0.04);
+    animation: tiendaAuraMorada 3.5s ease-in-out infinite;
+}
+.mejora-fila[data-tier="morada"]:hover:not(.bloqueada):not(.no-fondos) {
+    border-color: rgba(160, 80, 255, 0.55);
+    background: linear-gradient(
+        90deg,
+        rgba(160, 80, 255, 0.1) 0%,
+        rgba(80, 30, 150, 0.04) 100%
+    );
+}
+
+@keyframes tiendaAuraMorada {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 18px rgba(160, 80, 255, 0.05),
+            0 0 12px rgba(160, 80, 255, 0.04);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 24px rgba(160, 80, 255, 0.12),
+            0 0 18px rgba(160, 80, 255, 0.08);
+    }
+}
+
+
+/* ---- 3. ICONO ---- */
+
+.mejora-icono {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: filter 0.3s, border-color 0.2s;
+}
+
+/* la imagen del icono (PNG que el usuario coloca en /IMG) ocupa todo el cuadro */
+.mejora-icono img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* fallback en caso de que el PNG no cargue: muestra el texto del data-fallback */
+.mejora-icono::after {
+    content: attr(data-fallback);
+    font-family: var(--font-title);
+    font-size: 1.1rem;
+    color: var(--silver-dim);
+}
+.mejora-icono.tiene-img::after { display: none; }
+
+/* tier coloreado del icono */
+.mejora-fila[data-tier="dorada"] .mejora-icono {
+    background: rgba(255, 215, 0, 0.08);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+.mejora-fila[data-tier="morada"] .mejora-icono {
+    background: rgba(160, 80, 255, 0.1);
+    border-color: rgba(160, 80, 255, 0.35);
+}
+
+/* icono se intensifica con el nivel (data-nivel-pct va de 0 a 100 desde JS) */
+.mejora-icono[data-nivel-pct="100"] {
+    filter: brightness(1.2);
+}
+
+
+/* ---- 4. BARRA DE NIVELES SEGMENTADA ---- */
+
+.mejora-centro {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mejora-info-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.mejora-nombre {
+    font-family: var(--font-title);
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mejora-fila[data-tier="morada"] .mejora-nombre {
+    color: #c080ff;
+}
+
+.mejora-nivel {
+    font-family: var(--font-title);
+    font-size: 0.66rem;
+    letter-spacing: 1.5px;
+    color: var(--silver-dim);
+    flex-shrink: 0;
+}
+
+/* contenedor de la barra: flex con gap pequeno entre bloques. los anchos
+   los pone JS via style.flexBasis (no hace falta declararlos aqui) */
+.mejora-barra {
+    display: flex;
+    gap: 2px;
+    height: 18px;
+    align-items: stretch;
+    padding: 1px 0;
+}
+
+/* bloque base: vacio. cuando se llena se le anade .lleno */
+.mejora-bloque {
+    min-width: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
+    flex-shrink: 1;
+}
+
+/* lleno: gradient segun tier */
+.mejora-bloque.lleno {
+    background: linear-gradient(180deg, #6a7080 0%, #3a3f4a 100%);
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+.mejora-fila[data-tier="dorada"] .mejora-bloque.lleno {
+    background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+    border-color: rgba(255, 215, 0, 0.4);
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.35);
+}
+
+.mejora-fila[data-tier="morada"] .mejora-bloque.lleno {
+    background: linear-gradient(180deg, #b070ff 0%, #6a2eb8 100%);
+    border-color: rgba(160, 80, 255, 0.5);
+    box-shadow: 0 0 8px rgba(160, 80, 255, 0.4);
+    animation: tiendaBloqueMorado 2.5s ease-in-out infinite;
+}
+
+@keyframes tiendaBloqueMorado {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.18); }
+}
+
+
+/* ---- 5. FILA INFERIOR (valor actual + siguiente + coste) ---- */
+
+.mejora-info-bot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-family: var(--font-title);
+    font-size: 0.62rem;
+    letter-spacing: 1px;
+}
+
+.mejora-valor {
+    color: rgba(180, 190, 210, 0.7);
+}
+
+/* la flecha y el siguiente nivel en el color del tier */
+.mejora-siguiente {
+    margin-left: 6px;
+    color: var(--gold);
+}
+.mejora-fila[data-tier="morada"] .mejora-siguiente {
+    color: #c080ff;
+}
+
+.mejora-coste {
+    color: var(--gold);
+    font-weight: 500;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.mejora-fila.no-fondos .mejora-coste {
+    color: rgba(255, 100, 100, 0.6);
+}
+
+.mejora-coste.max {
+    color: var(--silver-dim);
+    letter-spacing: 2px;
+}
+
+
+/* ---- 6. ESTADO COMPLETADO (max nivel) ---- */
+
+/* mejoras normales completadas: borde con degradado RGB animado (sutil).
+   uso conic-gradient con custom property --angle animada */
+.mejora-fila.completada {
+    border-width: 1px;
+    border-style: solid;
+    border-color: transparent;
+    background-clip: padding-box;
+    position: relative;
+}
+
+.mejora-fila.completada::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 6px;
+    padding: 1px;
+    background: conic-gradient(
+        from var(--rgb-angle, 0deg),
+        #ff5577, #ffd700, #5fc8ff, #b070ff, #ff5577
+    );
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: tiendaRgbBorder 6s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* las doradas completadas: dorado + blanco (no RGB) */
+.mejora-fila.completada[data-tier="dorada"]::after {
+    background: linear-gradient(
+        135deg,
+        var(--gold) 0%,
+        #fffbeb 50%,
+        var(--gold) 100%
+    );
+    animation: tiendaDoradaShimmer 3s ease-in-out infinite;
+}
+
+/* las moradas completadas: gradient eterno purpura/azul */
+.mejora-fila.completada[data-tier="morada"]::after {
+    background: linear-gradient(
+        135deg,
+        #a050ff 0%,
+        #5fc8ff 50%,
+        #7030cc 100%
+    );
+    animation: tiendaMoradaShimmer 4s ease-in-out infinite;
+    filter: blur(0.3px);
+}
+
+@property --rgb-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+}
+
+@keyframes tiendaRgbBorder {
+    0%   { --rgb-angle: 0deg; }
+    100% { --rgb-angle: 360deg; }
+}
+
+@keyframes tiendaDoradaShimmer {
+    0%, 100% { opacity: 0.85; filter: brightness(1); }
+    50%      { opacity: 1; filter: brightness(1.3); }
+}
+
+@keyframes tiendaMoradaShimmer {
+    0%, 100% { opacity: 0.75; filter: brightness(1) blur(0.3px); }
+    50%      { opacity: 1; filter: brightness(1.25) blur(0px); }
+}
+
+
+/* ---- 7. ESTADO BLOQUEADO ---- */
+
+/* mejoras aun no desbloqueadas: caja vacia con interrogante */
+.mejora-fila.bloqueada {
+    cursor: default;
+    background: rgba(8, 9, 13, 0.4);
+    border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+}
+
+.mejora-fila.bloqueada::before,
+.mejora-fila.bloqueada::after { display: none; }
+
+.mejora-fila.bloqueada .mejora-icono {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+.mejora-fila.bloqueada .mejora-icono::after {
+    content: '?';
+    color: rgba(255, 255, 255, 0.15);
+}
+.mejora-fila.bloqueada .mejora-icono img { display: none; }
+
+.mejora-fila.bloqueada .mejora-nombre,
+.mejora-fila.bloqueada .mejora-nivel,
+.mejora-fila.bloqueada .mejora-valor,
+.mejora-fila.bloqueada .mejora-coste {
+    color: rgba(255, 255, 255, 0.18);
+    text-shadow: none;
+}
+
+.mejora-fila.bloqueada .mejora-bloque {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+
+/* ---- 8. BANNER "NUEVA" ---- */
+
+/* aparece cuando una mejora se desbloquea durante la partida. animacion
+   slide-in desde abajo + glow temporal de unos segundos. JS quita la clase
+   tras el primer click */
+.mejora-fila.nueva {
+    animation: tiendaNuevaEntrada 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mejora-fila.nueva::before {
+    content: 'NUEVA';
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-family: var(--font-title);
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    color: var(--gold);
+    background: rgba(255, 215, 0, 0.12);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    padding: 2px 6px;
+    border-radius: 2px;
+    pointer-events: none;
+    animation: tiendaNuevaPulso 1.5s ease-in-out infinite;
+    z-index: 2;
+}
+
+@keyframes tiendaNuevaEntrada {
+    0%   { opacity: 0; transform: translateY(20px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tiendaNuevaPulso {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.5); opacity: 0.9; }
+    50%      { box-shadow: 0 0 0 4px rgba(255, 215, 0, 0); opacity: 1; }
+}
+
+
+/* ---- 9. RESPONSIVE MOVIL ---- */
+
+@media (max-width: 768px) {
+    #seccion-tienda {
+        padding: 12px 10px 30px !important;
+    }
+
+    .mejora-grupo {
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .mejora-grupo-titulo {
+        font-size: 0.55rem;
+        letter-spacing: 4px;
+    }
+
+    .mejora-fila {
+        gap: 10px;
+        padding: 11px 12px;
+        border-radius: 5px;
+    }
+
+    .mejora-icono {
+        width: 38px;
+        height: 38px;
+    }
+    .mejora-icono img {
+        width: 26px;
+        height: 26px;
+    }
+
+    .mejora-nombre {
+        font-size: 0.74rem;
+        letter-spacing: 1.5px;
+    }
+
+    .mejora-nivel {
+        font-size: 0.6rem;
+    }
+
+    .mejora-barra {
+        height: 14px;
+        gap: 1.5px;
+    }
+
+    .mejora-info-bot {
+        font-size: 0.56rem;
+        gap: 6px;
+    }
+
+    /* en movil, el banner NUEVA se hace mas pequeno para no tapar el nombre */
+    .mejora-fila.nueva::before {
+        font-size: 0.5rem;
+        padding: 1px 4px;
+        top: 4px;
+        right: 6px;
+    }
+}

@@ -147,20 +147,40 @@
         const m   = document.getElementById('m-runas-cnt');
         if (cnt && m) m.textContent = cnt.textContent;
 
-        // sync de las cantidades "xN" de cada runa desde el panel original al
-        // clonado. itero los [data-id] del original y busco el mismo data-id
-        // en el clon. si el jugador tira una runa en medio, este sync la
-        // refleja en menos de un segundo
+        // sync de las runas desde el panel original al clonado. AHORA incluye
+        // estado de desbloqueo, no solo la cantidad. antes solo copiaba el
+        // textContent de .runa-card-cantidad, asi que si una runa se desbloqueaba
+        // durante la partida el clon seguia mostrando el candado
         const orig = document.getElementById('panel-mis-runas');
         const mob  = document.getElementById('panel-mis-runas-mobile');
         if (orig && mob) {
             orig.querySelectorAll('[data-id]').forEach(el => {
                 const id = el.dataset.id;
                 const mobEl = mob.querySelector(`[data-id="${id}"]`);
-                if (mobEl) {
-                    const cantOrig = el.querySelector('.runa-card-cantidad');
-                    const cantMob  = mobEl.querySelector('.runa-card-cantidad');
-                    if (cantOrig && cantMob) cantMob.textContent = cantOrig.textContent;
+                if (!mobEl) return;
+
+                // sync de cantidad (texto)
+                const cantOrig = el.querySelector('.runa-card-cantidad');
+                const cantMob  = mobEl.querySelector('.runa-card-cantidad');
+                if (cantOrig && cantMob) {
+                    cantMob.textContent = cantOrig.textContent;
+                }
+
+                // sync de desbloqueo: si en desktop ya no esta bloqueada
+                // pero en movil si, copio el estado completo del lado derecho
+                // (cantidad + flecha) y quito la clase de bloqueada
+                if (!el.classList.contains('runa-bloqueada') && mobEl.classList.contains('runa-bloqueada')) {
+                    mobEl.classList.remove('runa-bloqueada');
+                    const rightOrig = el.querySelector('.runa-card-right');
+                    const rightMob  = mobEl.querySelector('.runa-card-right');
+                    if (rightOrig && rightMob) {
+                        rightMob.innerHTML = rightOrig.innerHTML;
+                    }
+                }
+
+                // sync del data-cantidad por si algun otro script lo lee
+                if (el.dataset.cantidad !== undefined) {
+                    mobEl.dataset.cantidad = el.dataset.cantidad;
                 }
             });
         }

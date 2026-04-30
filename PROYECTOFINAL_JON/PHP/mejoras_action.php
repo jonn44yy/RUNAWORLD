@@ -9,7 +9,26 @@ if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
 require_once "conexion.php";
 
 $accion = $_POST["accion"] ?? $_GET["accion"] ?? "";
-$tipos_validos = ["coins_seg","coins_seg_multi","points_seg","points_seg_multi","suerte","bulk"];
+
+// 28/04 v3.1: lista actualizada de tipos validos.
+// quitado "suerte" (tipo eliminado en Fase 1).
+// anadidos los tipos que ya existian en BD pero no estaban listados:
+//   coins_seg_multi_eterno, points_seg_multi_eterno (Reactores)
+//   bulk_normal, bulk_extra (Mano Diestra, Cofre del Fragante)
+//   desbloquear_boost_leg, desbloquear_boost_div (Catalizadores)
+$tipos_validos = [
+    "coins_seg",
+    "coins_seg_multi",
+    "coins_seg_multi_eterno",
+    "points_seg",
+    "points_seg_multi",
+    "points_seg_multi_eterno",
+    "bulk",
+    "bulk_normal",
+    "bulk_extra",
+    "desbloquear_boost_leg",
+    "desbloquear_boost_div"
+];
 
 if ($accion === "crear" || $accion === "editar") {
     $nombre        = trim(strip_tags($_POST["nombre"]));

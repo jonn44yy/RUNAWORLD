@@ -514,7 +514,7 @@ function lanzarEterna(runa) {
     desactivarNeon();
 
     const iframe = document.createElement('iframe');
-    iframe.src = 'RUNAS_HTML/eterna_animacion.html';
+    iframe.src = 'RUNAS_HTML/RUNAS_ANIMADAS/eterna.html';
     iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:9500;pointer-events:all;';
     document.body.appendChild(iframe);
 
@@ -568,7 +568,7 @@ function lanzarDivina(runa) {
 
     // Crear iframe fullscreen con la animación divina
     const iframe = document.createElement('iframe');
-    iframe.src = 'RUNAS_HTML/divina_animacion.html';
+    iframe.src = 'RUNAS_HTML/RUNAS_ANIMADAS/divina.html';
     iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:9400;pointer-events:all;';
     document.body.appendChild(iframe);
 
@@ -625,6 +625,11 @@ function lanzarMitica(runa) {
     const flashEl = document.getElementById("flash-rojo");
     if (!runaEl || !flashEl) { tiradaBloqueada = false; return; }
 
+    // preparar el SVG para GPU. will-change avisa al navegador de que
+    // vamos a animar transform y filter, asi promueve la capa a GPU y no
+    // retraza la silueta del SVG en cada frame (era lo que lo hacia pesado)
+    runaEl.style.willChange = "transform, filter, opacity";
+
     const VW = window.innerWidth;
     const VH = window.innerHeight;
     const CX = VW / 2;
@@ -637,6 +642,7 @@ function lanzarMitica(runa) {
     let startTime      = null;
     let rafMitica      = null;
     let explosionHecha = false;
+    let lastFilterMs   = 0;
 
     // Fondo negro que tapa el juego durante la animación
     const fondoNegro = document.createElement("div");
@@ -673,8 +679,14 @@ function lanzarMitica(runa) {
             const size = RW.lerp(TAM_INICIAL, TAM_MAXIMO, RW.easeIn(t));
             velAngular = RW.lerp(0.2, 20, RW.easeIn(t));
             angulo    += velAngular;
-            const glow = RW.lerp(20, 90, t);
-            runaEl.style.filter = `drop-shadow(0 0 ${glow}px rgba(255,34,68,0.95)) drop-shadow(0 0 ${glow*2}px rgba(255,34,68,0.5))`;
+            // el filter se actualiza cada ~66ms (4 frames a 60fps) en vez de
+            // cada frame. un solo drop-shadow en vez de dos. la diferencia
+            // visual es imperceptible pero el coste de GPU baja a la cuarta parte
+            if (lastFilterMs === 0 || ms - lastFilterMs > 66) {
+                lastFilterMs = ms;
+                const glow = RW.lerp(20, 80, t);
+                runaEl.style.filter = "drop-shadow(0 0 " + glow + "px rgba(255,34,68,0.9))";
+            }
             posRuna(CX, CY, size, 1);
 
         // Fase 3 — 2800 a 3100ms: explosión
@@ -694,7 +706,7 @@ function lanzarMitica(runa) {
                     flashEl.style.opacity    = "0";
                 });
 
-                lanzarParticulasExplosion(60);
+                lanzarParticulasExplosion(25);
                 tiradaBloqueada = false;
 
                 // Card de resultado
@@ -713,6 +725,8 @@ function lanzarMitica(runa) {
             runaEl.style.opacity  = "0";
             runaEl.style.width    = "0";
             runaEl.style.height   = "0";
+            runaEl.style.filter   = "none";
+            runaEl.style.willChange = "auto";
             fondoNegro.style.transition = "opacity 0.6s ease-out";
             fondoNegro.style.opacity    = "0";
             setTimeout(() => { try { fondoNegro.remove(); } catch(e){} }, 700);

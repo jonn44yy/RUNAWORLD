@@ -6,6 +6,8 @@ if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
 require_once "../PHP/conexion.php";
 
 // ── ACCIONES POST ──────────────────────────────────────────────
+// 27/04 v3: rareza_curva eliminada, ahora se gestiona el campo denominador
+// directamente sobre la tabla rarezas (sistema de cascada)
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $accion = $_POST["accion"] ?? "";
 
@@ -16,34 +18,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $orden      = (int)$_POST["orden"];
         $es_especial = (int)($_POST["es_especial"] ?? 0);
         $activa     = (int)($_POST["activa"] ?? 1);
-
-        // Curva campana
-        $peso_base   = floatval($_POST["peso_base"]);
-        $suerte_pico = floatval($_POST["suerte_pico"]);
-        $peso_pico   = floatval($_POST["peso_pico"]);
-        $suerte_cero = floatval($_POST["suerte_cero"]);
+        $denominador = max(1, (int)($_POST["denominador"] ?? 1));
 
         if ($accion === "crear") {
-            $stmt = $conexion->prepare("INSERT INTO rarezas (nombre,slug,color,orden,es_especial,activa) VALUES (?,?,?,?,?,?)");
-            $stmt->bind_param("sssiii", $nombre, $slug, $color, $orden, $es_especial, $activa);
+            $stmt = $conexion->prepare("INSERT INTO rarezas (nombre,slug,color,orden,es_especial,activa,denominador) VALUES (?,?,?,?,?,?,?)");
+            $stmt->bind_param("sssiiii", $nombre, $slug, $color, $orden, $es_especial, $activa, $denominador);
             $stmt->execute(); $stmt->close();
         } else {
             $id = (int)$_POST["id"];
-            $stmt = $conexion->prepare("UPDATE rarezas SET nombre=?,slug=?,color=?,orden=?,es_especial=?,activa=? WHERE id=?");
-            $stmt->bind_param("sssiii i", $nombre, $slug, $color, $orden, $es_especial, $activa, $id);
+            $stmt = $conexion->prepare("UPDATE rarezas SET nombre=?,slug=?,color=?,orden=?,es_especial=?,activa=?,denominador=? WHERE id=?");
+            $stmt->bind_param("sssiiiii", $nombre, $slug, $color, $orden, $es_especial, $activa, $denominador, $id);
             $stmt->execute(); $stmt->close();
         }
-
-        // Guardar/actualizar curva campana
-        $stmt = $conexion->prepare("
-            INSERT INTO rareza_curva (rareza, peso_base, suerte_pico, peso_pico, suerte_cero)
-            VALUES (?,?,?,?,?)
-            ON DUPLICATE KEY UPDATE
-                peso_base=VALUES(peso_base), suerte_pico=VALUES(suerte_pico),
-                peso_pico=VALUES(peso_pico), suerte_cero=VALUES(suerte_cero)
-        ");
-        $stmt->bind_param("sdddd", $slug, $peso_base, $suerte_pico, $peso_pico, $suerte_cero);
-        $stmt->execute(); $stmt->close();
 
         header("Location: rarezas.php?ok=1"); exit;
     }
@@ -62,24 +48,41 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
         $stmt = $conexion->prepare("DELETE FROM rarezas WHERE id=?");
         $stmt->bind_param("i", $id); $stmt->execute(); $stmt->close();
-        $stmt = $conexion->prepare("DELETE FROM rareza_curva WHERE rareza=?");
-        $stmt->bind_param("s", $slug); $stmt->execute(); $stmt->close();
         header("Location: rarezas.php?ok=eliminar"); exit;
     }
 }
 
 // ── CARGAR DATOS ───────────────────────────────────────────────
-$stmt = $conexion->prepare("SELECT * FROM rarezas ORDER BY orden ASC");
+// 27/04 v3: rareza_curva eliminada, ya no la cargamos
+$stmt = $conexion->prepare("SELECT * FROM rarezas ORDER BY denominador DESC, orden ASC");
 $stmt->execute();
 $rarezas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$stmt = $conexion->prepare("SELECT * FROM rareza_curva");
-$stmt->execute();
-$curvas_raw = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
-$curvas = [];
-foreach ($curvas_raw as $cv) $curvas[$cv["rareza"]] = $cv;
+// helper: formatea un denominador como fraccion legible (1/100k, 1/25, 1/1)
+function fmtFraccion($denom) {
+    if ($denom <= 1) return "1/1";
+    if ($denom >= 1000000) return "1/" . round($denom / 1000000) . "M";
+    if ($denom >= 1000)    return "1/" . round($denom / 1000)    . "k";
+    return "1/" . $denom;
+}
+
+// calcular probabilidad real de cada rareza tras la cascada
+// (la mas rara: 1/d. la siguiente: (1 - 1/d_prev) * 1/d. etc.)
+$prob_real_pct = [];
+$running = 1.0;
+foreach ($rarezas as $r) {
+    if (!$r["activa"]) { $prob_real_pct[$r["slug"]] = 0; continue; }
+    $denom = max(1, (int)$r["denominador"]);
+    if ($denom <= 1) {
+        $prob_real_pct[$r["slug"]] = $running * 100;
+        $running = 0.0;
+    } else {
+        $hit = 1.0 / $denom;
+        $prob_real_pct[$r["slug"]] = $running * $hit * 100;
+        $running *= (1.0 - $hit);
+    }
+}
 
 $conexion->close();
 ?>
@@ -127,7 +130,7 @@ $conexion->close();
             <a href="rarezas.php"  class="admin-nav-btn active"><span class="nav-icon">✦</span> Rarezas</a>
             <a href="tienda.php"   class="admin-nav-btn"><span class="nav-icon">⟡</span> Tienda</a>
             <a href="mensajes.php" class="admin-nav-btn"><span class="nav-icon">✉</span> Mensajes</a>
-            <a href="curvas.php"   class="admin-nav-btn"><span class="nav-icon">〜</span> Curvas</a>
+            <a href="cascada.php"   class="admin-nav-btn"><span class="nav-icon">〜</span> Cascada</a>
             <div class="admin-nav-divider"></div>
             <a href="../PHP/logout.php" class="admin-nav-btn danger"><span class="nav-icon">→</span> Cerrar Sesion</a>
         </nav>
@@ -151,11 +154,12 @@ $conexion->close();
             <table class="admin-tabla">
                 <thead><tr>
                     <th>Nombre</th><th>Slug</th><th>Color</th><th>Orden</th>
-                    <th>Especial</th><th>Activa</th><th>Peso base</th><th>Suerte pico</th><th>Acciones</th>
+                    <th>Especial</th><th>Activa</th><th>Denominador</th><th>Prob. real</th><th>Acciones</th>
                 </tr></thead>
                 <tbody>
                 <?php foreach ($rarezas as $r):
-                    $cv = $curvas[$r["slug"]] ?? null;
+                    $denom = (int)($r["denominador"] ?? 1);
+                    $pct   = $prob_real_pct[$r["slug"]] ?? 0;
                 ?>
                     <tr>
                         <td style="font-family:var(--font-title);color:<?= htmlspecialchars($r['color']) ?>;letter-spacing:2px;">
@@ -171,8 +175,15 @@ $conexion->close();
                         <td style="color:var(--silver-dim);"><?= $r["orden"] ?></td>
                         <td><span class="badge <?= $r['es_especial'] ? 'badge-si' : 'badge-no' ?>"><?= $r['es_especial'] ? 'Si' : 'No' ?></span></td>
                         <td><span class="badge <?= $r['activa'] ? 'badge-si' : 'badge-no' ?>"><?= $r['activa'] ? 'Si' : 'No' ?></span></td>
-                        <td style="color:var(--silver-dim);"><?= $cv ? $cv["peso_base"] : '—' ?></td>
-                        <td style="color:var(--silver-dim);"><?= $cv ? $cv["suerte_pico"] : '—' ?></td>
+                        <td style="color:var(--gold);font-family:var(--font-title);"><?= fmtFraccion($denom) ?></td>
+                        <td style="color:var(--silver-dim);font-size:0.8rem;">
+                            <?php
+                                if ($pct >= 1)        echo number_format($pct, 2) . "%";
+                                elseif ($pct >= 0.01) echo number_format($pct, 4) . "%";
+                                elseif ($pct > 0)     echo number_format($pct, 6) . "%";
+                                else                  echo "—";
+                            ?>
+                        </td>
                         <td>
                             <div style="display:flex;gap:6px;">
                                 <button class="btn-admin btn-admin-primary"
@@ -180,10 +191,7 @@ $conexion->close();
                                         'id'=>$r['id'],'nombre'=>$r['nombre'],'slug'=>$r['slug'],
                                         'color'=>$r['color'],'orden'=>$r['orden'],
                                         'es_especial'=>$r['es_especial'],'activa'=>$r['activa'],
-                                        'peso_base'  => $cv['peso_base']   ?? 1000,
-                                        'suerte_pico'=> $cv['suerte_pico'] ?? 1,
-                                        'peso_pico'  => $cv['peso_pico']   ?? 1000,
-                                        'suerte_cero'=> $cv['suerte_cero'] ?? 10,
+                                        'denominador'=>$denom,
                                     ])) ?>)">Editar</button>
                                 <form method="POST" style="display:inline;" onsubmit="return confirm('Eliminar rareza <?= htmlspecialchars($r['nombre']) ?>?')">
                                     <input type="hidden" name="accion" value="eliminar">
@@ -243,27 +251,19 @@ $conexion->close();
                     </select>
                 </div>
 
-                <!-- Curva campana -->
+                <!-- Sistema de cascada -->
                 <div style="grid-column:1/-1;">
                     <div style="font-family:var(--font-title);font-size:0.7rem;letter-spacing:3px;color:var(--silver-dim);margin-bottom:12px;border-top:1px solid var(--border);padding-top:14px;">
-                        CURVA DE PROBABILIDAD (CAMPANA)
+                        PROBABILIDAD (SISTEMA CASCADA)
                     </div>
                 </div>
-                <div class="admin-form-grupo">
-                    <label class="admin-form-label">Peso base (con suerte x1)</label>
-                    <input type="number" name="peso_base" id="f-peso-base" class="admin-form-input" step="0.01" min="0" value="1">
-                </div>
-                <div class="admin-form-grupo">
-                    <label class="admin-form-label">Suerte en el pico</label>
-                    <input type="number" name="suerte_pico" id="f-suerte-pico" class="admin-form-input" step="0.1" min="1" value="200">
-                </div>
-                <div class="admin-form-grupo">
-                    <label class="admin-form-label">Peso máximo (en el pico)</label>
-                    <input type="number" name="peso_pico" id="f-peso-pico" class="admin-form-input" step="1" min="0" value="500">
-                </div>
-                <div class="admin-form-grupo">
-                    <label class="admin-form-label">Suerte donde llega a 0</label>
-                    <input type="number" name="suerte_cero" id="f-suerte-cero" class="admin-form-input" step="1" min="1" value="2000">
+                <div class="admin-form-grupo" style="grid-column:1/-1;">
+                    <label class="admin-form-label">Denominador (1/X)</label>
+                    <input type="number" name="denominador" id="f-denominador" class="admin-form-input" step="1" min="1" value="1">
+                    <small style="color:var(--silver-dim);font-size:0.72rem;display:block;margin-top:4px;">
+                        Ej: 100000 para una rareza 1/100k. La comun (fallback) usa 1.
+                        Nota: la cascada va de mayor a menor denominador, asi que la mas rara se rolea primero.
+                    </small>
                 </div>
 
                 <div style="grid-column:1/-1;display:flex;gap:10px;">
@@ -295,10 +295,7 @@ function abrirEditar(r) {
     document.getElementById('f-orden').value     = r.orden;
     document.getElementById('f-especial').value  = r.es_especial;
     document.getElementById('f-activa').value    = r.activa;
-    document.getElementById('f-peso-base').value  = r.peso_base;
-    document.getElementById('f-suerte-pico').value = r.suerte_pico;
-    document.getElementById('f-peso-pico').value   = r.peso_pico;
-    document.getElementById('f-suerte-cero').value = r.suerte_cero;
+    document.getElementById('f-denominador').value = r.denominador;
     document.getElementById('f-submit').textContent = 'Guardar cambios';
     document.getElementById('f-cancelar').style.display = '';
     document.getElementById('form-rareza').scrollIntoView({behavior:'smooth'});
@@ -314,6 +311,7 @@ function resetForm() {
     document.getElementById('f-orden').value = '8';
     document.getElementById('f-especial').value = '0';
     document.getElementById('f-activa').value = '1';
+    document.getElementById('f-denominador').value = '1';
     document.getElementById('f-submit').textContent = 'Crear rareza';
     document.getElementById('f-cancelar').style.display = 'none';
 }

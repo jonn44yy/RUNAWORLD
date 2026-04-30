@@ -35,11 +35,23 @@ foreach ($grupos as $grupo) {
     $stmt->close();
 }
 
-// Peso total global (todas las runas activas) para % real
-$stmt = $conexion->prepare("SELECT COALESCE(SUM(peso), 1) as total FROM runas WHERE activa = 1");
+// 27/04 v3: cargar denominadores por rareza (sistema cascada)
+// para mostrar la fraccion (1/100k, 1/25, etc) en cada runa del listado
+$stmt = $conexion->prepare("SELECT slug, denominador FROM rarezas");
 $stmt->execute();
-$peso_total_global = (float)$stmt->get_result()->fetch_assoc()["total"];
+$rareza_denoms = [];
+foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $rd) {
+    $rareza_denoms[$rd["slug"]] = (int)$rd["denominador"];
+}
 $stmt->close();
+
+// helper: formatea un denominador como fraccion legible
+function fmtFraccion($denom) {
+    if ($denom <= 1) return "1/1";
+    if ($denom >= 1000000) return "1/" . round($denom / 1000000) . "M";
+    if ($denom >= 1000)    return "1/" . round($denom / 1000)    . "k";
+    return "1/" . $denom;
+}
 
 $conexion->close();
 
@@ -234,7 +246,7 @@ function fmtNum($n) {
                                         <tr>
                                             <th>Nombre</th>
                                             <th>Rareza</th>
-                                            <th>Prob. base</th>
+                                            <th>Probabilidad</th>
                                             <th>Multi</th>
                                             <th>Activa</th>
                                             <th>Acciones</th>
@@ -253,13 +265,10 @@ function fmtNum($n) {
                                                         <?= htmlspecialchars($r["rareza"]) ?>
                                                     </span>
                                                 </td>
-                                                <td style="color:var(--silver-dim);" title="Peso: <?= $r["peso"] ?>">
+                                                <td style="color:var(--silver-dim);" title="Probabilidad de la rareza">
                                                     <?php
-                                                        $pct = $peso_total_global > 0 ? ($r["peso"] / $peso_total_global * 100) : 0;
-                                                        if ($pct >= 1)       echo number_format($pct, 2) . "%";
-                                                        elseif ($pct >= 0.01)    echo number_format($pct, 4) . "%";
-                                                        elseif ($pct >= 0.0001)  echo number_format($pct, 6) . "%";
-                                                        else                     echo number_format($pct, 7) . "%";
+                                                        $denom = $rareza_denoms[$r["rareza"]] ?? 1;
+                                                        echo fmtFraccion($denom);
                                                     ?>
                                                 </td>
                                                 <td style="color:var(--gold);" title="Valor exacto: <?= $r["multiplicador"] ?>"><?= fmtNum($r["multiplicador"]) ?></td>

@@ -121,11 +121,6 @@ $conexion->close();
             </div>
 
             <div class="admin-form-grupo">
-                <label class="admin-form-label">Peso (mayor = mas probable)</label>
-                <input type="number" name="peso" class="admin-form-input" min="1" value="100" required>
-            </div>
-
-            <div class="admin-form-grupo">
                 <label class="admin-form-label">Multiplicador (points/seg que aporta)</label>
                 <input type="text" name="multiplicador" class="admin-form-input input-abbr" value="1.00" required>
             </div>

@@ -1,4 +1,7 @@
 <?php
+// 27/04 v3: columna `peso` eliminada de runas. ya no se valida ni se guarda.
+// las probabilidades vienen de la cascada (rarezas.denominador), no de pesos por runa.
+
 session_start();
 
 if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
@@ -9,7 +12,8 @@ if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
 require_once "conexion.php";
 
 $accion = $_POST["accion"] ?? $_GET["accion"] ?? "";
-// Cargar rarezas válidas desde BD
+
+// Cargar rarezas validas desde BD
 $stmt_r = $conexion->prepare("SELECT slug, orden FROM rarezas WHERE activa = 1");
 $stmt_r->execute();
 $rarezas_rows = $stmt_r->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -21,7 +25,6 @@ if ($accion === "crear") {
     $grupo_id      = (int)$_POST["grupo_id"];
     $nombre        = trim(strip_tags($_POST["nombre"]));
     $rareza        = trim($_POST["rareza"]);
-    $peso          = (int)$_POST["peso"];
     $multiplicador = floatval($_POST["multiplicador"]);
     $activa        = (int)$_POST["activa"];
 
@@ -29,7 +32,6 @@ if ($accion === "crear") {
     if ($grupo_id <= 0)                          $errores[] = "Selecciona una lista.";
     if ($nombre === "")                          $errores[] = "El nombre no puede estar vacio.";
     if (!in_array($rareza, $rarezas_validas))    $errores[] = "Rareza no valida.";
-    if ($peso <= 0)                              $errores[] = "El peso debe ser mayor que 0.";
     if ($multiplicador < 0)                      $errores[] = "El multiplicador no puede ser negativo.";
 
     if (!empty($errores)) {
@@ -39,8 +41,8 @@ if ($accion === "crear") {
     }
 
     $tier_crear = $rarezas_orden[$rareza] ?? 1;
-    $stmt = $conexion->prepare("INSERT INTO runas (nombre, rareza, peso, multiplicador, activa, grupo_id, tier) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("ssidiii", $nombre, $rareza, $peso, $multiplicador, $activa, $grupo_id, $tier_crear);
+    $stmt = $conexion->prepare("INSERT INTO runas (nombre, rareza, multiplicador, activa, grupo_id, tier) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssdiii", $nombre, $rareza, $multiplicador, $activa, $grupo_id, $tier_crear);
     $stmt->execute();
     $stmt->close();
 
@@ -52,14 +54,12 @@ if ($accion === "crear") {
     $grupo_id      = $_POST["grupo_id"] !== "" ? (int)$_POST["grupo_id"] : null;
     $nombre        = trim(strip_tags($_POST["nombre"]));
     $rareza        = trim($_POST["rareza"]);
-    $peso          = (int)$_POST["peso"];
     $multiplicador = floatval($_POST["multiplicador"]);
     $activa        = (int)$_POST["activa"];
 
     $errores = [];
     if ($nombre === "")                          $errores[] = "El nombre no puede estar vacio.";
     if (!in_array($rareza, $rarezas_validas))    $errores[] = "Rareza no valida.";
-    if ($peso <= 0)                              $errores[] = "El peso debe ser mayor que 0.";
     if ($multiplicador < 0)                      $errores[] = "El multiplicador no puede ser negativo.";
 
     if (!empty($errores)) {
@@ -69,8 +69,8 @@ if ($accion === "crear") {
     }
 
     $tier = $rarezas_orden[$rareza] ?? 1;
-    $stmt = $conexion->prepare("UPDATE runas SET nombre=?, rareza=?, peso=?, multiplicador=?, activa=?, grupo_id=?, tier=? WHERE id=?");
-    $stmt->bind_param("ssidiiii", $nombre, $rareza, $peso, $multiplicador, $activa, $grupo_id, $tier, $id);
+    $stmt = $conexion->prepare("UPDATE runas SET nombre=?, rareza=?, multiplicador=?, activa=?, grupo_id=?, tier=? WHERE id=?");
+    $stmt->bind_param("ssdiiii", $nombre, $rareza, $multiplicador, $activa, $grupo_id, $tier, $id);
     $stmt->execute();
     $stmt->close();
 

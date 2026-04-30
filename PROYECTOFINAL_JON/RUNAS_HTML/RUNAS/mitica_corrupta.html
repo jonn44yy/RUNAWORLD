@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; background:transparent; overflow:hidden; }
+    
+    #canvas-container {
+        position: absolute; inset: 0; z-index: 10;
+        display:flex; justify-content:center; align-items:center;
+    }
+    
+    /* El drop shadow normal de la Mítica, pero contaminado de púrpura */
+    canvas { display:block; filter: drop-shadow(0 0 20px rgba(255, 34, 68, 0.6)) drop-shadow(0 0 40px rgba(170, 0, 255, 0.4)); }
+</style>
+</head>
+<body>
+
+    <iframe src="/RUNAS_HTML/BACKGROUND/background_mitica_corrupta.html" style="position: fixed; inset: 0; width: 100vw; height: 100vh; border: none; z-index: -100; pointer-events: none;"></iframe>
+
+    <div id="canvas-container">
+        <canvas id="c"></canvas>
+    </div>
+
+    <iframe src="/RUNAS_HTML/MARCOS/marco_mitica_corrupta.html" style="position: fixed; inset: 0; width: 100vw; height: 100vh; border: none; z-index: 9999; pointer-events: none; background: transparent;"></iframe>
+
+<script>
+/**
+ * RUNA MÍTICA CORRUPTA (Con Sistema de Glitch Matemático)
+ */
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let t = 0;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize(); window.addEventListener("resize", resize);
+
+// Dibuja la geometría de la Mítica
+function drawMiticaGeometry(cx, cy, R1, R2, R3, t, pulsoA, color) {
+    ctx.strokeStyle = color;
+    
+    // Anillo exterior + flechas (Roto)
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*0.4);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([20, 10, 5, 15, 40, 5]); // Hace que la línea se vea fragmentada
+    ctx.beginPath(); ctx.arc(0,0,R1,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]); // Reset
+    
+    for(let i=0;i<4;i++){
+        const a=(i/4)*Math.PI*2;
+        ctx.save(); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(R1-15, -10); ctx.lineTo(R1+10, 0); ctx.lineTo(R1-15, 10); ctx.stroke();
+        ctx.restore();
+    }
+    ctx.restore();
+
+    // Anillo medio con uniones hacia el interior
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-t*0.2);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([50, 15]);
+    ctx.beginPath(); ctx.arc(0,0,R2,0,Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]);
+    
+    for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2; const len=i%2===0?16:8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*(R2-len), Math.sin(a)*(R2-len));
+        ctx.lineTo(Math.cos(a)*R2, Math.sin(a)*R2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Anillo interior + cruz diagonal
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*2);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0,0,R3,0,Math.PI*2); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    for(let i=0;i<4;i++){
+        const a=(i/4)*Math.PI*2+Math.PI/4;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*R3, Math.sin(a)*R3); ctx.stroke();
+    }
+    
+    // Núcleo corrupto
+    ctx.beginPath(); ctx.arc(0,0,R3*0.4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+}
+
+function frame() {
+    const W = canvas.width, H = canvas.height;
+    let cx = W/2, cy = H/2;
+    
+    // Para no borrar del todo y dejar estela, usamos fillRect con baja opacidad negra
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(0, 0, 5, 0.2)";
+    ctx.fillRect(0,0,W,H);
+    
+    ctx.globalCompositeOperation = "lighter";
+    t += 0.018;
+
+    const R1 = Math.min(W,H)*0.38;
+    const R2 = R1*0.72;
+    const R3 = R1*0.38;
+    const pulsoA = 0.6 + 0.35*Math.abs(Math.sin(t*1.5));
+
+    // LÓGICA DE GLITCH CROMÁTICO (Aberración Aleatoria)
+    const isGlitching = Math.random() > 0.92; // 8% de probabilidad de fallar por frame
+
+    if (isGlitching) {
+        // Desfase de Cyan
+        ctx.fillStyle = "rgba(0, 255, 255, 0.5)";
+        drawMiticaGeometry(cx - 5, cy + 2, R1, R2, R3, t, pulsoA, "rgba(0, 255, 255, 0.8)");
+        
+        // Desfase de Magenta
+        ctx.fillStyle = "rgba(255, 0, 255, 0.5)";
+        drawMiticaGeometry(cx + 6, cy - 4, R1*0.98, R2, R3, t, pulsoA, "rgba(255, 0, 255, 0.8)");
+        
+        // Terremoto central
+        cx += (Math.random() - 0.5) * 15;
+        cy += (Math.random() - 0.5) * 15;
+    }
+
+    // DIBUJO BASE (La Mítica original, pero en rojo oscurecido y magenta)
+    const baseColor = `rgba(255, 34, 68, ${pulsoA})`;
+    ctx.fillStyle = `rgba(20, 0, 0, 0.8)`; // Núcleo negro
+    drawMiticaGeometry(cx, cy, R1, R2, R3, t, pulsoA, baseColor);
+
+    // Añadir "venas" o partículas estáticas corruptas girando al revés
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(-t * 1.5);
+    ctx.fillStyle = "#aa00ff";
+    for(let i=0; i<15; i++) {
+        const a = (i/15) * Math.PI*2;
+        const rDist = R3 + Math.random()*(R1-R3);
+        ctx.fillRect(Math.cos(a)*rDist, Math.sin(a)*rDist, 2 + Math.random()*3, 2 + Math.random()*3);
+    }
+    ctx.restore();
+
+    requestAnimationFrame(frame);
+}
+
+// Arrancar el caos
+frame();
+</script>
+</body>
+</html>

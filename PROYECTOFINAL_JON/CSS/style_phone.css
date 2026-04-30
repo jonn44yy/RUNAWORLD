@@ -39,6 +39,20 @@
     /* evita el scroll doble en movil y el efecto rebote de ios. mecachis con safari */
     body { overflow: hidden; overscroll-behavior: none; }
 
+    /* touch-action: manipulation desactiva el zoom por doble-tap en iOS
+       sin esto el jugador no puede clicar rapido el boton de tirar porque
+       safari interpreta dos taps seguidos como gesto de zoom. se aplica a
+       todo para no dejarse nada, no afecta al scroll ni al pinch */
+    * { touch-action: manipulation; -webkit-touch-callout: none; }
+
+    /* el boton de tirar en particular necesita evitar tambien la seleccion
+       de texto y el menu contextual al mantener pulsado */
+    #btn-tirar {
+        touch-action: manipulation;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
     /* oculta el header y las sidebars de escritorio en movil */
     #header          { display: none !important; }
     #sidebar         { display: none !important; }
@@ -53,7 +67,7 @@
     #centro {
         position: fixed !important;
         top: 52px !important; left: 0 !important;
-        right: 0 !important; bottom: 70px !important;
+        right: 0 !important; bottom: 78px !important;
         width: 100vw !important; min-width: 0 !important;
         height: auto !important;
         overflow-y: auto !important; overflow-x: hidden !important;
@@ -74,7 +88,7 @@
     #seccion-tirada.activa {
         display: flex !important; flex-direction: column !important;
         align-items: center !important; justify-content: center !important;
-        min-height: calc(100dvh - 122px) !important; padding: 16px !important;
+        min-height: calc(100dvh - 130px) !important; padding: 16px !important;
     }
 
     /* la zona del boton de tirar, centrada y con ancho maximo para no quedar gigante */
@@ -89,14 +103,91 @@
     #btn-tirar { font-size: 1.15rem !important; padding: 20px 0 !important; width: 100% !important; letter-spacing: 6px !important; }
     #btn-desbloquear { font-size: 0.62rem !important; padding: 10px 14px !important; width: 100% !important; }
 
-    /* la grid de mejoras de la tienda pasa a una sola columna en movil */
-    .mejoras-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
-
     /* la seccion de coleccion ocupa toda la pantalla disponible entre topbar y stats bar */
     #seccion-coleccion, .seccion-coleccion-full {
-        min-height: calc(100dvh - 122px) !important;
-        height: calc(100dvh - 122px) !important;
-        padding: 4px !important; overflow: hidden !important;
+        min-height: calc(100dvh - 130px) !important;
+        height: calc(100dvh - 130px) !important;
+        padding: 0 !important; overflow: hidden !important;
+    }
+
+
+    /* ---- COLECCIÓN MÓVIL — REDISEÑO HORIZONTAL ----
+       desktop = fila: [lista izq] [iframe centro]
+       movil   = columna: [iframe arriba] [botones] [lista abajo scrollable]
+       el jugador ve la preview sin scroll, y debajo la lista de runas ---- */
+
+    /* layout principal de columna en vez de fila */
+    .coleccion-layout {
+        flex-direction: column !important;
+        height: 100% !important;
+        gap: 0 !important;
+    }
+
+    /* iframe de preview arriba, con altura fija para que no se trague toda la pantalla */
+    .coleccion-centro {
+        order: 1 !important;
+        flex: none !important;
+        height: 38vh !important;
+        min-height: 180px !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* el wrapper del canvas/iframe ocupa lo que quede del centro */
+    .coleccion-canvas-wrap {
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    /* botones ver animacion + toggle: fila horizontal con buen tamaño tactil */
+    #btn-anim-row {
+        order: 2 !important;
+        flex-shrink: 0 !important;
+        padding: 6px 8px !important;
+        gap: 8px !important;
+    }
+
+    /* boton de ver animacion mas grande y legible en movil */
+    .btn-ver-anim {
+        font-size: 0.7rem !important;
+        letter-spacing: 2px !important;
+        padding: 10px 12px !important;
+    }
+
+    /* boton toggle de animacion: mas grande, con fondo para que se vea */
+    .btn-toggle-anim {
+        font-size: 0.68rem !important;
+        letter-spacing: 2px !important;
+        padding: 10px 12px !important;
+        min-width: 80px !important;
+        background: rgba(255,255,255,0.04) !important;
+    }
+
+    /* lista de runas abajo, scrollable, con borde superior para separar */
+    .coleccion-columna-lista {
+        order: 3 !important;
+        width: 100% !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+        border-right: none !important;
+        border-top: 1px solid rgba(255,215,0,0.1) !important;
+        padding: 8px 10px !important;
+    }
+
+    /* el contador de coleccion en movil: mas compacto, en fila */
+    .col-contador {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 4px 4px 10px !important;
+    }
+
+    /* las runas especiales y comunes en fila para aprovechar ancho */
+    .col-runa-btn, .col-runa-comun {
+        font-size: 0.8rem !important;
     }
 
 
@@ -123,24 +214,24 @@
 
     /* barra inferior fija con las estadisticas del jugador (coins, points, suerte) */
     #mobile-stats-bar {
-        position: fixed; bottom: 0; left: 0; right: 0; height: 70px;
+        position: fixed; bottom: 0; left: 0; right: 0; height: 78px;
         background: rgba(6,7,10,0.97); border-top: 1px solid rgba(255,215,0,0.1);
         display: flex; align-items: center; justify-content: space-around;
-        padding: 0 8px; z-index: 8000;
+        padding: 0 6px; z-index: 8000;
         backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     }
 
     /* contenedor de cada estadistica en la barra inferior, centrado en columna */
-    .mob-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+    .mob-stat { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; min-width: 0; overflow: hidden; }
 
-    /* valor de la estadistica en dorado, con overflow ellipsis para numeros grandes */
-    .mob-val { font-family: 'Oswald', sans-serif; font-size: 0.82rem; color: #ffd700; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
+    /* valor de la estadistica en dorado — mas grande para que se lea bien */
+    .mob-val { font-family: 'Oswald', sans-serif; font-size: 1rem; color: #ffd700; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
 
     /* variante de valor en plata para estadisticas que no son coins */
     .mob-val.silver { color: #dde4f0; }
 
-    /* tasa de produccion por segundo bajo el valor, en gris muy tenue */
-    .mob-rate { font-family: 'Oswald', sans-serif; font-size: 0.5rem; color: rgba(180,180,200,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
+    /* tasa de produccion por segundo bajo el valor */
+    .mob-rate { font-family: 'Oswald', sans-serif; font-size: 0.6rem; color: rgba(180,180,200,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center; }
 
     /* separador vertical entre estadisticas en la barra inferior */
     .mob-sep { width: 1px; height: 30px; background: rgba(255,255,255,0.06); flex-shrink: 0; }
@@ -150,7 +241,7 @@
 
     /* botones redondos flotantes sobre la stats bar para abrir los drawers */
     #btn-menu-nav, #btn-menu-runas {
-        position: fixed; bottom: 80px; width: 44px; height: 44px; border-radius: 50%;
+        position: fixed; bottom: 88px; width: 44px; height: 44px; border-radius: 50%;
         background: rgba(6,7,10,0.95); cursor: pointer;
         display: flex; align-items: center; justify-content: center;
         z-index: 8100; -webkit-tap-highlight-color: transparent; transition: transform 0.12s;
@@ -242,5 +333,82 @@
         right: auto !important; top: auto !important; transform: none !important;
         margin: 4px 8px !important;
     }
+
+
+    /* ---- COLECCION: PREVIEW DE RUNA EN MOVIL ---- */
+
+    /* en desktop la coleccion usa un grid de 3 columnas (lista izq / iframe centro /
+       stats der). en movil se apila todo en vertical: iframe arriba compacto, botones
+       de animacion en medio, y la grid de runas abajo ocupando el espacio restante */
+
+    .coleccion-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        height: 100% !important;
+    }
+
+    /* iframe de preview: horizontal, compacto arriba. no queremos que ocupe
+       media pantalla, con 180px se ve la runa girando bien */
+    .coleccion-centro {
+        order: 1 !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        flex-shrink: 0 !important;
+    }
+
+    .coleccion-canvas-wrap {
+        width: 100% !important;
+        height: 180px !important;
+        min-height: 0 !important;
+        border-radius: 6px !important;
+        overflow: hidden !important;
+    }
+
+    /* fila de botones (ver animacion + toggle on/off) en medio, visibles */
+    #btn-anim-row {
+        order: 2 !important;
+        display: flex !important;
+        gap: 8px !important;
+        padding: 0 4px !important;
+    }
+
+    /* boton "ver animacion" mas grande y legible en movil */
+    .btn-ver-anim {
+        flex: 1 !important;
+        padding: 12px 10px !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 1.5px !important;
+        min-width: 0 !important;
+    }
+
+    /* toggle ANIM ON/OFF: mas grande, colores mas visibles, borde mas grueso
+       para que no se "pierda" entre los otros elementos */
+    .btn-toggle-anim {
+        flex: 0 0 auto !important;
+        padding: 12px 16px !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 1.5px !important;
+        border-width: 2px !important;
+        min-width: 80px !important;
+    }
+    .btn-toggle-anim.anim-off {
+        opacity: 1 !important;
+        border-style: dashed !important;
+    }
+
+    /* grid de runas abajo, scrolleable, ocupa el resto del espacio */
+    .coleccion-grid-wrap {
+        order: 3 !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    /* el panel de stats de la runa seleccionada (derecha en desktop) se
+       oculta en movil, la info va en el drawer de runas o en la propia card */
+    #panel-col-stats { display: none !important; }
 
 }

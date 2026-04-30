@@ -7,7 +7,7 @@ require_once "../PHP/conexion.php";
 
 // ── Valores permitidos (hardcoded para que admin no pueda romper nada) ──
 $RAREZAS_VALIDAS = ['normal', 'raro', 'epico', 'legendario', 'divino'];
-$TIPOS_VALIDOS   = ['coins_seg', 'points_seg', 'suerte'];
+$TIPOS_VALIDOS   = ['coins_seg', 'points_seg'];
 
 // Acciones POST
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -103,7 +103,7 @@ foreach ($boosts as $b) {
     $pesos_por_tipo[$b["tipo"]] = ($pesos_por_tipo[$b["tipo"]] ?? 0) + $b["peso"];
 }
 
-$tipos_label = ["coins_seg" => "Coins/seg", "points_seg" => "Points/seg", "suerte" => "Suerte"];
+$tipos_label = ["coins_seg" => "Coins/seg", "points_seg" => "Points/seg"];
 $COLORES_RAREZA = [
     'normal'     => '#6a9fff',
     'raro'       => '#a050ff',
@@ -249,7 +249,6 @@ $COLORES_RAREZA = [
                     <select name="tipo" id="form-tipo" class="admin-form-select" required>
                         <option value="coins_seg">Coins/seg</option>
                         <option value="points_seg">Points/seg</option>
-                        <option value="suerte">Suerte</option>
                     </select>
                 </div>
                 <div class="admin-form-grupo">

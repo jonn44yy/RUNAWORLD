@@ -1,4 +1,13 @@
 <?php
+// 28/04 v3.1: ahora el usuario puede iniciar sesion tanto con su username
+// como con su email. detectamos cual es por la presencia del @.
+// el campo del formulario sigue llamandose "username" para no romper el HTML.
+//
+// 28/04 v3.2: si es email, se normaliza a minusculas. los emails son
+// case-insensitive por estandar y queremos que "[email protected]" y
+// "[email protected]" caigan en el mismo usuario aunque la columna en BD
+// tenga collation case-sensitive.
+
 session_start();
 
 // Si no viene del formulario, redirigir
@@ -9,19 +18,33 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 
 require_once "conexion.php";
 
-$username = trim(strip_tags($_POST["username"]));
-$password = trim($_POST["password"]);
+$identificador = trim(strip_tags($_POST["username"]));
+$password      = trim($_POST["password"]);
 
-// Validación básica
-if ($username === "" || $password === "") {
+// Validacion basica
+if ($identificador === "" || $password === "") {
     $_SESSION["error"] = "Rellena todos los campos.";
     header("Location: ../index.php");
     exit;
 }
 
-// Buscar usuario en la BD (prepared statement, seguro contra SQL injection)
-$stmt = $conexion->prepare("SELECT id, username, password, rol FROM usuarios WHERE username = ?");
-$stmt->bind_param("s", $username);
+// Detectar si es email o username segun contenga @.
+// si es email lo pasamos a minusculas (los emails son case-insensitive)
+$es_email = strpos($identificador, "@") !== false;
+$columna  = $es_email ? "email" : "username";
+if ($es_email) {
+    $identificador = strtolower($identificador);
+}
+
+// Buscar usuario en la BD por la columna correspondiente.
+// LOWER() en la query nos protege aunque la columna tenga collation
+// case-sensitive (que no deberia, pero por si acaso). Para username
+// no lo hacemos: dejamos que la collation de la columna decida.
+$sql = $es_email
+    ? "SELECT id, username, password, rol FROM usuarios WHERE LOWER(email) = ?"
+    : "SELECT id, username, password, rol FROM usuarios WHERE username = ?";
+$stmt = $conexion->prepare($sql);
+$stmt->bind_param("s", $identificador);
 $stmt->execute();
 $resultado = $stmt->get_result();
 
@@ -33,14 +56,14 @@ if ($resultado->num_rows === 0) {
 
 $fila = $resultado->fetch_assoc();
 
-// Verificar contraseña hasheada
+// Verificar contrasena hasheada
 if (!password_verify($password, $fila["password"])) {
     $_SESSION["error"] = "Usuario o contraseña incorrectos.";
     header("Location: ../index.php");
     exit;
 }
 
-// Login correcto, guardar sesión
+// Login correcto, guardar sesion
 $_SESSION["idUsuario"] = $fila["id"];
 $_SESSION["username"]  = $fila["username"];
 $_SESSION["rol"]       = $fila["rol"];
@@ -48,7 +71,7 @@ $_SESSION["rol"]       = $fila["rol"];
 $stmt->close();
 $conexion->close();
 
-// Redirigir según rol
+// Redirigir segun rol
 if ($fila["rol"] === "admin") {
     header("Location: ../ADMIN/index.php");
 } else {

@@ -92,11 +92,12 @@ if ($stmt->execute()) {
     $nuevo_id = $conexion->insert_id;
     $stmt->close();
 
-    // Crear fila de jugador automáticamente
+    // Crear fila de jugador automaticamente
+    // 28/04 v3.1: columnas suerte y display_mode eliminadas en Fase 1
     $stmt2 = $conexion->prepare("
         INSERT INTO jugadores (usuario_id, coins, points, coins_por_seg, points_por_seg,
-                               coins_ps_max, points_ps_max, suerte, bulk_total, display_mode)
-        VALUES (?, 10, 0, 1, 0, 1, 0, 1.00, 1, 'porcentaje')
+                               coins_ps_max, points_ps_max, bulk_total)
+        VALUES (?, 10, 0, 1, 0, 1, 0, 1)
     ");
     $stmt2->bind_param("i", $nuevo_id);
     $stmt2->execute();

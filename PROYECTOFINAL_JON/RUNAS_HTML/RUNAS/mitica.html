@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; background:transparent; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let t = 0;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener("resize", resize);
+
+function frame() {
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2, cy = H/2;
+    ctx.clearRect(0,0,W,H);
+    t += 0.018;
+
+    const R1 = Math.min(W,H)*0.38;
+    const R2 = R1*0.72;
+    const R3 = R1*0.38;
+    const pulsoA = 0.6 + 0.35*Math.abs(Math.sin(t*1.5));
+
+    // Anillo exterior + flechas cardinales
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*0.4);
+    ctx.strokeStyle=`rgba(255,34,68,${pulsoA})`; ctx.lineWidth=1.5;
+    ctx.shadowColor="#ff2244"; ctx.shadowBlur=30;
+    ctx.beginPath(); ctx.arc(0,0,R1,0,Math.PI*2); ctx.stroke();
+    [0,Math.PI/2,Math.PI,Math.PI*1.5].forEach(a=>{
+        ctx.save(); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(0,-(R1+12)); ctx.lineTo(-5,-(R1+4)); ctx.lineTo(5,-(R1+4)); ctx.closePath();
+        ctx.fillStyle=`rgba(255,34,68,${pulsoA})`; ctx.fill();
+        ctx.restore();
+    });
+    ctx.restore();
+
+    // Anillo medio con marcas
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-t*1.1);
+    ctx.strokeStyle=`rgba(255,34,68,${pulsoA*0.7})`; ctx.lineWidth=1;
+    ctx.shadowColor="#ff2244"; ctx.shadowBlur=15;
+    ctx.beginPath(); ctx.arc(0,0,R2,0,Math.PI*2); ctx.stroke();
+    for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2; const len=i%2===0?16:8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*(R2-len), Math.sin(a)*(R2-len));
+        ctx.lineTo(Math.cos(a)*R2, Math.sin(a)*R2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Anillo interior + cruz diagonal
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(t*2);
+    ctx.strokeStyle=`rgba(255,34,68,${0.8+0.2*Math.sin(t*5)})`; ctx.lineWidth=2;
+    ctx.shadowColor="#ff2244"; ctx.shadowBlur=35;
+    ctx.beginPath(); ctx.arc(0,0,R3,0,Math.PI*2); ctx.stroke();
+    ctx.lineWidth=1.5;
+    for(let i=0;i<4;i++){
+        const a=(i/4)*Math.PI*2+Math.PI/4;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*R3, Math.sin(a)*R3); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Centro
+    const p2 = 6+5*Math.abs(Math.sin(t*3));
+    const gR = ctx.createRadialGradient(cx,cy,0,cx,cy,p2*4);
+    gR.addColorStop(0,`rgba(255,34,68,${pulsoA})`); gR.addColorStop(1,"rgba(255,34,68,0)");
+    ctx.fillStyle=gR; ctx.beginPath(); ctx.arc(cx,cy,p2*4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#ff2244"; ctx.shadowBlur=30; ctx.shadowColor="#ff2244";
+    ctx.beginPath(); ctx.arc(cx,cy,p2,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

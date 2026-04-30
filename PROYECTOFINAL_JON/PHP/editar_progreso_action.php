@@ -18,14 +18,14 @@ $coins       = floatval($_POST["coins"]);
 $points      = floatval($_POST["points"]);
 $coins_ps    = floatval($_POST["coins_por_seg"]);
 $points_ps   = floatval($_POST["points_por_seg"]);
-$suerte      = floatval($_POST["suerte"]);
 
+// 27/04 v3: campo suerte eliminado
 $stmt = $conexion->prepare("
     UPDATE jugadores
-    SET coins = ?, points = ?, coins_por_seg = ?, points_por_seg = ?, suerte = ?
+    SET coins = ?, points = ?, coins_por_seg = ?, points_por_seg = ?
     WHERE usuario_id = ?
 ");
-$stmt->bind_param("dddddi", $coins, $points, $coins_ps, $points_ps, $suerte, $id);
+$stmt->bind_param("ddddi", $coins, $points, $coins_ps, $points_ps, $id);
 $stmt->execute();
 $stmt->close();
 $conexion->close();

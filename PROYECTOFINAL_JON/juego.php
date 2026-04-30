@@ -48,12 +48,10 @@ require_once "PHP/conexion.php";
 
 $id_usuario = $_SESSION["idUsuario"];
 
-// cargar datos basicos del jugador. ojo, esto NO incluye las mejoras ni los
-// bonus de grupo, eso se mete despues a mano porque en la bd guardo solo la
-// suerte base (la "d" de la formula, los bonus de coleccion)
+// cargar datos basicos del jugador
+// 27/04 v3: sistema de suerte eliminado, ya no leemos columna suerte ni display_mode
 $stmt = $conexion->prepare("
-    SELECT coins, points, coins_por_seg, points_por_seg, coins_ps_max, points_ps_max,
-           suerte, display_mode
+    SELECT coins, points, coins_por_seg, points_por_seg, coins_ps_max, points_ps_max
     FROM jugadores WHERE usuario_id = ?
 ");
 $stmt->bind_param("i", $id_usuario);
@@ -67,23 +65,6 @@ $coins_ps     = $jugador["coins_por_seg"]  ?? 1;
 $points_ps    = $jugador["points_por_seg"] ?? 0;
 $coins_ps_max = $jugador["coins_ps_max"]   ?? $coins_ps;
 $points_ps_max= $jugador["points_ps_max"]  ?? $points_ps;
-$suerte       = floatval($jugador["suerte"] ?? 1.0);
-$display_mode = $jugador["display_mode"]   ?? "porcentaje";
-
-// bonus de grupo ya conseguidos. en teoria la suerte en la bd ya los
-// incluye porque se multiplica al completar una coleccion (ver tirar_runa.php)
-// pero dejo esta query por si en un futuro hago debug o algo. 10/04: aun sin usar
-$stmt = $conexion->prepare("
-    SELECT SUM(bg.valor) as bonus_suerte
-    FROM jugador_bonus jb
-    INNER JOIN bonus_grupo bg ON bg.id = jb.bonus_id
-    WHERE jb.jugador_id = (SELECT id FROM jugadores WHERE usuario_id = ?)
-      AND bg.tipo = 'suerte'
-");
-$stmt->bind_param("i", $id_usuario);
-$stmt->execute();
-$bonus_row = $stmt->get_result()->fetch_assoc();
-$stmt->close();
 
 // bulk total del jugador. bulk = masa = cuantas runas lanza por cada coin
 // gastada. la mejora "tiradas multiples" suma +1 bulk por nivel. arranca en 1
@@ -100,13 +81,40 @@ $bulk_row   = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 $bulk_total = 1 + (int)($bulk_row["bulk_total"] ?? 0);
 
-// probabilidades con curva campana
-// calcular_pesos.php tiene la matematica de la curva, aqui solo la llamo
-require_once "PHP/calcular_pesos.php";
+// probabilidades por cascada (sin suerte)
+// 27/04 v3: ya no hay curva campana, las probabilidades son fijas por rareza.
+// se cargan desde rarezas.denominador y se calculan en cascada:
+//   prob(rareza_N) = (1 - 1/d1) * (1 - 1/d2) * ... * (1/dN)
+// la rareza con denominador 1 (comun) se queda con lo que sobre.
+
+$stmt = $conexion->prepare("
+    SELECT slug, denominador FROM rarezas
+    WHERE activa = 1
+    ORDER BY denominador DESC
+");
+$stmt->execute();
+$rarezas_db = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt->close();
+
+// calcular probabilidad de cada rareza siguiendo la cascada
+$prob_rareza_pct = [];
+$running = 1.0;
+foreach ($rarezas_db as $r) {
+    $denom = (int)$r["denominador"];
+    if ($denom <= 1) {
+        // fallback: se lleva lo que quede
+        $prob_rareza_pct[$r["slug"]] = $running * 100;
+        $running = 0.0;
+    } else {
+        $hit = 1.0 / $denom;
+        $prob_rareza_pct[$r["slug"]] = $running * $hit * 100;
+        $running *= (1.0 - $hit);
+    }
+}
 
 // lista completa de runas activas (para el panel de probabilidades)
 $stmt = $conexion->prepare("
-    SELECT r.id, r.nombre, r.rareza, r.peso,
+    SELECT r.id, r.nombre, r.rareza,
            COALESCE(g.nombre, 'Sin grupo') as grupo_nombre
     FROM runas r
     LEFT JOIN grupos_runas g ON r.grupo_id = g.id
@@ -117,13 +125,11 @@ $stmt->execute();
 $todas_runas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// pesos con suerte = 1 (probabilidad base, sin bonus). esto es lo que mostraria
-// el juego si fueras un pringao nivel 1 sin nada comprado. spoiler: son las
-// "Probabilidad base" que sale en el panel de la derecha
-$campana_base    = calcularPesosPorSuerte(1.0, $conexion);
-$peso_base_total = $campana_base["total"];
-// inicializo peso_efectivo_total al base, se recalcula mas abajo con suerte_real
-$peso_efectivo_total = $peso_base_total;
+// contar cuantas runas hay por rareza para repartir la prob entre ellas
+$counts_rareza = [];
+foreach ($todas_runas as $r) {
+    $counts_rareza[$r["rareza"]] = ($counts_rareza[$r["rareza"]] ?? 0) + 1;
+}
 
 // runas que tiene el jugador ahora mismo (solo las que tiene alguna cantidad)
 $stmt = $conexion->prepare("
@@ -162,28 +168,164 @@ $stmt->execute();
 $mejoras = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
+// ── Calcular bloqueos de mejoras para inyectarlos en RW_INIT ──
+// (se hace AQUI, antes del $conexion->close() de mas abajo, porque
+// usamos el cursor para sacar stats y comprobar la coleccion).
+// el server evalua las condiciones (coleccion_basica, tirar_runa_x,
+// tirar_rareza, comprar_mejora_id) y marca cada mejora como bloqueada.
+// tienda.js solo pinta lo que recibe, asi un cliente no puede saltarse
+// una condicion editando el DOM (la validacion final esta tambien en
+// comprar_mejora.php). aqui solo es para que la UI muestre el estado
+// correcto sin un round-trip extra al server
+
+// resolver jugador_id desde usuario_id (el resto del archivo no lo cachea
+// en una variable, hace el JOIN cada vez. aqui necesito el id "seco")
+$stmt = $conexion->prepare("SELECT id FROM jugadores WHERE usuario_id = ?");
+$stmt->bind_param("i", $id_usuario);
+$stmt->execute();
+$jugador_row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+$jugador_id = (int)($jugador_row["id"] ?? 0);
+
+// stats del jugador (necesitamos total_tiradas y los counters de rareza)
+$stmt = $conexion->prepare("SELECT * FROM jugador_stats WHERE jugador_id = ?");
+$stmt->bind_param("i", $jugador_id);
+$stmt->execute();
+$jugador_stats_row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+$total_tiradas      = (int)($jugador_stats_row["total_tiradas"]      ?? 0);
+$total_eternas      = (int)($jugador_stats_row["total_eternas"]      ?? 0);
+$total_divinas      = (int)($jugador_stats_row["total_divinas"]      ?? 0);
+$total_miticas      = (int)($jugador_stats_row["total_miticas"]      ?? 0);
+$total_legendarias  = (int)($jugador_stats_row["total_legendarias"]  ?? 0);
+$boosts_clickados   = (int)($jugador_stats_row["boosts_clickados"]   ?? 0);  // 28/04 v3.1
+
+// coleccion basica completa? cuento runas no especiales que tiene el jugador
+$stmt = $conexion->prepare("
+    SELECT
+      (SELECT COUNT(*) FROM runas WHERE activa = 1
+       AND rareza NOT IN ('eterna','divina','mitica','legendaria')) AS total_basicas,
+      (SELECT COUNT(DISTINCT jr.runa_id) FROM jugador_runas jr
+       INNER JOIN runas r ON r.id = jr.runa_id
+       WHERE jr.jugador_id = ? AND jr.cantidad > 0
+         AND r.rareza NOT IN ('eterna','divina','mitica','legendaria')
+         AND r.activa = 1) AS poseidas
+");
+$stmt->bind_param("i", $jugador_id);
+$stmt->execute();
+$col_row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+$coleccion_basica_completa = $col_row
+    && (int)$col_row["total_basicas"] > 0
+    && (int)$col_row["poseidas"] >= (int)$col_row["total_basicas"];
+
+// niveles del jugador en cada mejora_id (para condicion comprar_mejora_id)
+$niveles_jugador = [];
+foreach ($mejoras as $m) {
+    $niveles_jugador[(int)$m["id"]] = (int)$m["nivel_actual"];
+}
+
+// helper que devuelve [bloqueada, texto_pista] para una mejora
+$evaluar_desbloqueo = function($m) use (
+    $total_tiradas, $total_eternas, $total_divinas, $total_miticas, $total_legendarias,
+    $coleccion_basica_completa, $niveles_jugador, $boosts_clickados
+) {
+    $tipo  = $m["condicion_tipo"]  ?? "ninguna";
+    $valor = $m["condicion_valor"] ?? null;
+    if ($tipo === "ninguna" || $tipo === null || $tipo === "") {
+        return [false, ""];
+    }
+    switch ($tipo) {
+        case "coleccion_basica":
+            return $coleccion_basica_completa
+                ? [false, ""]
+                : [true, "Completa la coleccion basica de runas"];
+        case "tirar_runa_x":
+            $minimo = (int)$valor;
+            return $total_tiradas >= $minimo
+                ? [false, ""]
+                : [true, "Tira " . number_format($minimo, 0, ',', '.') . " runas (" . $total_tiradas . "/" . $minimo . ")"];
+        case "tirar_rareza":
+            $rareza = strtolower($valor);
+            $cnt = 0;
+            if     ($rareza === "eterna")      $cnt = $total_eternas;
+            elseif ($rareza === "divina")      $cnt = $total_divinas;
+            elseif ($rareza === "mitica")      $cnt = $total_miticas;
+            elseif ($rareza === "legendaria")  $cnt = $total_legendarias;
+            return $cnt >= 1
+                ? [false, ""]
+                : [true, "Consigue una runa " . $rareza];
+        case "comprar_mejora_id":
+            $req_id = (int)$valor;
+            $tiene  = ($niveles_jugador[$req_id] ?? 0) >= 1;
+            return $tiene
+                ? [false, ""]
+                : [true, "Requiere otra mejora previa"];
+        // 28/04 v3.1: nuevo caso. se desbloquea cuando el jugador ha
+        // clickado >= condicion_valor boosts (contador en jugador_stats)
+        case "clickar_boost_x":
+            $minimo = (int)$valor;
+            return $boosts_clickados >= $minimo
+                ? [false, ""]
+                : [true, "Clica " . $minimo . " boost" . ($minimo > 1 ? "s" : "") . " (" . $boosts_clickados . "/" . $minimo . ")"];
+        default:
+            return [true, "Bloqueada"];
+    }
+};
+
+// pre-calcular para cada mejora el flag y el texto, para inyectarlos abajo
+$mejoras_con_estado = array_map(function($m) use ($evaluar_desbloqueo) {
+    list($bloq, $texto) = $evaluar_desbloqueo($m);
+    $m["bloqueada"]        = $bloq;
+    $m["condicion_texto"]  = $texto;
+    return $m;
+}, $mejoras);
+
 // calcular stats reales aplicando las mejoras
-// aqui es donde sale la "b" de la formula de suerte (suerte_add)
-// en general: cosas additive se suman, cosas multi se multiplican
+// 27/04 v3: casos de suerte eliminados, las mejoras de suerte ya no existen
+// formulas:
+//   coins_seg          -> acumulativo: 1+2+...+nivel
+//   coins_seg_multi[_eterno]   -> 2^nivel
+//   points_seg         -> lineal: valor * nivel (28/04 v3.1)
+//   points_seg_multi[_eterno] -> 2^nivel
+//   bulk / bulk_normal -> +nivel runas
+//   bulk_extra         -> +valor runas si nivel>=1
 $coins_add    = 0.0; $multi_coins  = 1.0;
 $points_add   = 0.0; $multi_points = 1.0;
-$suerte_add   = 0.0;
+$bulk_extra   = 0;
 foreach ($mejoras as $mejora) {
     $valor  = floatval($mejora["valor"]);
     $nivel  = (int)$mejora["nivel_actual"];
     if ($nivel <= 0) continue;
     switch ($mejora["tipo"]) {
-        case "coins_seg":        $coins_add    += $valor * $nivel; break;
-        case "coins_seg_multi":  $multi_coins  *= (1 + $valor * $nivel); break;
-        case "points_seg":       $points_add   += $valor * $nivel; break;
-        case "points_seg_multi": $multi_points *= (1 + $valor * $nivel); break;
-        case "suerte":           $suerte_add   += $valor * $nivel; break;
+        case "coins_seg":
+            $coins_add += ($nivel * ($nivel + 1) / 2) * $valor;
+            break;
+        case "coins_seg_multi":
+        case "coins_seg_multi_eterno":
+            $multi_coins *= pow(2, $nivel);
+            break;
+        case "points_seg":
+            // 28/04 v3.1: lineal (valor * nivel) en vez de geometrica
+            // (valor * 10^(nivel-1)). la geometrica explotaba a millardos
+            // en niveles altos, ahora cada nivel suma `valor` puntos/seg.
+            $points_add += $valor * $nivel;
+            break;
+        case "points_seg_multi":
+        case "points_seg_multi_eterno":
+            $multi_points *= pow(2, $nivel);
+            break;
+        case "bulk":
+        case "bulk_normal":
+            // este lo lee tirar_runa.php directamente de la BD,
+            // pero lo dejamos aqui por si algun panel quiere mostrar el bulk total
+            break;
+        case "bulk_extra":
+            if ($nivel >= 1) $bulk_extra += (int)$valor;
+            break;
     }
 }
-$coins_ps    = (1.0 + $coins_add) * $multi_coins;
-// suerte_real = (1 + b) * d. falta la "c" (boosts) que es client-side porque
-// los boosts son cosa de js, el server no se entera hasta que tiras
-$suerte_real = $suerte * (1.0 + $suerte_add);
+$coins_ps = (1.0 + $coins_add) * $multi_coins;
 
 // points/seg tiene un extra: las runas que tiene el jugador dan points pasivos
 // segun su multiplicador. esto se llama runas_pts_base
@@ -199,37 +341,24 @@ $runas_pts_base = floatval($stmt_pts->get_result()->fetch_assoc()["total"]);
 $stmt_pts->close();
 $points_ps = ($runas_pts_base + $points_add) * $multi_points;
 
-// recalcular pesos con la suerte real (base + mejoras). esto es lo que
-// veras cuando abres una carta de runa y ves "Con tu suerte: X%"
-$campana_suerte      = calcularPesosPorSuerte($suerte_real, $conexion);
-$peso_efectivo_total = $campana_suerte["total"];
+// prob_map: probabilidad fija por runa
+// 27/04 v3: cascada simple. dentro de cada rareza todas las runas tienen la
+// misma prob, asi que dividimos la prob de la rareza entre el numero de runas
+// que tiene esa rareza
 $prob_map = [];
 foreach ($todas_runas as $runa) {
     $rareza = $runa["rareza"];
-    $pct_base = $peso_base_total     > 0 ? ($campana_base["pesos"][$rareza]   ?? 0) / $peso_base_total     * 100 : 0;
-    $pct_suer = $peso_efectivo_total > 0 ? ($campana_suerte["pesos"][$rareza] ?? 0) / $peso_efectivo_total * 100 : 0;
-    $peso_ef  = $peso_efectivo_total > 0 ? round($campana_suerte["pesos"][$rareza] ?? 0, 2) : 0;
+    $count  = max(1, (int)($counts_rareza[$rareza] ?? 1));
+    $pct    = ($prob_rareza_pct[$rareza] ?? 0) / $count;
     $prob_map[$runa["id"]] = [
-        "base"          => $pct_base,
-        "suerte"        => $pct_suer,
-        "peso"          => $runa["peso"],
-        "peso_efectivo" => $peso_ef
-    ];
-}
-// mismo calculo pero por rareza (no por runa individual). lo uso en otro sitio
-$prob_rareza_pct = [];
-foreach ($campana_base["curvas"] as $curva) {
-    $r = $curva["rareza"];
-    $prob_rareza_pct[$r] = [
-        "base"   => $peso_base_total     > 0 ? ($campana_base["pesos"][$r]   ?? 0) / $peso_base_total     * 100 : 0,
-        "suerte" => $peso_efectivo_total > 0 ? ($campana_suerte["pesos"][$r] ?? 0) / $peso_efectivo_total * 100 : 0,
+        "prob" => $pct
     ];
 }
 
 // coleccion completa: todas las runas del juego con la cantidad que tiene
 // el jugador (0 si no la ha desbloqueado). LEFT JOIN es mi mejor amigo
 $stmt = $conexion->prepare("
-    SELECT r.id, r.nombre, r.rareza, r.peso, r.multiplicador, r.imagen,
+    SELECT r.id, r.nombre, r.rareza, r.multiplicador, r.imagen,
            COALESCE(jr.cantidad, 0) as cantidad
     FROM runas r
     LEFT JOIN jugador_runas jr ON r.id = jr.runa_id
@@ -251,20 +380,7 @@ $desbloqueadas_num = count(array_filter($runas_coleccion, fn($r) => $r["cantidad
 $runas_especiales = array_values(array_filter($runas_coleccion, fn($r) => in_array($r["rareza"], ["eterna","divina","legendaria","mitica"])));
 $runas_comunes    = array_values(array_filter($runas_coleccion, fn($r) => !in_array($r["rareza"], ["eterna","divina","legendaria","mitica"])));
 
-// bonus por completar grupo (ej: "colecciona todas las runas basicas y +0.5 suerte")
-// los muestro en coleccion como "recompensa por completar la coleccion X"
-$stmt = $conexion->prepare("
-    SELECT bg.*, gr.nombre as grupo_nombre, jb.id as conseguido
-    FROM bonus_grupo bg
-    INNER JOIN grupos_runas gr ON gr.id = bg.grupo_id
-    LEFT JOIN jugador_bonus jb ON jb.bonus_id = bg.id
-        AND jb.jugador_id = (SELECT id FROM jugadores WHERE usuario_id = ?)
-    ORDER BY bg.grupo_id ASC
-");
-$stmt->bind_param("i", $id_usuario);
-$stmt->execute();
-$bonuses_grupos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+// 27/04 v3: bloque de bonus_grupo eliminado, tabla dropeada en Fase 1
 
 // tipos de boost activos (los que pueden salir en el juego ahora mismo)
 $stmt = $conexion->prepare("SELECT * FROM boost_tipos WHERE activo = 1 ORDER BY peso DESC");
@@ -335,12 +451,13 @@ $conexion->close();
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RunaWorld</title>
     <link rel="stylesheet" href="CSS/style.css">
     <link rel="stylesheet" href="CSS/style_phone.css">
     <link rel="stylesheet" href="CSS/rune_button.css">
     <link rel="stylesheet" href="CSS/stats_estadisticas.css">
+    <link rel="stylesheet" href="CSS/tienda.css">
     <style>
         /* hover y seleccion de runas comunes en la coleccion */
         /* lo puse aqui inline porque style.css estaba creciendo mucho */
@@ -373,6 +490,10 @@ $conexion->close();
         .coleccion-canvas-wrap {
             min-height: 0 !important;
         }
+        /* CSS del popup welcomePopup eliminado: el popup se quito porque
+           ahora la presentacion va en index.php (homepage publica). las
+           clases .jondrar-modal-*, .welcome-text, .neon-hr, .info-section,
+           .info-list, .btn-access ya no se usan en ningun sitio */
     </style>
 </head>
 <body>
@@ -503,6 +624,11 @@ $conexion->close();
     </div>
 </div>
 
+<!-- popup de bienvenida eliminado: ahora la presentacion del juego va en
+     index.php (la homepage publica). los visitantes nuevos llegan ahi
+     primero y deciden si entrar a jugar; quien ya esta dentro no necesita
+     que se le repita al cargar juego.php -->
+
 <!-- titulo del juego + saludo al jugador. el saludo viene de la sesion -->
 <div id="header">
     <h1>RunaWorld</h1>
@@ -535,17 +661,6 @@ $conexion->close();
             <div class="stat-info">
                 <span class="stat-value silver" id="points-display"><?= number_format($points, 0) ?></span>
                 <span class="stat-rate"          id="points-ps-display">+<?= number_format($points_ps, 2) ?>/seg</span>
-            </div>
-        </div>
-
-        <div class="stat-block">
-            <svg class="stat-icon" viewBox="0 0 40 40" fill="none">
-                <polygon points="20,4 22,15 33,15 24,22 27,33 20,26 13,33 16,22 7,15 18,15"
-                         stroke="#ffd700" stroke-width="1.2" fill="none" opacity="0.7"/>
-            </svg>
-            <div class="stat-info">
-                <span class="stat-value gold" id="suerte-display">x<?= number_format($suerte, 2) ?></span>
-                <span class="stat-rate">suerte</span>
             </div>
         </div>
 
@@ -689,38 +804,15 @@ $conexion->close();
         </div>
 
         <!-- menu 2: tienda -->
-        <!-- las mejoras compradas con points (no coins). el jugador las desbloquea
-             para potenciar coins/seg, points/seg, suerte, bulk, etc.
-             ideas: anadir prestigio, mejoras de evento, descuento por compra masiva -->
+        <!-- las mejoras compradas con points (no coins). el HTML lo monta
+             tienda.js dinamicamente leyendo window.RW_INIT.mejoras_completas
+             (ver final de este archivo). estilo y logica viven en JS/tienda.js
+             y CSS/tienda.css respectivamente. aqui solo dejamos el contenedor
+             vacio con titulo y zona de mensajes -->
         <div id="seccion-tienda" class="seccion">
             <div class="seccion-titulo">Tienda de Mejoras</div>
             <p id="msg-tienda"></p>
-            <div class="mejoras-grid">
-                <?php foreach ($mejoras as $mejora):
-                    $nivel_actual = (int)$mejora["nivel_actual"];
-                    $max_nivel    = (int)$mejora["nivel_maximo"];
-                    $coste_actual = $mejora["coste_base"] * pow($mejora["coste_escala"], $nivel_actual);
-                    $es_max       = $nivel_actual >= $max_nivel;
-                ?>
-                    <div class="mejora-card" id="mejora-fila-<?= $mejora["id"] ?>">
-                        <div class="mejora-card-nombre"><?= htmlspecialchars($mejora["nombre"]) ?></div>
-                        <div class="mejora-card-desc"><?= htmlspecialchars($mejora["descripcion"] ?? "") ?></div>
-                        <div class="mejora-card-nivel" id="mejora-nivel-<?= $mejora["id"] ?>">Nivel <?= $nivel_actual ?> / <?= $max_nivel ?></div>
-                        <div class="mejora-card-coste <?= $es_max ? 'max' : '' ?>" id="mejora-coste-<?= $mejora["id"] ?>">
-                            <?php if ($es_max): ?>
-                                NIVEL MAX
-                            <?php else: ?>
-                                <span class="coste-num" data-valor="<?= $coste_actual ?>"></span> pts
-                            <?php endif; ?>
-                        </div>
-                        <?php if (!$es_max): ?>
-                            <button class="btn-comprar" onclick="comprarMejora(<?= $mejora["id"] ?>)">Comprar</button>
-                        <?php else: ?>
-                            <button class="btn-comprar" disabled>Completado</button>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
+            <!-- las filas de mejoras se inyectan aqui en runtime por tienda.js -->
         </div>
 
         <!-- menu 3: coleccion -->
@@ -754,7 +846,6 @@ $conexion->close();
                          data-id="<?= $runa_col["id"] ?>"
                          data-rareza="<?= $cls_rareza ?>"
                          data-nombre="<?= htmlspecialchars($runa_col["nombre"]) ?>"
-                         data-peso="<?= $runa_col["peso"] ?>"
                          data-multiplicador="<?= $runa_col["multiplicador"] ?>"
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
                          data-imagen="<?= htmlspecialchars($runa_col["imagen"] ?? "") ?>"
@@ -785,7 +876,6 @@ $conexion->close();
                          data-id="<?= $runa_col["id"] ?>"
                          data-rareza="<?= $cls_rareza ?>"
                          data-nombre="<?= htmlspecialchars($runa_col["nombre"]) ?>"
-                         data-peso="<?= $runa_col["peso"] ?>"
                          data-multiplicador="<?= $runa_col["multiplicador"] ?>"
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
                          <?= $desbloqueada ? 'onclick="seleccionarRunaCol(this)"' : '' ?>>
@@ -858,10 +948,6 @@ $conexion->close();
                     <div class="stats-fila">
                         <span class="stats-label">Points por segundo</span>
                         <span class="stats-valor" id="stats-points-ps">—</span>
-                    </div>
-                    <div class="stats-fila">
-                        <span class="stats-label">Suerte</span>
-                        <span class="stats-valor" id="stats-suerte">—</span>
                     </div>
                     <div class="stats-fila">
                         <span class="stats-label">Runas por tirada (bulk)</span>
@@ -1051,21 +1137,8 @@ $conexion->close();
                 <button class="btn-enviar" onclick="enviarMensaje()">Enviar Mensaje</button>
             </div>
 
-            <!-- toggle de como se muestran las probabilidades: porcentaje (%)
-                 o peso (numero bruto). en antimatter dimensions los pesos son
-                 peso vs peso total y la gente nerd lo prefiere, por eso lo anadi -->
-            <div class="ajuste-input-grupo">
-                <div class="ajuste-label">Mostrar probabilidades como</div>
-                <div class="ajuste-input-row" style="gap:10px;">
-                    <button class="ajuste-input-btn <?= $display_mode === 'porcentaje' ? 'active' : '' ?>"
-                            id="btn-modo-pct"
-                            onclick="cambiarDisplayMode('porcentaje')">Porcentaje</button>
-                    <button class="ajuste-input-btn <?= $display_mode === 'peso' ? 'active' : '' ?>"
-                            id="btn-modo-peso"
-                            onclick="cambiarDisplayMode('peso')">Peso</button>
-                </div>
-                <span class="ajuste-msg" id="msg-display-mode"></span>
-            </div>
+            <!-- 27/04 v3: toggle de display_mode (porcentaje/peso) eliminado.
+                 ahora todas las probabilidades se muestran como fraccion fija. -->
 
             <div class="sidebar-divider"></div>
 
@@ -1126,17 +1199,12 @@ $conexion->close();
                             $id_runa   = $runa_item["id"];
                             $cantidad  = $mis_cantidades[$id_runa] ?? 0;
                             $tiene     = $cantidad > 0;
-                            $pct_base  = isset($prob_map[$id_runa]) ? $prob_map[$id_runa]["base"]   : 0;
-                            $pct_suer  = isset($prob_map[$id_runa]) ? $prob_map[$id_runa]["suerte"] : 0;
-                            $peso_r    = isset($prob_map[$id_runa]) ? $prob_map[$id_runa]["peso"]   : 0;
+                            $pct_prob  = isset($prob_map[$id_runa]) ? $prob_map[$id_runa]["prob"] : 0;
                             $rareza    = htmlspecialchars($runa_item["rareza"]);
                         ?>
                             <div class="runa-card <?= $rareza ?> runa-card-btn <?= !$tiene ? 'runa-bloqueada' : '' ?>"
                                  data-id="<?= $id_runa ?>"
-                                 data-base="<?= $pct_base ?>"
-                                 data-suerte="<?= $pct_suer ?>"
-                                 data-peso="<?= $peso_r ?>"
-                                 data-peso-efectivo="<?= isset($prob_map[$id_runa]["peso_efectivo"]) ? $prob_map[$id_runa]["peso_efectivo"] : $peso_r ?>"
+                                 data-prob="<?= $pct_prob ?>"
                                  onclick="toggleRunaProb(this)">
                                 <div class="runa-card-main">
                                     <span class="runa-card-nombre"><?= htmlspecialchars($runa_item["nombre"]) ?></span>
@@ -1151,12 +1219,8 @@ $conexion->close();
                                 </div>
                                 <div class="runa-card-prob">
                                     <div class="prob-fila">
-                                        <span class="prob-label">Probabilidad base</span>
+                                        <span class="prob-label">Probabilidad</span>
                                         <span class="prob-val prob-base-val"></span>
-                                    </div>
-                                    <div class="prob-fila prob-suerte">
-                                        <span class="prob-label">Con tu suerte</span>
-                                        <span class="prob-val prob-suerte-val"></span>
                                     </div>
                                 </div>
                             </div>
@@ -1193,32 +1257,20 @@ window.RW_INIT = {
     points_ps:      <?= $points_ps ?>,
     coins_ps_max:   <?= $coins_ps_max  ?>,
     points_ps_max:  <?= $coins_ps_max  ?>,
-    suerte:         <?= isset($suerte_real) ? $suerte_real : $suerte ?>,
 
-    // formula de suerte desglosada (a+b)*c*d, ver cabecera del archivo
-    //   a = 1 fijo, no hace falta pasarlo
-    //   b = suerte_shop_add (mejoras de tienda)
-    //   c = no se pasa, lo calcula js con los boosts activos
-    //   d = suerte_grupo (bonus de colecciones completadas)
-    suerte_shop_add: <?= isset($suerte_add) ? $suerte_add : 0.0 ?>,
-    suerte_grupo:    <?= $suerte ?>,
+    // 27/04 v3: campos suerte_*, curvas_data y display_mode eliminados.
+    // las probabilidades son fijas, no dependen de suerte ni de boosts.
 
     // multiplicadores de mejoras que persisten entre tiradas, js los
     // guarda en variables globales para no tener que recalcular siempre
     mejora_coins_ps:    <?= isset($coins_ps) ? $coins_ps : 1 ?>,
     mejora_multi_pts:   <?= isset($multi_points) ? $multi_points : 1.0 ?>,
     mejora_points_add:  <?= isset($points_add) ? $points_add : 0.0 ?>,
-    mejora_suerte_multi:<?= isset($suerte_add) ? (1 + $suerte_add) : 1.0 ?>,
     runas_points_ps:    <?= isset($runas_pts_base) ? $runas_pts_base : 0.0 ?>,
 
     bulk_total:     <?= $bulk_total ?>,
-    display_mode:   "<?= $display_mode ?>",
     user_id:        <?= (int)$id_usuario ?>,
     probMap:        <?= json_encode($prob_map) ?>,
-
-    // curvas campana en crudo: js las usa para recalcular los % de cada runa
-    // en vivo cuando la suerte cambia por un boost sin tener que pedirselo al server
-    curvas_data:    <?= json_encode(array_column($campana_base["curvas"], null, "rareza")) ?>,
 
     boost_tipos:    <?= json_encode($boost_tipos) ?>,
     boost_intervalo:<?= $boost_intervalo ?> * 1000,
@@ -1227,6 +1279,29 @@ window.RW_INIT = {
     // si el jugador tiene comprada la mejora de desbloqueo correspondiente
     mejoras_desbloqueadas: <?= json_encode($mejoras_desbloqueadas) ?>,
     prob_rareza:    <?= json_encode($prob_rareza_pct) ?>,
+
+    // datos de TODAS las mejoras de la tabla `mejoras` con el nivel actual
+    // del jugador. tienda.js los lee al cargar y construye las filas
+    // horizontales con barra segmentada e iconos. el flag `bloqueada` y el
+    // texto-pista los calcula PHP arriba (ver $mejoras_con_estado), asi
+    // tienda.js solo pinta lo que recibe sin tener que evaluar nada
+    mejoras_completas: <?= json_encode(array_map(function($m) {
+        return [
+            "id"               => (int)   $m["id"],
+            "nombre"           => (string)$m["nombre"],
+            "tipo"             => (string)$m["tipo"],
+            "valor"            => (float) $m["valor"],
+            "coste_base"       => (float) $m["coste_base"],
+            "coste_escala"     => (float) $m["coste_escala"],
+            "nivel_actual"     => (int)   $m["nivel_actual"],
+            "nivel_maximo"     => (int)   $m["nivel_maximo"],
+            "descripcion"      => (string)($m["descripcion"] ?? ""),
+            "orden"            => (int)   ($m["orden"] ?? 0),
+            "bloqueada"        => (bool)  ($m["bloqueada"] ?? false),
+            "condicion_texto"  => (string)($m["condicion_texto"] ?? ""),
+            "es_nueva"         => false,   // marca tras desbloqueo reciente (pendiente)
+        ];
+    }, $mejoras_con_estado)) ?>,
 };
 
 // toggle de particulas del boton de tirada (ajustes > rendimiento).
@@ -1250,6 +1325,24 @@ function toggleAnimBoton(cb) {
         });
     }
 })();
+
+// Función simple para quitar el mensaje de la vista
+    function cerrarBienvenida() {
+        const overlay = document.getElementById('bienvenida-overlay');
+        overlay.classList.remove('mostrar');
+        // Hemos quitado el localStorage.setItem, así que no se guardará el cierre
+    }
+
+    // Se ejecuta cada vez que la página termina de cargar
+    window.addEventListener('load', () => {
+        const overlay = document.getElementById('bienvenida-overlay');
+        if (overlay) { // <-- Esta comprobación evita el error
+            setTimeout(() => {
+                overlay.classList.add('mostrar');
+            }, 3500); 
+        }
+    });
+
 </script>
 
 <!-- orden de los scripts importa: animaciones primero porque la usan casi todos,
@@ -1262,7 +1355,9 @@ function toggleAnimBoton(cb) {
 <script src="JS/ui.js"></script>
 <script src="JS/coleccion.js"></script>
 <script src="JS/boosts.js"></script>
+<script src="JS/runa-sync.js"></script>
 <script src="JS/tirada.js"></script>
+<script src="JS/tienda.js"></script>
 <script src="JS/ajustes.js"></script>
 <script src="JS/mobile.js"></script>
 

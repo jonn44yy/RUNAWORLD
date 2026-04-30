@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;700&family=Oswald:wght@300;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; background:transparent; overflow:hidden; }
+
+/*
+ * Todos los elementos de la animación van en z-index muy alto
+ * para superponerse sobre cualquier UI del juego.
+ * El canvas principal #c es transparente durante F1 —
+ * solo el alquitrán cubre la pantalla progresivamente.
+ * A partir de F2 se rellena con negro total.
+ */
+#c-bg     { position:fixed; inset:0; z-index:9000; pointer-events:none; }
+#c        { position:fixed; inset:0; z-index:9001; pointer-events:none; }
+#c-fg     { position:fixed; inset:0; z-index:9002; pointer-events:none; }
+#c-chroma { position:fixed; inset:0; z-index:9003; pointer-events:none; mix-blend-mode:screen; opacity:0; }
+
+#vig {
+    position:fixed; inset:0; z-index:9780; pointer-events:none; opacity:0;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 22%,rgba(0,5,1,0.45) 58%,rgba(0,3,0,0.97) 100%);
+}
+#vig::after {
+    content:""; position:absolute; inset:0;
+    background:repeating-linear-gradient(0deg,rgba(0,10,2,0.06) 0px,rgba(0,10,2,0.06) 1px,transparent 1px,transparent 2px);
+    opacity:0.45;
+}
+#ntitle { position:fixed; bottom:12%; left:50%; transform:translateX(-50%); z-index:9820; display:flex; gap:0; white-space:nowrap; pointer-events:none; }
+.nl {
+    font-family:'Cinzel Decorative',cursive; font-size:clamp(1.5rem,4vw,4.5rem); font-weight:900;
+    background:linear-gradient(180deg,#e0ffe4 0%,#7fff88 25%,#00e63a 60%,#00701a 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 22px rgba(0,230,58,0.95));
+    letter-spacing:8px; opacity:0; transform:scale(3.5) translateZ(0); display:inline-block;
+}
+#nsub {
+    position:fixed; bottom:7.5%; left:50%; transform:translateX(-50%); z-index:9820; pointer-events:none; white-space:nowrap;
+    font-family:'Cinzel',serif; font-size:clamp(0.65rem,1.4vw,1rem); letter-spacing:14px; color:rgba(127,255,136,0.9);
+    text-shadow:0 0 22px rgba(0,200,50,0.75); opacity:0; transition:opacity 2.5s ease-out;
+}
+#npct {
+    position:fixed; bottom:4.5%; left:50%; transform:translateX(-50%); z-index:9820; pointer-events:none; white-space:nowrap;
+    font-family:'Oswald',sans-serif; font-size:clamp(0.6rem,1.2vw,0.9rem); letter-spacing:13px; color:rgba(0,230,58,0.95);
+    text-shadow:0 0 16px rgba(0,200,50,0.85); opacity:0; transition:opacity 2s ease-out 1s;
+}
+#wrap {
+    position:fixed; inset:0; z-index:9800; display:flex; justify-content:center; align-items:center;
+    opacity:0; pointer-events:none; animation:gfloat 8s ease-in-out infinite; perspective:1200px;
+}
+@keyframes gfloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-11px)} }
+#gsvg {
+    width:min(680px,88vw); height:min(680px,88vw);
+    filter:drop-shadow(0 0 55px rgba(0,200,50,0.9)) drop-shadow(0 0 130px rgba(0,100,20,0.4));
+    transform-style:preserve-3d; will-change:transform;
+}
+.rs  { animation:gr 52s linear infinite; transform-origin:center; }
+.rm  { animation:gr 26s linear infinite; transform-origin:center; }
+.rf  { animation:gr 11s linear infinite; transform-origin:center; }
+.rv  { animation:gr 36s linear infinite reverse; transform-origin:center; }
+.rvs { animation:gr 65s linear infinite reverse; transform-origin:center; }
+.rp  { animation:gp 3.5s ease-in-out infinite; }
+@keyframes gr { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@keyframes gp { 0%,100%{opacity:.5;transform:scale(.97)} 50%{opacity:1;transform:scale(1.04)} }
+#spore-flash {
+    position:fixed; inset:0; z-index:9810; pointer-events:none;
+    background:radial-gradient(ellipse at center,rgba(180,255,190,1) 0%,rgba(0,200,50,0.6) 40%,rgba(0,0,0,0) 75%);
+    opacity:0;
+}
+</style>
+</head>
+<body>
+<canvas id="c-bg"></canvas>
+<canvas id="c"></canvas>
+<canvas id="c-fg"></canvas>
+<canvas id="c-chroma"></canvas>
+<div id="vig"></div>
+<div id="spore-flash"></div>
+<div id="ntitle"></div>
+<div id="nsub">Fractal Vivo · Origen Absoluto</div>
+<div id="npct">0.000001%</div>
+
+<div id="wrap">
+<svg id="gsvg" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%"   stop-color="#e0ffe4" stop-opacity="1"/>
+    <stop offset="30%"  stop-color="#00e63a" stop-opacity="0.6"/>
+    <stop offset="70%"  stop-color="#003d0e" stop-opacity="0.2"/>
+    <stop offset="100%" stop-color="#000501" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="innerGlow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+    <stop offset="40%"  stop-color="#7fff88" stop-opacity="0.8"/>
+    <stop offset="100%" stop-color="#00aa2a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="midGlow" cx="50%" cy="50%" r="50%">
+    <stop offset="0%"   stop-color="#00e63a" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#000501" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="coronaGrad" cx="50%" cy="50%" r="50%">
+    <stop offset="0%"   stop-color="#ffffff"  stop-opacity="1"/>
+    <stop offset="18%"  stop-color="#e8fff0"  stop-opacity="0.98"/>
+    <stop offset="40%"  stop-color="#00ff60"  stop-opacity="0.65"/>
+    <stop offset="65%"  stop-color="#00cc33"  stop-opacity="0.28"/>
+    <stop offset="85%"  stop-color="#004d15"  stop-opacity="0.08"/>
+    <stop offset="100%" stop-color="#000501"  stop-opacity="0"/>
+  </radialGradient>
+  <filter id="glow3" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="5" result="b1"/>
+    <feGaussianBlur stdDeviation="15" result="b2"/>
+    <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="glow1" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur stdDeviation="6" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="softBlur"><feGaussianBlur stdDeviation="3"/></filter>
+  <g id="leaf">
+    <ellipse cx="0" cy="-18" rx="5" ry="18" fill="none" stroke="#00e63a" stroke-width="1.5" opacity="0.85"/>
+    <line x1="0" y1="0" x2="0" y2="-36" stroke="#00aa2a" stroke-width="0.7" opacity="0.5"/>
+  </g>
+  <g id="spore-ring">
+    <circle cx="0" cy="0" r="5" fill="none" stroke="#7fff88" stroke-width="1" opacity="0.7"/>
+    <circle cx="0" cy="0" r="2" fill="#00e63a" opacity="0.9"/>
+  </g>
+  <g id="cell">
+    <circle cx="0" cy="0" r="8"  fill="none" stroke="#00aa2a" stroke-width="1.2" opacity="0.7"/>
+    <circle cx="0" cy="0" r="4"  fill="none" stroke="#00e63a" stroke-width="0.8" opacity="0.5"/>
+    <circle cx="0" cy="0" r="1.5" fill="#00ffee" opacity="0.88"/>
+  </g>
+  <g id="myc">
+    <circle cx="0" cy="0" r="6" fill="#001a05" stroke="#00e63a" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="2" fill="#eeffd0" opacity="0.9"/>
+  </g>
+  <g id="tri-frac">
+    <polygon points="0,-10 9,5 -9,5" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.7"/>
+    <polygon points="0,-5 4.5,2.5 -4.5,2.5" fill="none" stroke="#7fff88" stroke-width="0.6" opacity="0.5"/>
+    <circle cx="0" cy="0" r="1.5" fill="#00ffee" opacity="0.8"/>
+  </g>
+  <g id="vein-node">
+    <circle cx="0" cy="0" r="4" fill="#003d0e" stroke="#00aa2a" stroke-width="1"/>
+    <line x1="-8" y1="0"  x2="8"  y2="0"  stroke="#00e63a" stroke-width="0.7" opacity="0.6"/>
+    <line x1="0"  y1="-8" x2="0"  y2="8"  stroke="#00e63a" stroke-width="0.7" opacity="0.6"/>
+  </g>
+</defs>
+
+<ellipse cx="500" cy="500" r="460" fill="url(#coreGlow)" opacity="0.5"/>
+<ellipse cx="500" cy="500" r="300" fill="url(#midGlow)" opacity="0.4"/>
+
+<!-- RING 5 -->
+<g class="rs" opacity="0.55">
+  <circle cx="500" cy="500" r="478" fill="none" stroke="#003d0e" stroke-width="1" stroke-dasharray="2 30"/>
+  <circle cx="500" cy="500" r="470" fill="none" stroke="#00701a" stroke-width="0.6" stroke-dasharray="1 20" opacity="0.4"/>
+  <g transform="translate(500,22)"><use href="#leaf" transform="scale(1.4)"/></g>
+  <g transform="rotate(30,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.1)"/></g>
+  <g transform="rotate(60,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.3)"/></g>
+  <g transform="rotate(90,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.2)"/></g>
+  <g transform="rotate(120,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.4)"/></g>
+  <g transform="rotate(150,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.0)"/></g>
+  <g transform="rotate(180,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.5)"/></g>
+  <g transform="rotate(210,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.1)"/></g>
+  <g transform="rotate(240,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.3)"/></g>
+  <g transform="rotate(270,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.2)"/></g>
+  <g transform="rotate(300,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.4)"/></g>
+  <g transform="rotate(330,500,500) translate(500,22)"><use href="#leaf" transform="scale(1.0)"/></g>
+  <use href="#spore-ring" transform="translate(838,162)"/>
+  <use href="#spore-ring" transform="translate(162,838)"/>
+  <use href="#spore-ring" transform="translate(838,838)"/>
+  <use href="#spore-ring" transform="translate(162,162)"/>
+</g>
+
+<!-- RING 4 -->
+<g class="rvs" opacity="0.7">
+  <circle cx="500" cy="500" r="410" fill="none" stroke="#003d0e" stroke-width="1.5"/>
+  <circle cx="500" cy="500" r="400" fill="none" stroke="#00701a" stroke-width="0.7" opacity="0.4" stroke-dasharray="6 14"/>
+  <polygon points="500,90 780,220 890,500 800,780 550,910 250,870 110,600 160,280" fill="none" stroke="#00701a" stroke-width="2" opacity="0.5"/>
+  <line x1="500" y1="500" x2="500" y2="90"  stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="780" y2="220" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="890" y2="500" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="800" y2="780" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="550" y2="910" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="250" y2="870" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="110" y2="600" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <line x1="500" y1="500" x2="160" y2="280" stroke="#003d0e" stroke-width="1" opacity="0.4"/>
+  <use href="#vein-node" transform="translate(500,90)"/><use href="#vein-node" transform="translate(780,220)"/>
+  <use href="#vein-node" transform="translate(890,500)"/><use href="#vein-node" transform="translate(800,780)"/>
+  <use href="#vein-node" transform="translate(550,910)"/><use href="#vein-node" transform="translate(250,870)"/>
+  <use href="#vein-node" transform="translate(110,600)"/><use href="#vein-node" transform="translate(160,280)"/>
+  <use href="#tri-frac" transform="translate(500,90)"/>
+  <use href="#tri-frac" transform="translate(780,220) rotate(45)"/>
+  <use href="#tri-frac" transform="translate(890,500) rotate(90)"/>
+  <use href="#tri-frac" transform="translate(800,780) rotate(135)"/>
+  <use href="#tri-frac" transform="translate(550,910) rotate(180)"/>
+  <use href="#tri-frac" transform="translate(250,870) rotate(225)"/>
+  <use href="#tri-frac" transform="translate(110,600) rotate(270)"/>
+  <use href="#tri-frac" transform="translate(160,280) rotate(315)"/>
+</g>
+
+<!-- RING 3 -->
+<g class="rm" opacity="0.85">
+  <circle cx="500" cy="500" r="310" fill="none" stroke="#00701a" stroke-width="1.5" stroke-dasharray="4 10" opacity="0.5"/>
+  <g transform="translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(22.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(45,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(67.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(90,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(112.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(135,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(157.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(180,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(202.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(225,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(247.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(270,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(292.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <g transform="rotate(315,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="28" ry="70" fill="#001a05" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/></g>
+  <g transform="rotate(337.5,500,500) translate(500,500)"><ellipse cx="0" cy="-155" rx="22" ry="60" fill="#001a05" stroke="#00701a" stroke-width="1.2" opacity="0.7"/></g>
+  <use href="#myc" transform="translate(500,190)"/>
+  <use href="#myc" transform="rotate(45,500,500)  translate(500,190)"/>
+  <use href="#myc" transform="rotate(90,500,500)  translate(500,190)"/>
+  <use href="#myc" transform="rotate(135,500,500) translate(500,190)"/>
+  <use href="#myc" transform="rotate(180,500,500) translate(500,190)"/>
+  <use href="#myc" transform="rotate(225,500,500) translate(500,190)"/>
+  <use href="#myc" transform="rotate(270,500,500) translate(500,190)"/>
+  <use href="#myc" transform="rotate(315,500,500) translate(500,190)"/>
+</g>
+
+<!-- RING 2 -->
+<g class="rv" opacity="0.9">
+  <circle cx="500" cy="500" r="215" fill="none" stroke="#00aa2a" stroke-width="2" opacity="0.6"/>
+  <circle cx="500" cy="500" r="205" fill="none" stroke="#00e63a" stroke-width="0.7" opacity="0.25"/>
+  <circle cx="500" cy="285" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="687" cy="392" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="687" cy="608" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="500" cy="715" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="313" cy="608" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="313" cy="392" r="55" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="500" cy="285" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <circle cx="687" cy="392" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <circle cx="687" cy="608" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <circle cx="500" cy="715" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <circle cx="313" cy="608" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <circle cx="313" cy="392" r="28" fill="none" stroke="#00e63a" stroke-width="1" opacity="0.6"/>
+  <polygon points="500,285 687,392 687,608 500,715 313,608 313,392" fill="none" stroke="#00701a" stroke-width="1" opacity="0.4"/>
+  <polygon points="500,285 687,608 313,608" fill="none" stroke="#003d0e" stroke-width="0.8" opacity="0.35"/>
+  <polygon points="687,392 313,392 500,715" fill="none" stroke="#003d0e" stroke-width="0.8" opacity="0.35"/>
+  <use href="#cell" transform="translate(500,230)"/>
+  <use href="#cell" transform="translate(687,337)"/>
+  <use href="#cell" transform="translate(687,663)"/>
+  <use href="#cell" transform="translate(500,770)"/>
+  <use href="#cell" transform="translate(313,663)"/>
+  <use href="#cell" transform="translate(313,337)"/>
+</g>
+
+<!-- RING 1 + forma morfológica -->
+<g class="rf" opacity="0.9" filter="url(#glow1)">
+  <circle cx="500" cy="500" r="140" fill="none" stroke="#00e63a" stroke-width="2"/>
+  <circle cx="500" cy="500" r="130" fill="none" stroke="#7fff88" stroke-width="0.7" opacity="0.4"/>
+  <circle cx="500" cy="500" r="148" fill="none" stroke="#003d0e" stroke-width="1.5" stroke-dasharray="3 9" opacity="0.5"/>
+  <!-- FORMA MORFOLÓGICA: círculo → hexágono → estrella 12 puntas → círculo -->
+  <path fill="none" stroke="#00e63a" stroke-width="1.8" opacity="0.65">
+    <animate attributeName="d"
+      dur="9s" repeatCount="indefinite" calcMode="spline"
+      keySplines="0.42 0 0.58 1;0.42 0 0.58 1;0.42 0 0.58 1"
+      values="
+        M640,500 A140,140 0 1,1 639.99,500 Z;
+        M622,430 L622,570 L500,640 L378,570 L378,430 L500,360 Z;
+        M640,500 L607,466 L622,430 L585,413 L570,378 L533,393 L500,360 L467,393 L430,378 L415,413 L378,430 L393,466 L360,500 L393,534 L378,570 L415,587 L430,622 L467,607 L500,640 L533,607 L570,622 L585,587 L622,570 L607,534 Z;
+        M640,500 A140,140 0 1,1 639.99,500 Z"/>
+  </path>
+  <g transform="translate(500,362)">
+    <line x1="-8" y1="0" x2="8" y2="0" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="0" y1="-10" x2="0" y2="10" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="-5" y1="-10" x2="5" y2="10" stroke="#00e63a" stroke-width="1.5" opacity="0.7"/>
+  </g>
+  <g transform="rotate(45,500,500) translate(500,362)">
+    <line x1="-8" y1="-8" x2="8" y2="8" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="-8" y1="8" x2="8" y2="-8" stroke="#7fff88" stroke-width="2.5"/>
+    <circle cx="0" cy="0" r="4" fill="none" stroke="#00ffee" stroke-width="1.2" opacity="0.9"/>
+  </g>
+  <g transform="rotate(90,500,500) translate(500,362)">
+    <line x1="-8" y1="0" x2="8" y2="0" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="-8" y1="-6" x2="0" y2="0" stroke="#7fff88" stroke-width="2"/>
+    <line x1="8"  y1="-6" x2="0" y2="0" stroke="#7fff88" stroke-width="2"/>
+  </g>
+  <g transform="rotate(135,500,500) translate(500,362)">
+    <path d="M-8,-8 Q0,4 8,-8" fill="none" stroke="#7fff88" stroke-width="2.5"/>
+    <circle cx="0" cy="6" r="3" fill="#00ffee" opacity="0.85"/>
+  </g>
+  <g transform="rotate(180,500,500) translate(500,362)">
+    <line x1="-8" y1="0" x2="8" y2="0" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="0" y1="-10" x2="0" y2="10" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="5" y1="-10" x2="-5" y2="10" stroke="#00e63a" stroke-width="1.5" opacity="0.7"/>
+  </g>
+  <g transform="rotate(225,500,500) translate(500,362)">
+    <circle cx="0" cy="0" r="7" fill="none" stroke="#7fff88" stroke-width="2"/>
+    <line x1="0" y1="-7" x2="0" y2="7" stroke="#7fff88" stroke-width="1.5"/>
+  </g>
+  <g transform="rotate(270,500,500) translate(500,362)">
+    <line x1="-8" y1="-6" x2="8" y2="-6" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="-8" y1="6" x2="8" y2="6" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="0" y1="-6" x2="0" y2="6" stroke="#00e63a" stroke-width="1.5"/>
+  </g>
+  <g transform="rotate(315,500,500) translate(500,362)">
+    <path d="M-8,8 L0,-10 L8,8" fill="none" stroke="#7fff88" stroke-width="2.5"/>
+    <line x1="-5" y1="2" x2="5" y2="2" stroke="#7fff88" stroke-width="2"/>
+  </g>
+</g>
+
+<!-- NUCLEUS -->
+<g filter="url(#glow3)">
+  <circle cx="500" cy="500" r="72" fill="#000e03" stroke="#00aa2a" stroke-width="1.5" opacity="0.9"/>
+  <circle cx="500" cy="428" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="562" cy="464" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="562" cy="536" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="500" cy="572" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="438" cy="536" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="438" cy="464" r="72" fill="none" stroke="#00701a" stroke-width="1" opacity="0.5"/>
+  <circle cx="500" cy="500" r="50" fill="#001408" stroke="#00e63a" stroke-width="2" opacity="0.95"/>
+  <circle cx="500" cy="500" r="38" fill="none" stroke="#7fff88" stroke-width="1.2" opacity="0.6"/>
+</g>
+
+<!-- NÚCLEO INESTABLE — corona solar -->
+<g filter="url(#glow3)">
+  <circle cx="500" cy="500" r="28" fill="url(#coronaGrad)" opacity="0.9">
+    <animate attributeName="r" values="22;32;20;30;24;28" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.9;1;0.75;0.95;0.85;0.9" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <g opacity="0.65">
+    <line x1="500" y1="468" x2="500" y2="452" stroke="#00ff60" stroke-width="1.5">
+      <animate attributeName="y2" values="452;444;456;448;452" dur="1.3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.8;1;0.5;0.9;0.8" dur="1.3s" repeatCount="indefinite"/>
+    </line>
+    <line x1="532" y1="468" x2="542" y2="455" stroke="#00ff60" stroke-width="1.5">
+      <animate attributeName="x2" values="542;552;538;548;542" dur="1.7s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;1;0.4;0.9;0.7" dur="1.7s" repeatCount="indefinite"/>
+    </line>
+    <line x1="532" y1="532" x2="545" y2="545" stroke="#00ff60" stroke-width="1.5">
+      <animate attributeName="y2" values="545;558;540;552;545" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.6;1;0.5;0.8;0.6" dur="1.5s" repeatCount="indefinite"/>
+    </line>
+    <line x1="500" y1="532" x2="500" y2="550" stroke="#00ff60" stroke-width="1.5">
+      <animate attributeName="y2" values="550;562;546;556;550" dur="1.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.75;1;0.5;0.85;0.75" dur="1.2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="468" y1="532" x2="455" y2="545" stroke="#00ff60" stroke-width="1.5">
+      <animate attributeName="x2" values="455;443;459;448;455" dur="1.6s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.65;1;0.45;0.82;0.65" dur="1.6s" repeatCount="indefinite"/>
+    </line>
+    <line x1="468" y1="468" x2="455" y2="455" stroke="#eeffd0" stroke-width="1.2">
+      <animate attributeName="x2" values="455;445;460;450;455" dur="1.4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.7;1;0.4;0.85;0.7" dur="1.4s" repeatCount="indefinite"/>
+    </line>
+  </g>
+  <circle cx="500" cy="500" r="20" fill="url(#innerGlow)"/>
+  <circle cx="500" cy="500" r="12" fill="#e0ffe4" opacity="0.97">
+    <animate attributeName="r" values="10;14;9;13;11;12" dur="0.9s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="500" cy="500" r="5" fill="white">
+    <animate attributeName="r" values="4;7;3;6;5;5" dur="0.7s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="500" cy="500" r="2.5" fill="#00ffee" opacity="0.95">
+    <animate attributeName="opacity" values="0.95;0.3;1;0.6;0.95" dur="0.5s" repeatCount="indefinite"/>
+  </circle>
+</g>
+
+<g style="animation:gr 8s linear infinite;transform-origin:500px 500px" filter="url(#glow3)">
+  <circle cx="500" cy="500" r="28" fill="none" stroke="#00e63a" stroke-width="2" stroke-dasharray="2 6"/>
+</g>
+
+<g style="animation:gr 15s linear infinite; transform-origin:500px 500px" opacity="0.7">
+  <use href="#cell" transform="translate(500,450)"/>
+  <use href="#cell" transform="rotate(72,500,500)  translate(500,450)"/>
+  <use href="#cell" transform="rotate(144,500,500) translate(500,450)"/>
+  <use href="#cell" transform="rotate(216,500,500) translate(500,450)"/>
+  <use href="#cell" transform="rotate(288,500,500) translate(500,450)"/>
+</g>
+<g style="animation:gr 20s linear infinite reverse; transform-origin:500px 500px" opacity="0.5">
+  <use href="#spore-ring" transform="translate(560,440)"/>
+  <use href="#spore-ring" transform="rotate(60,500,500)  translate(560,440)"/>
+  <use href="#spore-ring" transform="rotate(120,500,500) translate(560,440)"/>
+  <use href="#spore-ring" transform="rotate(180,500,500) translate(560,440)"/>
+  <use href="#spore-ring" transform="rotate(240,500,500) translate(560,440)"/>
+  <use href="#spore-ring" transform="rotate(300,500,500) translate(560,440)"/>
+</g>
+</svg>
+</div>
+
+<script>
+const W=window.innerWidth,H=window.innerHeight,CX=W/2,CY=H/2,MIN=Math.min(W,H);
+const IS_MOBILE=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||W<768;
+const cv=document.getElementById('c');cv.width=W;cv.height=H;const ctx=cv.getContext('2d');
+const cvBg=document.getElementById('c-bg');cvBg.width=W;cvBg.height=H;const ctxBg=cvBg.getContext('2d');
+const cvFg=document.getElementById('c-fg');cvFg.width=W;cvFg.height=H;const ctxFg=cvFg.getContext('2d');
+const cc=document.getElementById('c-chroma');cc.width=W;cc.height=H;const cctx=cc.getContext('2d');
+const L=(a,b,t)=>a+(b-a)*t,C=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const eI=t=>t*t*t,eO=t=>1-Math.pow(1-t,3),eIO=t=>t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;
+const R=(a,b)=>a+Math.random()*(b-a);
+const G=(h,s,l,a=1)=>`hsla(${h},${s}%,${l}%,${a})`;
+
+const T={F1:0,F2:3500,F2b:5200,F3:6400,F4:9800,F5:14300,F6:15500,F7:17300};
+let START=performance.now(),el=0;
+
+// ═══ FONDO NEBULOSO ═══
+let bgCanvas=null;
+function buildBgNebula(){
+    const off=document.createElement('canvas');off.width=W;off.height=H;
+    const octx=off.getContext('2d');
+    for(let n=0;n<42;n++){
+        const nx=R(0,W),ny=R(0,H),nr=R(55,340),nh=R(98,148),na=R(0.016,0.065);
+        const ng=octx.createRadialGradient(nx,ny,0,nx,ny,nr);
+        ng.addColorStop(0,`hsla(${nh},75%,24%,${na*2})`);ng.addColorStop(0.4,`hsla(${nh+12},60%,14%,${na})`);ng.addColorStop(1,'rgba(0,0,0,0)');
+        octx.fillStyle=ng;octx.beginPath();octx.arc(nx,ny,nr,0,Math.PI*2);octx.fill();
+    }
+    for(let v=0;v<28;v++){
+        const vx1=R(0,W),vy1=R(0,H),vx2=R(0,W),vy2=R(0,H),vh=R(105,140);
+        const vg=octx.createLinearGradient(vx1,vy1,vx2,vy2);
+        vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(0.5,`hsla(${vh},60%,22%,0.05)`);vg.addColorStop(1,'rgba(0,0,0,0)');
+        octx.strokeStyle=vg;octx.lineWidth=R(0.4,2.2);octx.beginPath();octx.moveTo(vx1,vy1);
+        octx.quadraticCurveTo(R(0,W),R(0,H),vx2,vy2);octx.stroke();
+    }
+    bgCanvas=off;
+}
+let bgT=0;
+function drawBgNebula(alpha){
+    if(!bgCanvas)return;bgT+=0.005;
+    ctxBg.clearRect(0,0,W,H);
+    ctxBg.globalAlpha=alpha*0.92;
+    ctxBg.drawImage(bgCanvas,0,Math.sin(bgT)*6);
+    ctxBg.globalAlpha=1;
+    const beat=0.5+0.5*Math.sin(Date.now()*0.0005)*Math.sin(Date.now()*0.00033);
+    ctxBg.save();ctxBg.globalAlpha=beat*0.055*alpha;
+    const bg2=ctxBg.createRadialGradient(CX,CY,0,CX,CY,MIN*0.52);
+    bg2.addColorStop(0,'hsla(125,80%,32%,1)');bg2.addColorStop(1,'rgba(0,0,0,0)');
+    ctxBg.fillStyle=bg2;ctxBg.beginPath();ctxBg.arc(CX,CY,MIN*0.52,0,Math.PI*2);ctxBg.fill();ctxBg.restore();
+}
+
+// ═══ PRIMER PLANO BOKEH ═══
+const FG_SHARDS=Array.from({length:20},()=>({
+    x:R(0,W),y:R(0,H),vx:R(-0.07,0.07),vy:R(-0.055,0.055),
+    r:R(30,95),hue:R(100,148),a:R(0.05,0.2),phase:R(0,Math.PI*2),
+    rot:R(0,Math.PI*2),rotSpd:R(-0.003,0.003),sides:~~R(3,7)
+}));
+function drawFgLayer(alpha){
+    ctxFg.clearRect(0,0,W,H);
+    FG_SHARDS.forEach(s=>{
+        s.x+=s.vx;s.y+=s.vy;s.rot+=s.rotSpd;s.phase+=0.007;
+        if(s.x<-100)s.x=W+100;if(s.x>W+100)s.x=-100;
+        if(s.y<-100)s.y=H+100;if(s.y>H+100)s.y=-100;
+        const fa=s.a*(0.5+0.5*Math.sin(s.phase))*alpha;
+        ctxFg.save();ctxFg.filter=`blur(${s.r*0.52}px)`;ctxFg.globalAlpha=fa;
+        ctxFg.beginPath();
+        for(let i=0;i<s.sides;i++){
+            const a=s.rot+(i/s.sides)*Math.PI*2,rr=s.r*(0.7+0.3*Math.sin(s.phase+i*1.4));
+            if(i===0)ctxFg.moveTo(s.x+Math.cos(a)*rr,s.y+Math.sin(a)*rr);
+            else ctxFg.lineTo(s.x+Math.cos(a)*rr,s.y+Math.sin(a)*rr);
+        }
+        ctxFg.closePath();
+        const sg=ctxFg.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r);
+        sg.addColorStop(0,`hsla(${s.hue},85%,62%,0.9)`);sg.addColorStop(0.5,`hsla(${s.hue+15},70%,42%,0.5)`);sg.addColorStop(1,'rgba(0,0,0,0)');
+        ctxFg.fillStyle=sg;ctxFg.fill();ctxFg.filter='none';ctxFg.restore();
+    });
+}
+
+// ═══ PULSO GLOBAL cada 3s ═══
+let GLOBAL_PULSE=0,lastBeatTime=0;
+const PULSE_PARTICLES=[];
+function triggerGlobalPulse(){
+    GLOBAL_PULSE=1;
+    const n=IS_MOBILE?20:60;
+    for(let i=0;i<n;i++){
+        const ang=Math.random()*Math.PI*2;
+        PULSE_PARTICLES.push({x:CX,y:CY,ang,spd:R(2,10),r:R(1.2,4.5),a:0.95,hue:R(100,150),decay:R(0.013,0.025),curve:R(-0.02,0.02)});
+    }
+    const svg=document.getElementById('gsvg');
+    svg.style.transition='filter 0.1s ease-out';
+    svg.style.filter='drop-shadow(0 0 90px rgba(0,255,80,1)) drop-shadow(0 0 220px rgba(0,230,50,0.9)) brightness(1.6)';
+    setTimeout(()=>{svg.style.transition='filter 1.4s ease-out';svg.style.filter='drop-shadow(0 0 55px rgba(0,200,50,0.9)) drop-shadow(0 0 130px rgba(0,100,20,0.4))';},140);
+}
+function updatePulse(now){
+    if(now-lastBeatTime>=3000){lastBeatTime=now;triggerGlobalPulse();}
+    if(GLOBAL_PULSE>0)GLOBAL_PULSE=Math.max(0,GLOBAL_PULSE-0.025);
+    if(GLOBAL_PULSE>0.65){
+        const wR=MIN*(0.04+(1-GLOBAL_PULSE)*0.6);
+        ctx.save();ctx.globalAlpha=GLOBAL_PULSE*0.38;
+        ctx.strokeStyle='rgba(100,255,130,0.88)';ctx.lineWidth=3*GLOBAL_PULSE;
+        ctx.shadowColor='rgba(0,255,80,0.95)';ctx.shadowBlur=22;
+        ctx.beginPath();ctx.arc(CX,CY,wR,0,Math.PI*2);ctx.stroke();
+        ctx.globalAlpha=GLOBAL_PULSE*0.18;ctx.beginPath();ctx.arc(CX,CY,wR*0.58,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
+    }
+    for(let i=PULSE_PARTICLES.length-1;i>=0;i--){
+        const p=PULSE_PARTICLES[i];p.ang+=p.curve;p.x+=Math.cos(p.ang)*p.spd;p.y+=Math.sin(p.ang)*p.spd;p.spd*=0.975;p.a-=p.decay;
+        if(p.a<=0){PULSE_PARTICLES.splice(i,1);continue;}
+        ctx.save();ctx.globalAlpha=p.a;ctx.fillStyle=G(p.hue,90,65);ctx.shadowColor=G(p.hue,95,70,0.8);ctx.shadowBlur=p.r*2;
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// F1: ALQUITRÁN VISCOSO — olas suaves tipo bezier cayendo,
+//     sin fondo propio, tapa la pantalla del jugador
+// ═══════════════════════════════════════════════════════════════
+//
+// En vez de gaussianas, usamos una suma de sinusoides de baja
+// frecuencia con interpolación bezier → curvas suaves como en
+// el dibujo: colinas de distintos tamaños, sin picos.
+
+// Puntos de control de la ola — pocos, muy separados, para curvas anchas
+// ═══════════════════════════════════════════════════════════════
+// F1: ALQUITRÁN VISCOSO
+// ═══════════════════════════════════════════════════════════════
+const WAVE_NODES_COUNT = 7;
+// Amplitudes MUY DISPARES: mezcla de olas grandes, medianas y pequeñas
+const waveNodes = [
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.003,0.007), amp: H*R(0.12,0.20)}, // grande
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.008,0.014), amp: H*R(0.02,0.06)}, // pequeña
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.004,0.009), amp: H*R(0.14,0.22)}, // muy grande
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.010,0.016), amp: H*R(0.02,0.05)}, // pequeña
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.005,0.010), amp: H*R(0.10,0.18)}, // grande
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.009,0.015), amp: H*R(0.02,0.07)}, // pequeña
+    {phase: R(0,Math.PI*2), phaseSpd: R(0.004,0.008), amp: H*R(0.13,0.21)}, // grande
+];
+
+// tarLevel: Y del nivel medio. Empieza fuera de pantalla.
+let tarLevel = -H * 0.25;
+const tarFallSpd = (H * 1.18) / T.F2;
+
+// Hilos viscosos
+const TAR_THREADS = Array.from({length: IS_MOBILE ? 5 : 9}, (_, i) => ({
+    xRatio:       (i + 0.5 + R(-0.2,0.2)) / (IS_MOBILE ? 5 : 9),
+    stretchPhase: R(0, Math.PI*2),
+    stretchSpd:   R(0.005, 0.014),
+    maxLen:       R(H*0.06, H*0.16),
+    width:        R(5, 14)
+}));
+
+// Extremos fijos (sin R() cada frame)
+const TAR_LEFT_SAG  = R(0, H*0.015);
+const TAR_RIGHT_SAG = R(0, H*0.015);
+
+let viscT = 0;
+let f1Done = false; // true cuando todas las olas han llegado abajo
+
+function getTarProfile() {
+    const pts = [];
+    pts.push({x: 0, y: tarLevel + TAR_LEFT_SAG});
+    for (let i = 0; i < WAVE_NODES_COUNT; i++) {
+        const nd = waveNodes[i];
+        const x   = W * (i + 1) / (WAVE_NODES_COUNT + 1);
+        const sag = nd.amp * Math.abs(Math.sin(nd.phase))
+                  + nd.amp * 0.18 * Math.abs(Math.sin(nd.phase * 2.3 + viscT * 0.3));
+        pts.push({x, y: tarLevel + sag});
+    }
+    pts.push({x: W, y: tarLevel + TAR_RIGHT_SAG});
+    return pts;
+}
+
+function buildWavePath(ctx2, pts) {
+    ctx2.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i], p1 = pts[i+1];
+        ctx2.quadraticCurveTo(p0.x, p0.y, (p0.x+p1.x)*0.5, (p0.y+p1.y)*0.5);
+    }
+    ctx2.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+}
+
+function drawViscous(elapsed, dt) {
+    viscT += 0.015;
+    tarLevel += tarFallSpd * dt;
+    waveNodes.forEach(nd => { nd.phase += nd.phaseSpd; });
+
+    const pts = getTarProfile();
+    const maxY = 0; // calculamos inline sin spread
+    let ptsMaxY = tarLevel;
+    for (let i = 0; i < pts.length; i++) if (pts[i].y > ptsMaxY) ptsMaxY = pts[i].y;
+
+    // ¿Todas las olas cubrieron la pantalla? → F1 terminada
+    if (!f1Done && tarLevel > H * 0.88) f1Done = true;
+
+    ctx.save();
+
+    // ── 1. MASA ──
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(W, 0);
+    ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+    for (let i = pts.length-2; i >= 0; i--) {
+        const p0 = pts[i+1], p1 = pts[i];
+        ctx.quadraticCurveTo(p0.x, p0.y, (p0.x+p1.x)*0.5, (p0.y+p1.y)*0.5);
+    }
+    ctx.lineTo(pts[0].x, pts[0].y);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(0, 0, 0, ptsMaxY + H*0.05);
+    grad.addColorStop(0,    'rgba(0,  1, 0, 1.0)');
+    grad.addColorStop(0.55, 'rgba(0,  8, 2, 0.99)');
+    grad.addColorStop(0.82, 'rgba(0, 26, 6, 0.98)');
+    grad.addColorStop(0.93, 'rgba(0, 52,11, 0.97)');
+    grad.addColorStop(1,    'rgba(0, 82,18, 0.97)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // ── 2. BORDE LUMINOSO ── (sin shadowBlur doble)
+    ctx.beginPath();
+    buildWavePath(ctx, pts);
+    ctx.shadowColor = 'rgba(0,210,50,0.9)';
+    ctx.shadowBlur  = IS_MOBILE ? 8 : 20;
+    ctx.strokeStyle = 'rgba(40,235,80,0.85)';
+    ctx.lineWidth   = IS_MOBILE ? 3 : 5;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.shadowBlur = 0; // apagar shadow antes del segundo stroke
+    if (!IS_MOBILE) {
+        ctx.strokeStyle = 'rgba(210,255,218,0.22)';
+        ctx.lineWidth   = 1.5;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // ── 3. HILOS ── (sin shadowBlur en el cuerpo, solo en la gota)
+    TAR_THREADS.forEach(th => {
+        th.stretchPhase += th.stretchSpd;
+        const thX   = th.xRatio * W;
+        const segW  = W / (pts.length-1);
+        const idx   = Math.min(Math.floor(thX/segW), pts.length-2);
+        const frac  = (thX - idx*segW) / segW;
+        const baseY = L(pts[idx].y, pts[idx+1].y, frac);
+        const tGrow = Math.min(elapsed / (T.F2*0.65), 1);
+        const len   = th.maxLen * tGrow * (0.45 + 0.55*Math.abs(Math.sin(th.stretchPhase)));
+        const tipY  = baseY + len;
+        if (baseY > H+30) return;
+
+        const wB = th.width, wT = Math.max(0.5, wB*0.07);
+        ctx.save();
+        // Gradiente sin shadow en el cuerpo = mucho más rápido
+        const tg = ctx.createLinearGradient(thX, baseY, thX, tipY);
+        tg.addColorStop(0,   'rgba(0,55,13,0.97)');
+        tg.addColorStop(0.5, 'rgba(0,35, 8,0.88)');
+        tg.addColorStop(0.85,'rgba(0,15, 3,0.70)');
+        tg.addColorStop(1,   'rgba(0, 5, 1,0.00)');
+        ctx.fillStyle = tg;
+        ctx.beginPath();
+        ctx.moveTo(thX-wB*0.5, baseY);
+        ctx.bezierCurveTo(thX-wB*0.5, baseY+len*0.35, thX-wT*0.5, tipY-len*0.18, thX, tipY);
+        ctx.bezierCurveTo(thX+wT*0.5, tipY-len*0.18, thX+wB*0.5, baseY+len*0.35, thX+wB*0.5, baseY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Gota — shadow solo aquí, una sola vez
+        if (Math.abs(Math.sin(th.stretchPhase)) > 0.5) {
+            const dr = wB*(0.5 + 0.4*Math.abs(Math.sin(th.stretchPhase)));
+            const dg = ctx.createRadialGradient(thX,tipY,0, thX,tipY,dr*2);
+            dg.addColorStop(0,   'rgba(180,255,185,0.98)');
+            dg.addColorStop(0.3, 'rgba(0,195,48,0.88)');
+            dg.addColorStop(0.7, 'rgba(0,55,12,0.50)');
+            dg.addColorStop(1,   'rgba(0,0,0,0)');
+            ctx.fillStyle = dg;
+            ctx.shadowColor = 'rgba(0,220,60,0.9)';
+            ctx.shadowBlur  = IS_MOBILE ? 4 : 12;
+            ctx.beginPath();
+            ctx.arc(thX, tipY, dr*1.6, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+    });
+
+    // ── 4. BURBUJAS (desktop, sin shadow) ──
+    if (!IS_MOBILE && tarLevel > H*0.1) {
+        ctx.save();
+        for (let b = 0; b < 5; b++) {
+            const bx = (b/5+0.1)*W + Math.sin(viscT*0.6+b*2.2)*W*0.06;
+            const by = tarLevel*0.4 + Math.sin(viscT*0.4+b*1.9)*tarLevel*0.28;
+            if (by < 2 || by > tarLevel-4) continue;
+            ctx.globalAlpha = 0.08 + 0.05*Math.sin(viscT+b);
+            ctx.fillStyle = 'rgba(70,195,85,1)';
+            ctx.beginPath();
+            ctx.arc(bx, by, 1.5+Math.sin(viscT+b), 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+// ── F1→F2: transición automática cuando la ola cubre la pantalla ──
+// El loop usa f1Done para saber cuándo arrancar F2 en vez del timer fijo
+
+// ═══ F2: VÓRTICE ═══
+let allP=[],imploded=false,vortexAngle=0;
+function recogerParticulas(){
+    for(let i=0;i<190;i++){const e=~~R(0,4);let x,y;if(e===0){x=R(0,W);y=0;}else if(e===1){x=W;y=R(0,H);}else if(e===2){x=R(0,W);y=H;}else{x=0;y=R(0,H);}allP.push({x,y,vx:0,vy:0,r:R(1.5,5.5),a:R(0.3,0.9),hue:R(90,150)});}
+    for(let i=0;i<90;i++)allP.push({x:R(0,W),y:R(H*0.4,H),vx:0,vy:0,r:R(2,7),a:R(0.4,0.85),hue:R(100,145)});
+}
+function drawVortice(prog){
+    const pull=eI(prog);vortexAngle+=0.05+pull*0.18;
+    ctx.save();ctx.globalAlpha=0.35+pull*0.55;ctx.fillStyle=`rgba(0,${~~(pull*12)},${~~(pull*3)},0.95)`;ctx.fillRect(0,0,W,H);ctx.restore();
+    ctx.save();
+    for(let arm=0;arm<10;arm++){const bA=vortexAngle+(arm/10)*Math.PI*2;ctx.globalAlpha=pull*0.28;ctx.strokeStyle=G(110+arm*4,80,52,0.55);ctx.lineWidth=1.5+pull;ctx.shadowColor=G(120,85,55,0.4);ctx.shadowBlur=0;ctx.beginPath();for(let t=0;t<1;t+=0.018){const sR=MIN*(0.4-t*0.36)*pull+(1-pull)*MIN*0.48*t,a=bA+t*Math.PI*3.2;if(t===0)ctx.moveTo(CX+Math.cos(a)*sR,CY+Math.sin(a)*sR);else ctx.lineTo(CX+Math.cos(a)*sR,CY+Math.sin(a)*sR);}ctx.stroke();}ctx.restore();
+    if(pull>0.3){ctx.save();for(let r=0;r<14;r++){const angle=(r/14)*Math.PI*2+vortexAngle*0.5,sR=MIN*(0.55+0.2*(1-pull)),sx=CX+Math.cos(angle)*sR,sy=CY+Math.sin(angle)*sR,ex=CX+Math.cos(angle)*MIN*0.02,ey=CY+Math.sin(angle)*MIN*0.02;ctx.globalAlpha=(pull-0.3)*0.5;const rg=ctx.createLinearGradient(sx,sy,ex,ey);rg.addColorStop(0,'rgba(0,0,0,0)');rg.addColorStop(0.4,G(120,80,50,0.4));rg.addColorStop(1,'rgba(150,255,160,0.85)');ctx.strokeStyle=rg;ctx.lineWidth=1+pull*2;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();}ctx.restore();}
+    allP=allP.filter(p=>{const dx=CX-p.x,dy=CY-p.y,d=Math.sqrt(dx*dx+dy*dy)||1;const f=(1+pull*14)/d;const px=-dy/d,py=dx/d;p.vx+=dx*f*0.09+px*pull*1.8;p.vy+=dy*f*0.09+py*pull*1.8;p.x+=p.vx;p.y+=p.vy;p.a-=0.007;if(d<10||p.a<=0)return false;ctx.save();ctx.globalAlpha=p.a;ctx.fillStyle=G(p.hue,82,60);ctx.shadowColor=G(p.hue,88,65,0.6);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();return true;});
+    ctx.save();ctx.globalAlpha=pull*0.5;const cg=ctx.createRadialGradient(CX,CY,0,CX,CY,MIN*0.35*pull);cg.addColorStop(0,'rgba(200,255,210,0.95)');cg.addColorStop(0.3,'rgba(0,180,50,0.45)');cg.addColorStop(0.6,'rgba(0,80,15,0.18)');cg.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=cg;ctx.beginPath();ctx.arc(CX,CY,MIN*0.35*pull,0,Math.PI*2);ctx.fill();ctx.restore();
+}
+
+// ═══ F2b: SINGULARIDAD ═══
+let singT=0;const singP=[];
+function drawSingularidad(prog){
+    singT+=0.03;const p=eIO(prog),col=prog<0.5?eI(prog*2):1,exp=prog>0.5?eO((prog-0.5)*2):0;
+    for(let ring=0;ring<5;ring++){const rR=MIN*(0.03+ring*0.04)*(1-exp*0.6),rA=singT*(2.2-ring*0.38);ctx.save();ctx.translate(CX,CY);ctx.rotate(rA);ctx.scale(1,0.32+ring*0.06);ctx.globalAlpha=(0.38+ring*0.12)*col*(1-exp*0.7);ctx.strokeStyle=G(115+ring*10,88,48+ring*5,0.85);ctx.lineWidth=2.5-ring*0.3;ctx.shadowColor=G(120+ring*8,90,55,0.6);ctx.shadowBlur=4;for(let arc=0;arc<3;arc++){const sA=arc*Math.PI*2/3+singT*ring*0.28;ctx.beginPath();ctx.arc(0,0,rR,sA,sA+Math.PI*0.52);ctx.stroke();}ctx.restore();}
+    const cR=4+Math.sin(singT*9)*2.5,cG2=MIN*(0.08+col*0.04);ctx.save();ctx.globalAlpha=0.92*col;const sg=ctx.createRadialGradient(CX,CY,0,CX,CY,cG2);sg.addColorStop(0,'rgba(220,255,225,1)');sg.addColorStop(0.1,'rgba(180,255,195,0.95)');sg.addColorStop(0.3,`rgba(0,200,50,${0.7*col})`);sg.addColorStop(0.6,`rgba(0,100,18,${0.3*col})`);sg.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=sg;ctx.shadowColor='rgba(0,220,60,0.95)';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(CX,CY,cG2,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(230,255,235,1)';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(CX,CY,cR,0,Math.PI*2);ctx.fill();ctx.restore();
+    if(Math.random()>0.55&&col>0.2){const ang=R(0,Math.PI*2),dist=R(MIN*0.15,MIN*0.42);singP.push({x:CX+Math.cos(ang)*dist,y:CY+Math.sin(ang)*dist,r:R(0.5,2.5),a:R(0.5,0.9),hue:R(100,150),spd:R(0.03,0.08)});}
+    for(let i=singP.length-1;i>=0;i--){const sp=singP[i];const dx=CX-sp.x,dy=CY-sp.y,d=Math.sqrt(dx*dx+dy*dy)||1;sp.x+=dx/d*(sp.spd*MIN*0.15);sp.y+=dy/d*(sp.spd*MIN*0.15);const px=-dy/d,py=dx/d;sp.x+=px*sp.spd*MIN*0.04;sp.y+=py*sp.spd*MIN*0.04;sp.a-=0.012;if(d<8||sp.a<=0){singP.splice(i,1);continue;}ctx.save();ctx.globalAlpha=sp.a;ctx.fillStyle=G(sp.hue,85,62);ctx.shadowColor=G(sp.hue,90,68,0.6);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(sp.x,sp.y,sp.r,0,Math.PI*2);ctx.fill();ctx.restore();}
+    if(exp>0.1){const wR=MIN*0.02+exp*MIN*0.38;ctx.save();ctx.globalAlpha=exp*0.42*(1-exp);ctx.strokeStyle='rgba(100,255,130,0.75)';ctx.lineWidth=3*(1-exp);ctx.shadowColor='rgba(0,200,50,0.8)';ctx.shadowBlur=6;ctx.beginPath();ctx.arc(CX,CY,wR,0,Math.PI*2);ctx.stroke();ctx.restore();}
+}
+
+// ═══ F3: PULSO MICELIO ═══
+let pT=0,rings=[];const spiralP=[];
+function drawPulso(elapsed){
+    pT=(elapsed-T.F3)/750;const lub=Math.max(0,Math.sin(pT*Math.PI*2)),dub=Math.max(0,Math.sin((pT-0.2)*Math.PI*2)),sub=Math.max(0,Math.sin((pT-0.4)*Math.PI*2.5)*0.5);const pulse=Math.max(lub,dub,sub);
+    if(pulse>0.82&&rings.length<14){const strong=lub>0.82;rings.push({r:8,a:strong?0.9:0.55,hue:R(100,145),distort:R(1,8),spd:strong?4.5:2.8,lineW:strong?2.2:1,chrom:strong});}
+    rings=rings.filter(rg=>{rg.r+=rg.spd;rg.a*=0.946;if(rg.a<0.01)return false;if(rg.chrom){[{off:-rg.distort*1.5,c:'rgba(0,255,80,',m:0.4},{off:0,c:`hsla(${rg.hue},88%,60%,`,m:1},{off:rg.distort*1.5,c:'rgba(180,255,100,',m:0.35}].forEach(ch=>{ctx.save();ctx.globalAlpha=rg.a*ch.m;ctx.strokeStyle=ch.c+rg.a+')';ctx.lineWidth=rg.lineW;ctx.shadowColor=ch.c+'0.5)';ctx.shadowBlur=0;ctx.beginPath();ctx.arc(CX+ch.off*0.5,CY,rg.r,0,Math.PI*2);ctx.stroke();ctx.restore();});}else{[-rg.distort,0,rg.distort].forEach((off,i2)=>{const h=rg.hue+(i2-1)*22;ctx.save();ctx.globalAlpha=rg.a*(i2===1?1:0.42);ctx.strokeStyle=G(h,85,58,rg.a);ctx.lineWidth=rg.lineW;ctx.shadowColor=G(h,90,62,0.5);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(CX+off*0.5,CY,rg.r,0,Math.PI*2);ctx.stroke();ctx.restore();});}return true;});
+    if(pulse>0.55&&Math.random()>0.35){const ang=R(0,Math.PI*2);spiralP.push({x:CX,y:CY,ang,spd:R(2.5,7),rotSpd:R(0.04,0.14)*(Math.random()>0.5?1:-1),r:R(1,3.5),a:R(0.6,0.95),hue:R(100,145),decay:R(0.007,0.018)});}
+    for(let i=spiralP.length-1;i>=0;i--){const sp=spiralP[i];sp.ang+=sp.rotSpd;sp.x+=Math.cos(sp.ang)*sp.spd;sp.y+=Math.sin(sp.ang)*sp.spd;sp.spd*=0.985;sp.a-=sp.decay;if(sp.a<=0){spiralP.splice(i,1);continue;}ctx.save();ctx.globalAlpha=sp.a;ctx.fillStyle=G(sp.hue,82,60);ctx.shadowColor=G(sp.hue,88,64,0.5);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(sp.x,sp.y,sp.r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=sp.a*0.28;ctx.beginPath();ctx.moveTo(sp.x,sp.y);ctx.lineTo(sp.x-Math.cos(sp.ang)*sp.spd*5,sp.y-Math.sin(sp.ang)*sp.spd*5);ctx.strokeStyle=G(sp.hue,80,55);ctx.lineWidth=sp.r*0.6;ctx.stroke();ctx.restore();}
+    const cr=14+pulse*32;ctx.save();const oG=ctx.createRadialGradient(CX,CY,0,CX,CY,cr*5);oG.addColorStop(0,`rgba(0,180,50,${pulse*0.15})`);oG.addColorStop(0.3,`rgba(0,110,28,${pulse*0.08})`);oG.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=oG;ctx.beginPath();ctx.arc(CX,CY,cr*5,0,Math.PI*2);ctx.fill();
+    const cg3=ctx.createRadialGradient(CX,CY,0,CX,CY,cr*3.5);cg3.addColorStop(0,'rgba(240,255,242,1)');cg3.addColorStop(0.15,`rgba(180,255,195,${0.92+pulse*0.08})`);cg3.addColorStop(0.35,`rgba(0,210,55,${0.55+pulse*0.35})`);cg3.addColorStop(0.6,`rgba(0,130,30,${0.3+pulse*0.22})`);cg3.addColorStop(1,'rgba(0,20,5,0)');ctx.fillStyle=cg3;ctx.shadowColor='rgba(0,200,55,0.95)';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(CX,CY,cr*3.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(240,255,242,1)';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(CX,CY,cr*0.55,0,Math.PI*2);ctx.fill();
+    if(pulse>0.78){ctx.globalAlpha=(pulse-0.78)*3.8;for(let ray=0;ray<18;ray++){const rA=ray/18*Math.PI*2+pT*0.28,rLen=cr*2+pulse*cr*2.8;const rg=ctx.createLinearGradient(CX,CY,CX+Math.cos(rA)*rLen,CY+Math.sin(rA)*rLen);rg.addColorStop(0,'rgba(220,255,225,0.65)');rg.addColorStop(0.3,G(120+ray*3,82,55,0.3));rg.addColorStop(1,'rgba(0,0,0,0)');ctx.strokeStyle=rg;ctx.lineWidth=1.4+pulse;ctx.beginPath();ctx.moveTo(CX,CY);ctx.lineTo(CX+Math.cos(rA)*rLen,CY+Math.sin(rA)*rLen);ctx.stroke();}}
+    ctx.restore();
+}
+
+// ═══ F4: GEOMETRÍA ═══
+const SHAPES=[{t:'c',r:MIN*0.055,hue:120,spd:0.82,delay:0},{t:'c',r:MIN*0.11,hue:112,spd:0.64,delay:0.12},{t:'c',r:MIN*0.17,hue:128,spd:0.52,delay:0.24},{t:'c',r:MIN*0.23,hue:108,spd:0.44,delay:0.36},{t:'c',r:MIN*0.30,hue:118,spd:0.36,delay:0.48},{t:'c',r:MIN*0.38,hue:110,spd:0.3,delay:0.6},{t:'h',r:MIN*0.13,rot:0,hue:132,spd:0.56,delay:0.18},{t:'h',r:MIN*0.21,rot:Math.PI/6,hue:118,spd:0.46,delay:0.34},{t:'h',r:MIN*0.31,rot:0,hue:126,spd:0.36,delay:0.50},{t:'tri',r:MIN*0.17,rot:0,hue:138,spd:0.5,delay:0.22},{t:'tri',r:MIN*0.17,rot:Math.PI,hue:112,spd:0.5,delay:0.38},{t:'tri',r:MIN*0.25,rot:0,hue:124,spd:0.4,delay:0.46},{t:'tri',r:MIN*0.25,rot:Math.PI,hue:108,spd:0.4,delay:0.58},{t:'star',r:MIN*0.19,hue:130,spd:0.48,delay:0.28}];
+let geoS=null,geoT=0;
+function initGeo(){geoS=SHAPES.map(s=>({...s,p:0}));}
+function drawPtG(pts,dL,close){const n=pts.length;ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=0;i<n;i++){if(i>dL)break;const f=Math.min(dL-i,1),ni=(i+1)%n;ctx.lineTo(L(pts[i][0],pts[ni][0],f),L(pts[i][1],pts[ni][1],f));}if(close&&dL>=n-0.01)ctx.closePath();ctx.stroke();}
+function drawGeo(elapsed){
+    geoT+=0.013;const gP=C((elapsed-T.F4)/(T.F5-T.F4),0,1);
+    geoS.forEach(sh=>{if(gP<sh.delay)return;const lp=Math.min((gP-sh.delay)/((1-sh.delay)*0.72),1),rot=geoT*sh.spd*0.5,sc=eO(lp);ctx.save();ctx.translate(CX,CY);ctx.rotate(rot);ctx.scale(sc,sc);ctx.strokeStyle=G(sh.hue,80,55,0.55+lp*0.42);ctx.lineWidth=1.5+lp*0.8;ctx.shadowColor=G(sh.hue,88,60,0.6);ctx.shadowBlur=3;if(sh.t==='c'){const ea=lp*Math.PI*2;ctx.beginPath();ctx.arc(0,0,sh.r,0,ea);ctx.stroke();if(lp<0.99){const sx2=Math.cos(ea)*sh.r,sy2=Math.sin(ea)*sh.r;ctx.fillStyle='rgba(220,255,225,0.96)';ctx.shadowColor='rgba(0,220,60,1)';ctx.shadowBlur=4;ctx.beginPath();ctx.arc(sx2,sy2,3,0,Math.PI*2);ctx.fill();}}else if(sh.t==='h'){ctx.rotate(sh.rot||0);const pts=Array.from({length:6},(_,i3)=>{const a=(i3/6)*Math.PI*2-Math.PI/6;return[Math.cos(a)*sh.r,Math.sin(a)*sh.r];});drawPtG(pts,lp*6,true);}else if(sh.t==='tri'){ctx.rotate(sh.rot||0);const pts=Array.from({length:3},(_,i3)=>{const a=(i3/3)*Math.PI*2-Math.PI/6;return[Math.cos(a)*sh.r,Math.sin(a)*sh.r];});drawPtG(pts,lp*3,true);}else if(sh.t==='star'){const pts=[];for(let i3=0;i3<16;i3++){const a=(i3/16)*Math.PI*2,r2=i3%2===0?sh.r:sh.r*0.45;pts.push([Math.cos(a)*r2,Math.sin(a)*r2]);}drawPtG(pts,lp*16,true);}ctx.restore();});
+    ctx.save();ctx.globalAlpha=0.55;drawPulso(T.F3+200);ctx.globalAlpha=1;ctx.restore();
+}
+
+// ═══ F5: FLASH ═══
+function drawFlash(prog){
+    const fp=eI(Math.min(prog*2,1)),fr=eO(Math.max(prog*2-1,0)),v=fp-fr;
+    ctx.save();ctx.globalAlpha=v*0.97;ctx.fillStyle='rgba(200,255,210,1)';ctx.fillRect(0,0,W,H);ctx.restore();
+    const shift=35*v;cctx.clearRect(0,0,W,H);
+    if(shift>0.4){cctx.save();cctx.globalAlpha=v*0.55;cctx.fillStyle='rgba(255,100,0,0.5)';cctx.fillRect(shift,0,W,H);cctx.globalAlpha=v*0.45;cctx.fillStyle='rgba(0,255,80,0.6)';cctx.fillRect(-shift,0,W,H);cctx.restore();cc.style.opacity=String(v*0.75);}else cc.style.opacity='0';
+    const vib=v*18;cv.style.transform=`translate(${(Math.random()-0.5)*vib}px,${(Math.random()-0.5)*vib*0.65}px)`;
+}
+
+// ═══ F6: LETRAS ═══
+let letSpawned=false;
+function spawnLetras(){
+    letSpawned=true;const container=document.getElementById('ntitle');container.innerHTML='';
+    'GÉNESIS'.split('').forEach((ch,i)=>{const sp=document.createElement('span');sp.className='nl';sp.textContent=ch;container.appendChild(sp);setTimeout(()=>{sp.style.transition=`opacity .45s ease-out ${i*0.11}s, transform .45s cubic-bezier(.12,.85,.22,1) ${i*0.11}s`;sp.style.opacity='1';sp.style.transform='scale(1) translateZ(0)';},40+i*110);});
+}
+
+// ═══ EXPLOSIÓN ESPORAS ═══
+let exParts=[],explodeFired=false;
+function spawnExplosion(){
+    const m=IS_MOBILE?0.35:1;
+    for(let i=0;i<~~(130*m);i++){const ang=Math.random()*Math.PI*2;exParts.push({x:CX,y:CY,ang,spd:R(3,15),curve:R(-0.022,0.022),r:R(1.5,5.5),alpha:1,hue:R(100,145),decay:R(0.008,0.018),grav:R(0,0.06)});}
+    for(let i=0;i<~~(70*m);i++){const ang=Math.random()*Math.PI*2;exParts.push({x:CX,y:CY,ang,spd:R(0.5,4),curve:R(-0.03,0.03),r:R(3,8),alpha:0.75,hue:R(90,155),decay:R(0.005,0.012),grav:R(0,0.03)});}
+    for(let i=0;i<~~(90*m);i++){const ang=Math.random()*Math.PI*2;exParts.push({x:CX,y:CY,ang,spd:R(5,20),curve:R(-0.015,0.015),r:R(0.5,2),alpha:1,hue:R(95,150),decay:R(0.015,0.032),grav:0});}
+}
+function updateExplode(){
+    const useShadow=!IS_MOBILE;
+    exParts=exParts.filter(p=>{p.ang+=p.curve;p.x+=Math.cos(p.ang)*p.spd;p.y+=Math.sin(p.ang)*p.spd+p.grav;p.spd*=0.972;p.alpha-=p.decay;if(p.alpha<=0)return false;ctx.save();ctx.globalAlpha=p.alpha;ctx.fillStyle=G(p.hue,92,68);if(useShadow){ctx.shadowColor=G(p.hue,100,72,0.8);ctx.shadowBlur=p.r*2;}ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();if(!IS_MOBILE&&p.spd>1.5){ctx.globalAlpha=p.alpha*0.25;ctx.strokeStyle=G(p.hue,85,60);ctx.lineWidth=p.r*0.5;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-Math.cos(p.ang)*p.spd*3,p.y-Math.sin(p.ang)*p.spd*3);ctx.stroke();}ctx.restore();return true;});
+}
+
+// ═══ F7: ECOSISTEMA ═══
+const ECO_N = IS_MOBILE ? 0.4 : 1.0; // factor de cantidad
+const ECO_SPORES=Array.from({length:~~(280*ECO_N)},()=>({a:R(0,Math.PI*2),d:R(20,MIN*0.68),r:R(0.2,2.2),br:R(0.2,0.95),spd:R(0.0001,0.0006),hue:R(95,155)}));
+const ECO_NEBS=[{ox:R(-MIN*0.3,MIN*0.3),oy:R(-MIN*0.3,MIN*0.3),r:MIN*R(0.25,0.5),hue:R(100,140),a:R(0.06,0.11)},{ox:R(-MIN*0.25,MIN*0.25),oy:R(-MIN*0.25,MIN*0.25),r:MIN*R(0.18,0.35),hue:R(108,135),a:R(0.05,0.1)},{ox:R(-MIN*0.2,MIN*0.2),oy:R(-MIN*0.2,MIN*0.2),r:MIN*R(0.12,0.28),hue:R(115,145),a:R(0.04,0.09)}];
+const ECO_ROOTS=Array.from({length:~~(12*ECO_N)},(_,i)=>({baseAngle:i/12*Math.PI*2,len:R(MIN*0.18,MIN*0.38),wobble:R(0,Math.PI*2),wobbleSpd:R(0.008,0.025),width:R(0.4,1.4),alpha:R(0.15,0.42),hue:R(100,140),segments:~~R(5,10)}));
+const ECO_MUSHROOMS=Array.from({length:~~(18*ECO_N)},()=>({angle:R(0,Math.PI*2),orbitR:R(MIN*0.1,MIN*0.44),tilt:R(0,Math.PI),spd:R(0.004,0.025)*(Math.random()>0.5?1:-1),r:R(0.8,3.5),a:R(0.18,0.65),hue:R(100,145),phase:R(0,Math.PI*2),capR:R(2,5)}));
+const ECO_FLOATERS=Array.from({length:~~(65*ECO_N)},()=>({x:R(0,W),y:R(0,H),vx:R(-0.16,0.16),vy:R(-0.14,0.14),r:R(0.4,2.2),a:R(0.06,0.42),hue:R(98,150),ph:R(0,Math.PI*2)}));
+
+// Código cometas del usuario — preservado íntegro
+const ECO_COMETS=[];
+let lastAT=0,tTX=0,tTY=0,cTX=0,cTY=0,animDone=false;
+const gsvgEl=document.getElementById('gsvg');
+function drawEcoComets(){
+    if(!animDone)return;
+    const now=Date.now();if(lastAT===0)lastAT=now;
+    if(now-lastAT>R(8000,12000)){const sl=Math.random()<0.5;ECO_COMETS.push({x:sl?-80:W+80,y:R(0,H),vx:sl?R(5,9):-R(5,9),vy:R(-3,3),hue:R(95,145),nodes:[],wobble:R(0,Math.PI*2)});lastAT=now;}
+    for(let i=ECO_COMETS.length-1;i>=0;i--){
+        const ct=ECO_COMETS[i];ct.x+=ct.vx;ct.y+=ct.vy;ct.wobble+=0.08;
+        ct.nodes.unshift({x:ct.x,y:ct.y});if(ct.nodes.length>10)ct.nodes.pop();
+        if(ct.x<-120||ct.x>W+120||ct.y<-120||ct.y>H+120){ECO_COMETS.splice(i,1);continue;}
+        ctx.save();ctx.lineCap='round';ctx.lineJoin='round';
+        for(let n=1;n<ct.nodes.length;n++){const p0=ct.nodes[n-1],p1=ct.nodes[n],t2=n/ct.nodes.length,wob=Math.sin(ct.wobble+n*0.6)*3;ctx.strokeStyle=`hsla(${ct.hue},90%,${35+t2*20}%,${0.2+t2*0.4})`;ctx.lineWidth=6*(1-t2);ctx.beginPath();ctx.moveTo(p0.x+wob,p0.y-wob);ctx.lineTo(p1.x-wob,p1.y+wob);ctx.stroke();}
+        const head=ct.nodes[0]||{x:ct.x,y:ct.y},pulse2=0.6+Math.sin(ct.wobble*2)*0.4;
+        const hg=ctx.createRadialGradient(head.x,head.y,0,head.x,head.y,18);hg.addColorStop(0,`rgba(220,255,230,${pulse2})`);hg.addColorStop(0.3,`hsla(${ct.hue+10},95%,60%,0.8)`);hg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=hg;ctx.beginPath();ctx.arc(head.x,head.y,6+pulse2*4,0,Math.PI*2);ctx.fill();
+        for(let k=0;k<3;k++){const ak=ct.wobble+k*2;ctx.fillStyle=`hsla(${ct.hue+20},90%,65%,0.7)`;ctx.beginPath();ctx.arc(head.x+Math.cos(ak)*6,head.y+Math.sin(ak)*6,1.5,0,Math.PI*2);ctx.fill();}
+        ctx.restore();
+    }
+    if(ECO_COMETS.length>0){const a2=ECO_COMETS[0];tTY=(a2.x-CX)/(W/2)*28;tTX=-(a2.y-CY)/(H/2)*28;}else{tTX=0;tTY=0;}
+    cTX+=(tTX-cTX)*0.04;cTY+=(tTY-cTY)*0.04;
+    gsvgEl.style.transform=`rotateX(${cTX}deg) rotateY(${cTY}deg)`;
+}
+
+let uT=0,revDone=false;
+function drawEcosistema(alpha){
+    uT+=0.006;
+    ECO_NEBS.forEach((nb,i)=>{const pulse3=0.5+0.5*Math.sin(uT*0.35+i*2.1);ctx.save();ctx.globalAlpha=nb.a*alpha*pulse3;const ng=ctx.createRadialGradient(CX+nb.ox,CY+nb.oy,0,CX+nb.ox,CY+nb.oy,nb.r);ng.addColorStop(0,G(nb.hue,72,42,0.9));ng.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=ng;ctx.beginPath();ctx.arc(CX+nb.ox,CY+nb.oy,nb.r,0,Math.PI*2);ctx.fill();ctx.restore();});
+    ctx.save();ctx.globalAlpha=alpha*0.15;for(let bi=0;bi<6;bi++){const bA=bi*Math.PI/3+uT*0.012;const bG=ctx.createLinearGradient(CX+Math.cos(bA)*MIN,CY+Math.sin(bA)*MIN,CX-Math.cos(bA)*MIN,CY-Math.sin(bA)*MIN);bG.addColorStop(0,'rgba(0,0,0,0)');bG.addColorStop(0.35,G(118+bi*8,65,35,0.5));bG.addColorStop(0.5,G(122+bi*8,70,42,0.7));bG.addColorStop(0.65,G(118+bi*8,65,35,0.5));bG.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=bG;ctx.fillRect(0,0,W,H);}ctx.restore();
+    ECO_SPORES.forEach(s=>{s.a+=s.spd;const ox=CX+Math.cos(s.a)*s.d,oy=CY+Math.sin(s.a)*s.d;const b=s.br*(0.42+0.58*Math.sin(uT*2.5+s.a*4.5));ctx.save();ctx.globalAlpha=b*alpha*0.82;ctx.fillStyle=G(s.hue,72,65);ctx.beginPath();ctx.arc(ox,oy,s.r,0,Math.PI*2);ctx.fill();ctx.restore();});
+    ECO_ROOTS.forEach(root=>{root.wobble+=root.wobbleSpd;const baseAng=root.baseAngle+uT*0.04+Math.sin(uT*0.3+root.wobble)*0.15;ctx.save();ctx.globalAlpha=root.alpha*alpha;ctx.strokeStyle=G(root.hue,75,38);ctx.lineWidth=root.width;ctx.shadowColor=G(root.hue,80,42,0.4);ctx.shadowBlur=0;ctx.beginPath();let rx=CX+Math.cos(baseAng)*MIN*0.05,ry=CY+Math.sin(baseAng)*MIN*0.05;ctx.moveTo(rx,ry);for(let seg=0;seg<root.segments;seg++){const segAng=baseAng+Math.sin(uT*0.8+seg*1.3+root.wobble)*0.35;rx+=Math.cos(segAng)*root.len/root.segments;ry+=Math.sin(segAng)*root.len/root.segments;ctx.lineTo(rx,ry);}ctx.stroke();ctx.globalAlpha=root.alpha*alpha*0.7;ctx.fillStyle=G(root.hue+15,80,52);ctx.beginPath();ctx.arc(rx,ry,root.width*3,0,Math.PI*2);ctx.fill();ctx.restore();});
+    for(let di=0;di<8;di++){const dr=MIN*(0.055+di*0.052)+Math.sin(uT*0.7+di*1.4)*9,da=(0.055-di*0.006)*(0.52+0.48*Math.sin(uT*0.58+di*1.22))*alpha;ctx.save();ctx.globalAlpha=Math.max(da,0);ctx.strokeStyle=G(115+di*8,78,45,0.88);ctx.lineWidth=0.9+di*0.12;ctx.shadowColor=G(118+di*8,85,48,0.38);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(CX,CY,dr,0,Math.PI*2);ctx.stroke();ctx.restore();}
+    ECO_MUSHROOMS.forEach(orb=>{orb.angle+=orb.spd;const x=CX+Math.cos(orb.angle)*orb.orbitR,y=CY+Math.sin(orb.angle)*orb.orbitR*Math.abs(Math.sin(orb.tilt));const z=Math.sin(orb.angle)*Math.cos(orb.tilt),depth=0.55+0.45*((z+1)/2);const oa=orb.a*depth*(0.48+0.52*Math.sin(uT*1.2+orb.phase))*alpha;ctx.save();ctx.globalAlpha=Math.max(oa,0);ctx.strokeStyle=G(orb.hue,70,35);ctx.lineWidth=orb.r*0.4*depth;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+orb.capR*depth*2);ctx.stroke();ctx.fillStyle=G(orb.hue+20,85,55);ctx.beginPath();ctx.ellipse(x,y,orb.capR*depth*1.5,orb.capR*depth*0.7,-0.2,0,Math.PI*2);ctx.fill();ctx.globalAlpha=Math.max(oa*0.8,0);ctx.fillStyle=G(orb.hue+35,95,75);ctx.beginPath();ctx.arc(x-orb.capR*depth*0.3,y-orb.capR*depth*0.15,orb.r*0.4*depth,0,Math.PI*2);ctx.fill();ctx.restore();});
+    ECO_FLOATERS.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x=W;if(p.x>W)p.x=0;if(p.y<0)p.y=H;if(p.y>H)p.y=0;const fa=p.a*(0.42+0.58*Math.sin(uT*1.25+p.ph))*alpha;ctx.save();ctx.globalAlpha=Math.max(fa,0);ctx.fillStyle=G(p.hue,70,65);ctx.shadowColor=G(p.hue,85,70,0.6);ctx.shadowBlur=0;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();ctx.restore();});
+    drawEcoComets();
+    const beat2=0.5+0.5*Math.sin(uT*2.2)*Math.sin(uT*3.0);const bg=ctx.createRadialGradient(CX,CY,0,CX,CY,55+beat2*35);bg.addColorStop(0,`rgba(0,180,50,${beat2*0.25})`);bg.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=bg;ctx.beginPath();ctx.arc(CX,CY,100+beat2*35,0,Math.PI*2);ctx.fill();
+}
+
+// ═══ LOOP PRINCIPAL ═══
+let geoInit=false,f7a=0,lastTS=0;
+const sporeFlashEl=document.getElementById('spore-flash');
+buildBgNebula();
+
+function loop(ts){
+    const dt=lastTS>0?Math.min(ts-lastTS,50):16;
+    lastTS=ts;
+    el=ts-START;
+    ctx.clearRect(0,0,W,H);  // siempre limpiamos — en F1 queda transparente
+    const f7Active=el>=T.F7;
+    if(f7Active){drawBgNebula(f7a);if(!IS_MOBILE)drawFgLayer(f7a*0.65);updatePulse(ts);}
+    else{ctxBg.clearRect(0,0,W,H);ctxFg.clearRect(0,0,W,H);}
+
+    if(el<T.F2 && !f1Done) drawViscous(el,dt);
+
+    // F2 arranca cuando el alquitrán cubrió toda la pantalla (f1Done) O cuando llega el timer
+    const f2Start = f1Done ? Math.min(el, T.F2) : (el >= T.F2 ? T.F2 : Infinity);
+    const inF2plus = f1Done || el >= T.F2;
+
+    if(inF2plus){const dt2=C((el-T.F2)/1500,0,1);ctx.fillStyle=`rgba(0,${~~(dt2*8*0.08)},${~~(dt2*3*0.08)},${dt2*0.98})`;ctx.fillRect(0,0,W,H);cv.style.transform='';}
+    if(inF2plus&&el<T.F2b){if(!imploded){imploded=true;recogerParticulas();}drawVortice(C((el-T.F2)/(T.F2b-T.F2),0,1));}
+    if(el>=T.F2b&&el<T.F3) drawSingularidad(C((el-T.F2b)/(T.F3-T.F2b),0,1));
+    if(el>=T.F3&&el<T.F4){const p=C((el-T.F3)/(T.F4-T.F3),0,1);ctx.globalAlpha=eO(p);drawPulso(el);ctx.globalAlpha=1;}
+    if(el>=T.F4&&el<T.F5){if(!geoInit){geoInit=true;initGeo();}drawGeo(el);}
+    if(el>=T.F5&&el<T.F6) drawFlash(C((el-T.F5)/(T.F6-T.F5),0,1));
+    else if(el>=T.F6){cv.style.transform='';cc.style.opacity='0';}
+    if(el>=T.F6&&!letSpawned) spawnLetras();
+    if(el>=T.F6){document.getElementById('nsub').style.opacity=String(C((el-T.F6-500)/1600,0,1));document.getElementById('npct').style.opacity=String(C((el-T.F6-1100)/1600,0,1));}
+    if(el>=T.F7){
+        const p=C((el-T.F7)/4500,0,1);f7a=eO(p);
+        ctx.fillStyle='#000501';ctx.fillRect(0,0,W,H);
+        drawEcosistema(f7a);updateExplode();
+        document.getElementById('vig').style.opacity='1';
+        if(!revDone&&p>0.15){
+            revDone=true;const rev=document.getElementById('wrap');
+            if(!explodeFired){explodeFired=true;spawnExplosion();}
+            sporeFlashEl.style.transition='opacity 0.15s ease-in';sporeFlashEl.style.opacity='1';
+            setTimeout(()=>{sporeFlashEl.style.transition='opacity 1.8s ease-out';sporeFlashEl.style.opacity='0';},180);
+            rev.style.transition='opacity 3.5s ease-out';rev.style.opacity='1';
+            setTimeout(()=>{animDone=true;},5000);
+        }
+    }
+    requestAnimationFrame(loop);
+}
+START=performance.now();lastBeatTime=START;requestAnimationFrame(loop);
+</script>
+</body>
+</html>

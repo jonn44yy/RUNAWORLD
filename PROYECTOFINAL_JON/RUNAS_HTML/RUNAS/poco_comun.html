@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; background:transparent; overflow:hidden; display:flex; justify-content:center; align-items:center; }
+canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let t = 0;
+
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resize();
+window.addEventListener("resize", resize);
+
+function frame() {
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2, cy = H/2;
+    ctx.clearRect(0,0,W,H);
+    t += 0.012;
+
+    const base = Math.min(W,H);
+    const radios = [base*0.12, base*0.22, base*0.32];
+
+    radios.forEach((r, i) => {
+        const phase = t * 0.8 + i * 1.2;
+        const alpha = 0.4 + 0.3 * Math.sin(phase);
+        ctx.strokeStyle = `rgba(50,200,80,${alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = "#32c850"; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+    });
+
+    // Centro
+    const p = 3 + 2 * Math.abs(Math.sin(t*2));
+    ctx.fillStyle = `rgba(50,200,80,0.9)`;
+    ctx.shadowColor = "#32c850"; ctx.shadowBlur = 20;
+    ctx.beginPath(); ctx.arc(cx, cy, p, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

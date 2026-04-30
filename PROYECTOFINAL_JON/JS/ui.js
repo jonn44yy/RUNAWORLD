@@ -60,9 +60,9 @@ let coins_ps      = parseFloat(_i.coins_ps)     || 1;
 let points_ps     = parseFloat(_i.points_ps)    || 0;
 let coins_ps_max  = parseFloat(_i.coins_ps_max) || coins_ps;
 let points_ps_max = parseFloat(_i.points_ps_max)|| points_ps;
-let suerte        = parseFloat(_i.suerte)       || 1;
 let bulk_runas    = parseInt(_i.bulk_total)     || 1;
-let display_mode  = _i.display_mode             || "porcentaje";
+
+// 27/04 v3: variables suerte y display_mode eliminadas (sistema retirado)
 
 // sanity check paranoico: si alguna se cuela en NaN, el formateo de despues
 // pinta "NaN coins" en pantalla, feisimo. esto es barato y me ahorra un bug
@@ -71,7 +71,6 @@ if (isNaN(coins))     coins     = 0;
 if (isNaN(points))    points    = 0;
 if (isNaN(coins_ps))  coins_ps  = 1;
 if (isNaN(points_ps)) points_ps = 0;
-if (isNaN(suerte))    suerte    = 1;
 
 const probMap         = _i.probMap      || {};
 const BOOST_TIPOS     = _i.boost_tipos  || [];
@@ -83,24 +82,9 @@ let coins_ps_base     = null;
 let points_ps_base    = points_ps > 0 ? points_ps : null;
 
 
-// suerte: formula (a + b) * c * d. ver cabecera de juego.php para detalles
-let suerte_shop_add = parseFloat(_i.suerte_shop_add) || 0.0;   // b = mejoras tienda
-let suerte_grupo    = parseFloat(_i.suerte_grupo)    || 1.0;   // d = bonus grupo
-
-// calcular suerte base (sin boosts, solo a+b multiplicado por d). boosts.js
-// la multiplica por c en aplicarBoosts() para obtener la suerte efectiva.
-// separarlas permite "anadir boost" y "quitar boost" sin recalcular desde cero
-function _calcSuerteBase() {
-    return (1.0 + suerte_shop_add) * suerte_grupo;
-}
-let suerte_base_val = _calcSuerteBase();
-
-
-// datos crudos de las curvas campana indexados por rareza. se usan en
-// recalcularSuertePanel() para actualizar los % del panel sin pedirle al
-// server cada vez que la suerte baila (que puede ser varias veces por minuto
-// si hay boosts activandose/caducandose)
-const CURVAS_DATA = _i.curvas_data || {};
+// 27/04 v3: bloque entero de suerte (formula a+b*c*d, _calcSuerteBase,
+// suerte_shop_add, suerte_grupo, suerte_base_val) eliminado.
+// las probabilidades son fijas, no dependen de suerte.
 
 
 // multiplicadores de mejoras que sobreviven a las tiradas. los guardo aqui
@@ -110,66 +94,12 @@ let _mejora_coins_ps     = parseFloat(window.RW_INIT?.mejora_coins_ps)     || 1.
 let _mejora_multi_pts    = parseFloat(window.RW_INIT?.mejora_multi_pts)    || 1.0;
 let _mejora_points_add   = parseFloat(window.RW_INIT?.mejora_points_add)   || 0.0;
 let _runas_points_ps     = parseFloat(window.RW_INIT?.runas_points_ps)     || 0.0;
-let _mejora_suerte_multi = parseFloat(window.RW_INIT?.mejora_suerte_multi) || 1.0;
 const probRareza = _i.prob_rareza || {};
 
 
-// curva campana -- port js de calcular_pesos.php
-// para cada rareza hay 3 puntos clave: peso_base (cuando suerte=1),
-// peso_pico (cuando suerte=suerte_pico) y 0 (cuando suerte=suerte_cero).
-// la curva es piecewise lineal: sube de base a pico, luego baja del pico
-// a cero. lo de "campana" es porque con rarezas frecuentes como la comun,
-// la curva sube y baja (la comun caeria mucho si tiro la suerte arriba,
-// porque deja paso a las raras)
-function calcularPesoCampana(suerteVal, curva) {
-    const pesoBase   = parseFloat(curva.peso_base);
-    const suertePico = parseFloat(curva.suerte_pico);
-    const pesoPico   = parseFloat(curva.peso_pico);
-    const suerteCero = parseFloat(curva.suerte_cero);
-
-    if (suerteVal <= suertePico) {
-        // zona ascendente: de base a pico. caso especial: si pico <= 1, no
-        // hay ascenso posible (suerte minima es 1), devuelvo pico directamente
-        if (suertePico <= 1.0) return pesoPico;
-        let t = (suerteVal - 1.0) / (suertePico - 1.0);
-        t = Math.max(0, Math.min(1, t));
-        return pesoBase + (pesoPico - pesoBase) * t;
-    } else {
-        // zona descendente: de pico hasta cero
-        let t = (suerteVal - suertePico) / (suerteCero - suertePico);
-        t = Math.max(0, Math.min(1, t));
-        return pesoPico * (1.0 - t);
-    }
-}
-
-
-// recalcular los % del panel tras un cambio de suerte (p.ej. un boost se
-// activo o caduco). esto evita un round-trip al server cada vez que la
-// suerte cambia, y para un boost que afecta varias veces por minuto la
-// diferencia de latencia es notable
-function recalcularSuertePanel() {
-    if (!CURVAS_DATA || Object.keys(CURVAS_DATA).length === 0) return;
-    let pesoTotal = 0;
-    const pesosPorRareza = {};
-    for (const rareza in CURVAS_DATA) {
-        const peso = calcularPesoCampana(suerte, CURVAS_DATA[rareza]);
-        pesosPorRareza[rareza] = peso;
-        pesoTotal += peso;
-    }
-    if (pesoTotal <= 0) return;
-    // para cada carta meto los datos nuevos en dataset. formatProb los lee
-    // cuando el jugador despliega la carta, asi no recalculo por cada abrir
-    document.querySelectorAll(".runa-card-btn").forEach(card => {
-        const rareza = card.dataset.rareza;
-        if (!rareza || !pesosPorRareza.hasOwnProperty(rareza)) return;
-        const nuevoPct = (pesosPorRareza[rareza] / pesoTotal) * 100;
-        card.dataset.suerte = nuevoPct.toFixed(6);
-        card.dataset.pesoEfectivo = pesosPorRareza[rareza].toFixed(4);
-    });
-    // si hay cartas abiertas ya, refresco sus numeros tambien para no
-    // dejarlas con los % de la suerte anterior
-    if (typeof refrescarProbsAbiertas === "function") refrescarProbsAbiertas();
-}
+// 27/04 v3: funciones calcularPesoCampana y recalcularSuertePanel eliminadas.
+// las probabilidades por rareza son fijas (vienen de rarezas.denominador en BD)
+// y se pintan una sola vez al cargar, no se recalculan en vivo
 
 
 // formateo de numeros: 1500 --> "1.5k", 2500000 --> "2.5M", etc. el replace
@@ -193,28 +123,65 @@ document.querySelectorAll(".coste-num").forEach(el => {
 // tienda.js tras comprar una mejora. el server ya ha guardado el cambio,
 // pero para que el ui refleje el nuevo valor YA (sin esperar recarga),
 // aqui rehago la misma matematica que juego.php pero en js
+//
+// 27/04 v3: casos de suerte eliminados, las mejoras de suerte ya no existen.
+// 28/04 v3.1: points_seg cambiada de geometrica a lineal para evitar la
+// explosion de numeros (nivel 5 daba 50.000 pts/seg, nivel 10 daba 5.000M).
+// formulas que quedan:
+//   coins_seg:           triangular: (n*(n+1)/2) * v
+//   coins_seg_multi[_eterno]:   *= 2^n
+//   points_seg:          lineal: v * n  (28/04: antes era v * 10^(n-1))
+//   points_seg_multi[_eterno]:  *= 2^n
+//   bulk / bulk_normal:  + n (cada nivel suma 1 runa)
+//   bulk_extra:          + v si n>=1
 function recalcularStatsDesdeMejoras(mejoras) {
     let coins_add    = 0.0;
     let multi_coins  = 1.0;
     let points_add   = 0.0;
     let multi_points = 1.0;
-    let suerte_add   = 0.0;
     let bulk_add     = 0;
 
-    // recorro todas las mejoras y acumulo segun el tipo. el switch es el
-    // mismo que el de juego.php ~linea 175, mantener ambos sincronizados
-    // si se anaden tipos nuevos
     mejoras.forEach(m => {
         const v = parseFloat(m.valor);
-        const n = parseInt(m.cantidad) || parseInt(m.nivel) || 1;
+        const n = parseInt(m.nivel) || parseInt(m.cantidad) || 0;
+        if (n <= 0) return;
         switch (m.tipo) {
-            case "coins_seg":        coins_add    += v * n; break;
-            // multi: cada nivel anade +v al multiplicador (v=1.0 --> nivel1=x2, nivel2=x3...)
-            case "coins_seg_multi":  multi_coins  *= (1 + v * n); break;
-            case "points_seg":       points_add   += v * n; break;
-            case "points_seg_multi": multi_points *= (1 + v * n); break;
-            case "suerte":           suerte_add   += v * n; break;
-            case "bulk":             bulk_add     += n; break;
+            // coins lineal triangular: nivel 1=+1, nivel 2=+3 total, nivel 3=+6 total...
+            case "coins_seg":
+                coins_add += (n * (n + 1) / 2) * v;
+                break;
+
+            // multiplicadores x2 por nivel (eterno y normal mismo comportamiento)
+            case "coins_seg_multi":
+            case "coins_seg_multi_eterno":
+                multi_coins *= Math.pow(2, n);
+                break;
+
+            // points lineal: cada nivel suma `valor` puntos/seg
+            // 28/04: cambiado de geometrica (10^n-1) a lineal para que el
+            // generador no explote a millardos en nivel 10
+            case "points_seg":
+                points_add += v * n;
+                break;
+
+            case "points_seg_multi":
+            case "points_seg_multi_eterno":
+                multi_points *= Math.pow(2, n);
+                break;
+
+            // bulk: cada nivel suma 1 a runas/tirada (Tirada Multiple, Mano Diestra)
+            case "bulk":
+            case "bulk_normal":
+                bulk_add += n;
+                break;
+
+            // bulk de un solo nivel que da +5 (Cofre del Fragante)
+            case "bulk_extra":
+                if (n >= 1) bulk_add += Math.round(v);
+                break;
+
+            // los desbloquear_boost_* no afectan stats, solo desbloquean
+            // tipos de boost en boosts.js (que mira RW_INIT.mejoras_desbloqueadas)
         }
     });
 
@@ -222,7 +189,6 @@ function recalcularStatsDesdeMejoras(mejoras) {
     // coin/seg que tiene el jugador sin mejoras
     const coinsBase       = 1.0 + coins_add;
     const nuevaCoinsPs    = coinsBase * multi_coins;
-    const nuevaSuerteBase = 1.0 + suerte_add;
 
     coins_ps_base = nuevaCoinsPs;
     coins_ps      = nuevaCoinsPs;
@@ -241,10 +207,8 @@ function recalcularStatsDesdeMejoras(mejoras) {
     const bulkEl = document.getElementById("bulk-display");
     if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
 
-    suerte_base_val = nuevaSuerteBase;
-
-    // reaplicar boosts sobre los nuevos valores base. sin esto, tras comprar
-    // una mejora se perderian los boosts activos hasta que caduquen
+    // 27/04 v3: bloque de actualizacion de suerte eliminado.
+    // reaplicar boosts (ya solo de coins/points) sobre los nuevos valores
     if (typeof aplicarBoosts === "function") {
         aplicarBoosts();
     }
@@ -259,6 +223,9 @@ function actualizarPantalla() {
     document.getElementById("points-display").textContent    = formatNum(points);
     document.getElementById("coins-ps-display").textContent  = "+" + formatNum(coins_ps)   + "/seg";
     document.getElementById("points-ps-display").textContent = "+" + formatNum(points_ps)  + "/seg";
+    // 27/04 v3: bloque de suerte-display eliminado, ya no existe en el HTML
+    var bulkEl = document.getElementById("bulk-display");
+    if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
 }
 
 // tick cada segundo: sumo coins_ps y points_ps a las variables y repinto.
@@ -279,19 +246,10 @@ resetIdleTimer();
 // archivos (intro.html y boosts.js al final), no hace falta lanzarlos aqui
 
 
-// actualizar suerte tras tirar. lo llama tirada.js con la respuesta del
-// server. nuevaSuerteGrupo es la "d" de la formula, los otros factores
-// (b, c) no cambian con una tirada. tambien acepta nuevoBulk por si se
-// ha desbloqueado una mejora durante la tirada (via un bonus de grupo)
-function actualizarSuerte(nuevaSuerteGrupo, nuevoBulk, bonusConseguidos) {
-    if (nuevaSuerteGrupo !== undefined && nuevaSuerteGrupo !== null) {
-        const nueva = parseFloat(nuevaSuerteGrupo);
-        if (!isNaN(nueva) && nueva > 0) {
-            suerte_grupo    = nueva;
-            suerte_base_val = _calcSuerteBase();
-            if (typeof aplicarBoosts === "function") aplicarBoosts();
-        }
-    }
+// 27/04 v3: actualizarSuerte() eliminada, ya no aplica.
+// si tirada.js o algun otro archivo la llama, hacemos un stub vacio para
+// no romper la cadena. solo respeta el bulk si llega
+function actualizarSuerte(_nuevaSuerteGrupo, nuevoBulk, _bonusConseguidos) {
     if (nuevoBulk !== undefined) {
         bulk_runas = nuevoBulk;
         const el = document.getElementById("bulk-display");
@@ -300,14 +258,18 @@ function actualizarSuerte(nuevaSuerteGrupo, nuevoBulk, bonusConseguidos) {
 }
 
 
-// formato de probabilidad segun display_mode. el umbral 0.01% existe
-// porque con valores muy pequenos (runas raras, poca suerte), dos decimales
-// se ven como "0.00%" que no dice nada. por debajo paso a 4 decimales
-function formatProb(val, peso) {
-    if (display_mode === "peso") return "Peso: " + Math.round(peso);
-    if (val >= 1)    return val.toFixed(2) + "%";
-    if (val >= 0.01) return val.toFixed(3) + "%";
-    return val.toFixed(4) + "%";
+// 27/04 v3: formato de probabilidad como fraccion (1/100k, 1/25, 1/1...).
+// recibe un porcentaje (ej: 0.001 para 0.001%) y devuelve la fraccion legible.
+// la convencion estandar de gachas: si la prob es muy alta (>=99%) mostramos
+// "1/1" como referencia visual, no es literal pero es lo que la gente espera ver.
+function formatProb(pct) {
+    if (pct === undefined || pct === null || isNaN(pct)) return "—";
+    if (pct <= 0)   return "—";
+    if (pct >= 99)  return "1/1";
+    const denom = 100 / pct;
+    if (denom >= 1000000) return "1/" + Math.round(denom / 1000000) + "M";
+    if (denom >= 1000)    return "1/" + Math.round(denom / 1000) + "k";
+    return "1/" + Math.round(denom);
 }
 
 // abrir/cerrar el desplegable de probabilidad de una carta de runa. al
@@ -327,14 +289,9 @@ function toggleRunaProb(card) {
     });
 
     if (!abierto) {
-        // relleno los valores justo antes de abrir, usando el display_mode
-        // actual. asi si el jugador cambia de modo y reabre una carta ve
-        // el valor nuevo sin tener que recargar
-        const pb    = parseFloat(card.dataset.base   || 0);
-        const ps    = parseFloat(card.dataset.suerte || 0);
-        const peso  = parseFloat(card.dataset.peso   || 0);
-        card.querySelector(".prob-base-val").textContent   = formatProb(pb, peso);
-        card.querySelector(".prob-suerte-val").textContent = formatProb(ps, peso);
+        // 27/04 v3: ahora solo hay un valor de prob (data-prob), no base ni suerte
+        const p = parseFloat(card.dataset.prob || 0);
+        card.querySelector(".prob-base-val").textContent = formatProb(p);
 
         card.classList.add("expandida");
         prob.style.maxHeight = prob.scrollHeight + "px";
@@ -342,68 +299,33 @@ function toggleRunaProb(card) {
     }
 }
 
-// refrescar los valores pintados de las cartas abiertas. se usa cuando
-// cambia display_mode o cuando la suerte baila por un boost mientras hay
-// cartas abiertas (si no, se quedan con los numeros viejos hasta reabrirlas)
+// refrescar los valores pintados de las cartas abiertas (por si la prob
+// cambia dinamicamente en algun caso futuro). por ahora las probs son fijas
+// pero dejamos la funcion para no romper llamadas externas
 function refrescarProbsAbiertas() {
     document.querySelectorAll(".runa-card-btn.expandida").forEach(card => {
-        const pb   = parseFloat(card.dataset.base   || 0);
-        const ps   = parseFloat(card.dataset.suerte || 0);
-        const peso = parseFloat(card.dataset.peso   || 0);
-        card.querySelector(".prob-base-val").textContent   = formatProb(pb, peso);
-        card.querySelector(".prob-suerte-val").textContent = formatProb(ps, peso);
+        const p = parseFloat(card.dataset.prob || 0);
+        card.querySelector(".prob-base-val").textContent = formatProb(p);
     });
 }
 
 
-// cambio de display mode (porcentaje / peso) persistente a la bd. manda
-// el modo nuevo al server via ajustes_action.php, y si devuelve ok lo
-// aplica localmente: actualiza los botones activos + refresca cartas
-// abiertas con el nuevo formato
-function cambiarDisplayMode(modo) {
-    fetch("PHP/ajustes_action.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion: "display_mode", valor: modo })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            display_mode = modo;
-            document.getElementById("btn-modo-pct").classList.toggle("active",  modo === "porcentaje");
-            document.getElementById("btn-modo-peso").classList.toggle("active", modo === "peso");
-            refrescarProbsAbiertas();
-            // mensaje de confirmacion visible 2s, luego se limpia solo
-            const msg = document.getElementById("msg-display-mode");
-            msg.textContent = "Guardado.";
-            setTimeout(() => msg.textContent = "", 2000);
-        }
-    });
-}
+// 27/04 v3: cambiarDisplayMode() eliminada. ya no hay modo "porcentaje vs peso",
+// las probabilidades siempre se muestran como fraccion (1/100k, 1/1...).
 
 
 // helpers de probabilidad para el panel de stats en coleccion (lado derecho
-// cuando seleccionas una runa). getProbStr da la probabilidad con la
-// suerte actual. getProbBaseStr da la probabilidad base (con suerte=1).
-// son practicamente iguales, solo cambia que campo leen del probMap
+// cuando seleccionas una runa). probMap ahora tiene solo {prob: X.XX}
 function getProbStr(runaId) {
     const p = probMap[runaId];
     if (!p) return "—";
-    if (display_mode === "peso") return "Peso: " + p.peso;
-    const v = p.suerte;
-    if (v >= 1)    return v.toFixed(2) + "%";
-    if (v >= 0.01) return v.toFixed(3) + "%";
-    return v.toFixed(4) + "%";
+    return formatProb(p.prob);
 }
 
+// alias por compatibilidad: ya no hay diferencia entre "base" y "con suerte",
+// ambas dan la misma probabilidad fija
 function getProbBaseStr(runaId) {
-    const p = probMap[runaId];
-    if (!p) return "—";
-    if (display_mode === "peso") return "Peso base: " + p.peso;
-    const v = p.base;
-    if (v >= 1)    return v.toFixed(2) + "%";
-    if (v >= 0.01) return v.toFixed(3) + "%";
-    return v.toFixed(4) + "%";
+    return getProbStr(runaId);
 }
 
 
@@ -472,7 +394,6 @@ function refrescarEstadisticas() {
     setTxt("stats-coins-ps",     "+" + formatNum(coins_ps) + "/s");
     setTxt("stats-points-actual", formatNum(points));
     setTxt("stats-points-ps",    "+" + formatNum(points_ps) + "/s");
-    setTxt("stats-suerte",       "x" + (suerte || 1).toFixed(2));
     setTxt("stats-bulk",         (bulk_runas || 1) + " runa" + (bulk_runas > 1 ? "s" : ""));
 }
 
@@ -513,3 +434,29 @@ window.addEventListener("load", () => {
 //     juego.php (ahora es copy-paste manual, si cambio uno hay que acordarse
 //     del otro). podria ir en un json endpoint que devuelva el objeto ya
 //     calculado, pero es complicarlo por complicarlo
+
+
+// 28/04 v3.1: setters para que tienda.js, tirada.js etc puedan actualizar
+// las variables INTERNAS de ui.js (no solo window.coins, que era el bug que
+// hacia que tras comprar una mejora el sidebar siguiera mostrando el saldo
+// viejo). estos setters tocan tanto la variable de scope (coins, points)
+// como window por compatibilidad con codigo viejo
+function setCoins(v) {
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+        coins        = n;
+        window.coins = n;
+        actualizarPantalla();
+    }
+}
+function setPoints(v) {
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+        points        = n;
+        window.points = n;
+        actualizarPantalla();
+    }
+}
+window.setCoins  = setCoins;
+window.setPoints = setPoints;
+window.recalcularStatsDesdeMejoras = recalcularStatsDesdeMejoras;

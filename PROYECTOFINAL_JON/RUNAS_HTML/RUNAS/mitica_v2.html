@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runa Mítica V2 - Nivel Dios (Rotación Arreglada)</title>
+<style>
+    /* centro del monitor */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { 
+        width: 100%; height: 100%; 
+        background: transparent; /* sin background para poder hacer modificaciones encima */ 
+        overflow: hidden; 
+        display: flex; justify-content: center; align-items: center; 
+    }
+
+    /* El contenedor del SVG: aquí aplicamos los brillos principales (Glow) */
+    #mitica-container {
+        position: relative;
+        width: min(800px, 95vw);
+        height: min(800px, 95vw);
+        z-index: 10;
+        filter: drop-shadow(0 0 25px rgba(255, 34, 68, 0.5)) drop-shadow(0 0 60px rgba(200, 0, 40, 0.3));
+    }
+
+    svg { width: 100%; height: 100%; overflow: visible; }
+
+    #energy-particles {
+        position: fixed; inset: 0; z-index: 1; pointer-events: none;
+        mix-blend-mode: screen;
+    }
+
+    /* EL ARREGLO: transform-origin: 0 0; ancla el giro a la coordenada central matemática del SVG */
+    .spin-slow { animation: spin 45s linear infinite; transform-origin: 0px 0px; }
+    .spin-slow-rev { animation: spin 55s linear infinite reverse; transform-origin: 0px 0px; }
+    .spin-fast { animation: spin 20s linear infinite; transform-origin: 0px 0px; }
+    .spin-fast-rev { animation: spin 25s linear infinite reverse; transform-origin: 0px 0px; }
+    .pulse-glow { animation: pulseGlow 3s ease-in-out infinite alternate; transform-origin: 0px 0px; }
+    .core-beat { animation: coreBeat 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate; transform-origin: 0px 0px; }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    
+    @keyframes pulseGlow {
+        0% { transform: scale(0.98); opacity: 0.8; }
+        100% { transform: scale(1.02); opacity: 1; filter: drop-shadow(0 0 20px #ff2244); }
+    }
+
+    @keyframes coreBeat {
+        0% { transform: scale(0.9); fill: #ff2244; }
+        100% { transform: scale(1.15); fill: #ffffff; filter: drop-shadow(0 0 30px #ffbbcc); }
+    }
+
+    .runic-text {
+        font-family: 'Courier New', monospace; font-weight: bold; font-size: 16px;
+        fill: #ff2244; letter-spacing: 12px;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="energy-particles"></canvas>
+
+<div id="mitica-container">
+    <svg viewBox="-500 -500 1000 1000">
+        <defs>
+            <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="40%" stop-color="#ff2244" />
+                <stop offset="100%" stop-color="rgba(255, 34, 68, 0)" />
+            </radialGradient>
+            <path id="runeRingPath" d="M 0,-340 A 340,340 0 1,1 0,340 A 340,340 0 1,1 0,-340" />
+        </defs>
+
+        <g class="spin-slow">
+            <circle cx="0" cy="0" r="460" fill="none" stroke="#ff2244" stroke-width="2" stroke-dasharray="10 15" opacity="0.6"/>
+            <circle cx="0" cy="0" r="440" fill="none" stroke="#aa0022" stroke-width="8" />
+            <circle cx="0" cy="0" r="440" fill="none" stroke="#ff2244" stroke-width="2" stroke-dasharray="150 40 20 40" />
+
+            <g fill="rgba(20, 0, 5, 0.8)" stroke="#ff2244" stroke-width="3">
+                <path d="M -25,-440 L 0,-500 L 25,-440 L 0,-455 Z" />
+                <path d="M -25,440 L 0,500 L 25,440 L 0,455 Z" />
+                <path d="M 440,-25 L 500,0 L 440,25 L 455,0 Z" />
+                <path d="M -440,-25 L -500,0 L -440,25 L -455,0 Z" />
+            </g>
+            
+            <circle cx="0" cy="-455" r="5" fill="#ffffff" />
+            <circle cx="0" cy="455" r="5" fill="#ffffff" />
+            <circle cx="455" cy="0" r="5" fill="#ffffff" />
+            <circle cx="-455" cy="0" r="5" fill="#ffffff" />
+        </g>
+
+        <g class="spin-slow-rev">
+            <circle cx="0" cy="0" r="380" fill="none" stroke="#ff2244" stroke-width="1" opacity="0.3"/>
+            <text class="runic-text">
+                <textPath href="#runeRingPath" startOffset="0%">
+                    MYTHIC ✧ AETHEL ✧ KRONOS ✧ MYTHIC ✧ AETHEL ✧ KRONOS ✧ MYTHIC ✧ AETHEL ✧
+                </textPath>
+            </text>
+            <circle cx="0" cy="0" r="310" fill="none" stroke="#ff2244" stroke-width="4" stroke-dasharray="10 50" />
+        </g>
+
+        <g class="spin-fast pulse-glow">
+            <path d="M 0,-260 L 60,-60 L 260,0 L 60,60 L 0,260 L -60,60 L -260,0 L -60,-60 Z" fill="rgba(255, 34, 68, 0.05)" stroke="#ff2244" stroke-width="2"/>
+            <path d="M 0,-260 L 60,-60 L 260,0 L 60,60 L 0,260 L -60,60 L -260,0 L -60,-60 Z" fill="none" stroke="#ff8899" stroke-width="1" transform="rotate(45)"/>
+            <circle cx="0" cy="0" r="180" fill="none" stroke="#cc0022" stroke-width="1" />
+        </g>
+
+        <g class="spin-fast-rev">
+            <path d="M -130,-130 L 130,130 M -130,130 L 130,-130" stroke="#ff2244" stroke-width="4" stroke-linecap="round"/>
+            <path d="M -130,-130 L 130,130 M -130,130 L 130,-130" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="0" cy="0" r="90" fill="none" stroke="#ff2244" stroke-width="2" stroke-dasharray="20 10"/>
+            <circle cx="0" cy="0" r="70" fill="none" stroke="#ff2244" stroke-width="6" opacity="0.8"/>
+        </g>
+
+        <circle cx="0" cy="0" r="40" class="core-beat" />
+        <circle cx="0" cy="0" r="120" fill="url(#coreGlow)" style="mix-blend-mode: screen; pointer-events: none;" />
+        
+    </svg>
+</div>
+
+<script>
+    const canvas = document.getElementById("energy-particles");
+    const ctx = canvas.getContext("2d", { alpha: true });
+    
+    let W, H;
+    function resize() { 
+        W = canvas.width = window.innerWidth; 
+        H = canvas.height = window.innerHeight; 
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const particles = Array.from({length: 60}, () => ({
+        x: Math.random() * W, 
+        y: Math.random() * H,
+        s: Math.random() * 2 + 1,
+        v: Math.random() * 0.8 + 0.2,
+        a: Math.random() * Math.PI * 2,
+        life: Math.random()
+    }));
+
+    function draw() {
+        ctx.clearRect(0,0,W,H);
+        
+        ctx.fillStyle = "#ff2244";
+        ctx.shadowBlur = 10; 
+        ctx.shadowColor = "#ff2244";
+        
+        particles.forEach(p => {
+            p.y -= p.v; 
+            p.a += 0.05;
+            p.life += 0.01;
+            
+            if(p.y < -10) {
+                p.y = H + 10;
+                p.x = Math.random() * W;
+            }
+            
+            const px = p.x + Math.sin(p.a) * 20;
+            const currentAlpha = (Math.sin(p.life * Math.PI) + 1) / 2;
+            
+            ctx.globalAlpha = currentAlpha * 0.8;
+            ctx.beginPath(); 
+            ctx.arc(px, p.y, p.s, 0, Math.PI*2); 
+            ctx.fill();
+        });
+        
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(draw);
+    }
+    draw();
+</script>
+</body>
+</html>

@@ -97,12 +97,25 @@ if (!$mejora) die("Mejora no encontrada");
             <div class="admin-form-grupo">
                 <label class="admin-form-label">Tipo</label>
                 <select name="tipo" class="admin-form-select" required>
-                    <option value="coins_seg"        <?= $mejora["tipo"]==="coins_seg"        ?"selected":"" ?>>Coins/seg</option>
-                    <option value="coins_seg_multi"  <?= $mejora["tipo"]==="coins_seg_multi"  ?"selected":"" ?>>Multiplicador Coins/seg</option>
-                    <option value="points_seg"       <?= $mejora["tipo"]==="points_seg"       ?"selected":"" ?>>Points/seg</option>
-                    <option value="points_seg_multi" <?= $mejora["tipo"]==="points_seg_multi" ?"selected":"" ?>>Multiplicador Points/seg</option>
-                    <option value="suerte"           <?= $mejora["tipo"]==="suerte"           ?"selected":"" ?>>Suerte</option>
-                    <option value="bulk"             <?= $mejora["tipo"]==="bulk"             ?"selected":"" ?>>Bulk</option>
+                    <optgroup label="Coins">
+                        <option value="coins_seg"               <?= $mejora["tipo"]==="coins_seg"               ?"selected":"" ?>>Coins/seg</option>
+                        <option value="coins_seg_multi"         <?= $mejora["tipo"]==="coins_seg_multi"         ?"selected":"" ?>>Multiplicador Coins/seg</option>
+                        <option value="coins_seg_multi_eterno"  <?= $mejora["tipo"]==="coins_seg_multi_eterno"  ?"selected":"" ?>>Multiplicador Coins/seg ETERNO</option>
+                    </optgroup>
+                    <optgroup label="Points">
+                        <option value="points_seg"              <?= $mejora["tipo"]==="points_seg"              ?"selected":"" ?>>Points/seg</option>
+                        <option value="points_seg_multi"        <?= $mejora["tipo"]==="points_seg_multi"        ?"selected":"" ?>>Multiplicador Points/seg</option>
+                        <option value="points_seg_multi_eterno" <?= $mejora["tipo"]==="points_seg_multi_eterno" ?"selected":"" ?>>Multiplicador Points/seg ETERNO</option>
+                    </optgroup>
+                    <optgroup label="Bulk">
+                        <option value="bulk"                    <?= $mejora["tipo"]==="bulk"                    ?"selected":"" ?>>Bulk</option>
+                        <option value="bulk_normal"             <?= $mejora["tipo"]==="bulk_normal"             ?"selected":"" ?>>Bulk normal</option>
+                        <option value="bulk_extra"              <?= $mejora["tipo"]==="bulk_extra"              ?"selected":"" ?>>Bulk extra</option>
+                    </optgroup>
+                    <optgroup label="Desbloqueo de boosts">
+                        <option value="desbloquear_boost_leg"   <?= $mejora["tipo"]==="desbloquear_boost_leg"   ?"selected":"" ?>>Desbloquear boost legendario</option>
+                        <option value="desbloquear_boost_div"   <?= $mejora["tipo"]==="desbloquear_boost_div"   ?"selected":"" ?>>Desbloquear boost divino</option>
+                    </optgroup>
                 </select>
             </div>
 

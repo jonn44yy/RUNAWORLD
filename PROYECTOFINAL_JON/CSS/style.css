@@ -1,4 +1,4 @@
-@import url('https:/*fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
 
 /*
     style.css — runaworld
@@ -705,121 +705,6 @@ body {
 .runa-card.mitica     { border-left-color: var(--mitica);     }
 .runa-card.mitica     .runa-card-nombre { color: var(--mitica); text-shadow: 0 0 8px rgba(255,34,68,0.6); }
 
-/* ---- TIENDA ----  */
-
-/* grid de mejoras de la tienda, columnas adaptativas con minimo 210px */
-.mejoras-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-    gap: 16px;
-}
-
-/* tarjeta de una mejora en la tienda con borde dorado y hover que sube la card */
-.mejora-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 20px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    transition: all 0.25s;
-    position: relative;
-    overflow: hidden;
-}
-
-/* linea dorada en el top de la mejora-card que aparece al hacer hover */
-.mejora-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--gold), transparent);
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-/* hover de la mejora: sube, sombra mas profunda y borde dorado visible */
-.mejora-card:hover {
-    border-color: rgba(255,215,0,0.5);
-    background: rgba(255,255,255,0.07);
-    transform: translateY(-5px);
-    box-shadow: 0 10px 35px rgba(0,0,0,0.5);
-}
-
-/* muestra la linea superior al hacer hover en la mejora */
-.mejora-card:hover::before { opacity: 1; }
-
-/* nombre de la mejora en dorado y negrita */
-.mejora-card-nombre {
-    font-family: var(--font-title);
-    font-size: 1.05rem;
-    font-weight: 600;
-    letter-spacing: 2px;
-    color: var(--gold);
-}
-
-/* descripcion de la mejora en gris claro */
-.mejora-card-desc {
-    font-size: 0.9rem;
-    color: var(--silver-dim);
-    line-height: 1.5;
-    flex: 1;
-}
-
-/* texto pequeño con el nivel actual de la mejora */
-.mejora-card-nivel {
-    font-family: var(--font-title);
-    font-size: 0.75rem;
-    letter-spacing: 2px;
-    color: var(--silver-dim);
-}
-
-/* precio de la mejora en dorado grande */
-.mejora-card-coste {
-    font-family: var(--font-title);
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: var(--gold);
-}
-
-/* cuando la mejora esta al maximo el coste se muestra en gris con texto MAX */
-.mejora-card-coste.max {
-    color: var(--silver-dim);
-    font-size: 0.85rem;
-    letter-spacing: 3px;
-}
-
-/* boton de comprar mejora, estilo outline dorado */
-.btn-comprar {
-    padding: 11px;
-    font-family: var(--font-title);
-    font-size: 0.8rem;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    background: transparent;
-    border: 1px solid var(--gold);
-    color: var(--gold);
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.2s;
-    width: 100%;
-}
-
-/* hover del boton comprar: se rellena de dorado */
-.btn-comprar:hover:not(:disabled) {
-    background: var(--gold);
-    color: #000;
-    font-weight: 700;
-}
-
-/* boton comprar deshabilitado cuando no hay fondos suficientes */
-.btn-comprar:disabled {
-    border-color: #333;
-    color: #444;
-    cursor: not-allowed;
-}
-
 /* ---- AJUSTES ---- */
 
 /* la seccion de ajustes activa se muestra como columna con gap */
@@ -1152,24 +1037,6 @@ body {
 
 /* hover del boton desbloquear: un poco menos opaco para indicar que en algun momento funcionara LOL */
 #btn-desbloquear:hover { border-color: var(--legendaria); opacity: 0.8; }
-
-/* mensaje de error flotante de la tienda, oculto por defecto
-#msg-tienda {
-    font-family: var(--font-title);
-    font-size: 0.82rem;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: var(--red);
-    text-align: center;
-    padding: 10px 0;
-    min-height: 36px;
-    text-shadow: 0 0 10px var(--red-glow);
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-/* clase que hace visible el mensaje de error de la tienda */
-#msg-tienda.visible { opacity: 1; }
 
 /* contenedor de un grupo de inputs en ajustes con fondo tenue y borde */
 .ajuste-input-grupo {
@@ -2275,7 +2142,6 @@ body {
     color: var(--red);
 }
 .btn-toggle-anim-mitica:hover { background: rgba(255,34,68,0.08); }
-
 
 /* ideas futuras / TODO de este archivo:
     - unificar las clases de rareza en un mixin o algo (si alguien sabe como hacerlo en css puro, por favor)
