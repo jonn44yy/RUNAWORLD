@@ -243,13 +243,20 @@ try {
         exit;
     }
 
-    // Bulk real: sin mejora = 1 runa/click; nivel 1 = 2; nivel 2 = 3.
+    // Bulk real: sin mejora = 1 runa/click; bulk/bulk_normal suman por nivel;
+    // bulk_extra suma su valor una vez si esta comprado.
     $stmt = $conexion->prepare("
-        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS bulk_add
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN m.tipo IN ('bulk','bulk_normal') THEN m.valor * jm.nivel
+                WHEN m.tipo = 'bulk_extra' AND jm.nivel >= 1 THEN m.valor
+                ELSE 0
+            END
+        ), 0) AS bulk_add
         FROM jugador_mejoras jm
         INNER JOIN mejoras m ON m.id = jm.mejora_id
         WHERE jm.jugador_id = ? AND m.activa = 1
-          AND m.tipo IN ('bulk','bulk_normal')
+          AND m.tipo IN ('bulk','bulk_normal','bulk_extra')
     ");
     $stmt->bind_param("i", $jugador_id);
     $stmt->execute();

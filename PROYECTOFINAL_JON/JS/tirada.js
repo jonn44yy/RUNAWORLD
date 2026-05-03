@@ -176,30 +176,26 @@ function procesarRespuestaSync(data) {
     //   - si el server manda menos (lo normal con boosts) → el cliente mantiene
     // points solo bajan al comprar mejoras (comprar_mejora.php valida en
     // server), no en tiradas, asi que el max es seguro aqui
-    if (data.points !== undefined) {
+    if (!data.local_visual && data.points !== undefined) {
         var serverPoints = parseFloat(data.points) || 0;
         points = Math.max(points, serverPoints);
     }
 
-    // points_por_seg base = aportacion de las RUNAS del jugador. las
-    // mejoras additive/multi las aplica recalcularStatsDesdeMejoras en
-    // ui.js, asi que aqui reaplico la formula con la nueva base
+    // points_por_seg viene del server como valor FINAL ya calculado
+    // (runas + mejoras). no lo metas en _runas_points_ps ni vuelvas a
+    // aplicar _mejora_points_add/_mejora_multi_pts, porque duplicaria mejoras.
     if (data.points_por_seg !== undefined && !isNaN(parseFloat(data.points_por_seg))) {
-        var serverRunasPps = parseFloat(data.points_por_seg) || 0;
-    
-        _runas_points_ps = Math.max(parseFloat(_runas_points_ps) || 0, serverRunasPps);
-    
-        var nuevoPps = (_runas_points_ps + _mejora_points_add) * _mejora_multi_pts;
-    
-        points_ps_base = Math.max(points_ps_base || 0, nuevoPps);
-        points_ps = Math.max(points_ps || 0, nuevoPps);
+        var serverPpsFinal = parseFloat(data.points_por_seg) || 0;
+
+        points_ps_base = serverPpsFinal;
+        points_ps = serverPpsFinal;
     
         if (typeof aplicarBoosts === "function") aplicarBoosts();
     }
     
     // Estoy hasta los huevos de hacer copias de seguridad y probando se me olviden lineas de codigo pensando que eran inutiles
     // Si lees esto eres una persona exitosa
-    if (data.local_visual && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
+    if (data.points_por_seg === undefined && data.local_visual && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
     var deltaPpsRunas = data.runas_ganadas.reduce(function (s, r) {
         return s + (parseFloat(r.multiplicador) || 0);
     }, 0);
@@ -554,12 +550,9 @@ function guardarProgreso() {
             if (typeof points_ps !== "undefined" && data.points_por_seg !== undefined) {
                 var serverPps = parseFloat(data.points_por_seg) || 0;
 
-                // no permitir que baje
-                points_ps = Math.max(points_ps, serverPps);
-
-                // sincronizar bases internas
-                points_ps_base = Math.max(points_ps_base || 0, serverPps);
-                _runas_points_ps = Math.max(_runas_points_ps || 0, serverPps);
+                // valor final autoritativo del servidor; no es raw de runas.
+                points_ps = serverPps;
+                points_ps_base = serverPps;
             }
 
             actualizarPantalla();

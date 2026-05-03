@@ -385,6 +385,9 @@ window.RW_TIENDA_VERSION = '8.0';
                 && Array.isArray(data.mejoras_jugador)) {
                 window.recalcularStatsDesdeMejoras(data.mejoras_jugador);
             }
+            if (data.points_por_seg !== undefined && typeof window.setPointsPs === 'function') {
+                window.setPointsPs(data.points_por_seg);
+            }
 
             actualizarGlowNav();
             renderTienda();

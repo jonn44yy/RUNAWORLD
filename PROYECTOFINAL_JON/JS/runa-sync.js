@@ -16,9 +16,11 @@
     var PREFETCH_AT      = 10;
     var CONFIRM_INTERVAL = 30000;
     var HARD_QUEUE_CAP   = 120;
+    var PACK_DEBOUNCE_MS = 150;
 
     var cola = [];
     var solicitandoPack = false;
+    var packDebounceTimer = null;
     var retryPackTimer = null;
     var halted = false;
     var epoch = 0;
@@ -27,6 +29,7 @@
     var consumidasPorPack = {};
     var confirmTimer = null;
     var confirmInFlight = false;
+    var confirmPromise = null;
     var serverErrorCooldownUntil = 0;
 
     function nuevoId() {
@@ -61,7 +64,16 @@
         if (typeof coins === 'undefined') return;
         var base = parseFloat(serverCoins);
         if (isNaN(base)) return;
-        coins = Math.max(0, base + cola.length - waitingClicks);
+        if (cola.length > 0 || waitingClicks > 0 || solicitandoPack) return;
+        coins = Math.min(parseFloat(coins) || 0, Math.max(0, Math.floor(base)));
+        if (typeof actualizarPantalla === 'function') actualizarPantalla();
+    }
+
+    function sincronizarCoinsServidor(serverCoins) {
+        if (typeof coins === 'undefined') return;
+        var base = parseFloat(serverCoins);
+        if (isNaN(base)) return;
+        coins = Math.max(0, Math.floor(base));
         if (typeof actualizarPantalla === 'function') actualizarPantalla();
     }
 
@@ -93,11 +105,13 @@
     }
 
     function cantidadPackSolicitada() {
-        var capacidadServidor = estimarCoinsServidorDisponibles();
-        if (capacidadServidor <= 0) return 0;
+        var pendientesNetos = Math.max(0, waitingClicks - cola.length);
+        if (pendientesNetos <= 0) return 0;
+        var objetivo = Math.max(pendientesNetos, 10);
+        var capacidadVisual = Math.max(0, visualCoinsEnteras() + waitingClicks);
         var espacioCola = Math.max(0, HARD_QUEUE_CAP - cola.length);
         if (espacioCola <= 0) return 0;
-        return Math.max(1, Math.min(PACK_SIZE, capacidadServidor, espacioCola));
+        return Math.max(1, Math.min(PACK_SIZE, objetivo, capacidadVisual, espacioCola));
     }
 
     function debePedirPackPorEspera() {
@@ -105,7 +119,7 @@
     }
 
     function debePrefetch() {
-        return !halted && !solicitandoPack && waitingClicks === 0 && cola.length > 0 && cola.length <= PREFETCH_AT && cantidadPackSolicitada() > 0;
+        return false;
     }
 
     function programarRetryPack(ms) {
@@ -114,6 +128,23 @@
             retryPackTimer = null;
             if (debePedirPackPorEspera() || debePrefetch()) pedirPack();
         }, Math.max(250, ms || 800));
+    }
+
+    function programarPedirPack() {
+        if (halted || solicitandoPack) return;
+        if (waitingClicks >= PACK_SIZE) {
+            if (packDebounceTimer) {
+                clearTimeout(packDebounceTimer);
+                packDebounceTimer = null;
+            }
+            pedirPack();
+            return;
+        }
+        if (packDebounceTimer) return;
+        packDebounceTimer = setTimeout(function () {
+            packDebounceTimer = null;
+            if (debePedirPackPorEspera()) pedirPack();
+        }, PACK_DEBOUNCE_MS);
     }
 
     function reembolsarWaiting(cantidad) {
@@ -126,6 +157,10 @@
     function pedirPack() {
         if (halted || solicitandoPack) return Promise.resolve(null);
         if (Date.now() < serverErrorCooldownUntil) return Promise.resolve(null);
+        if (packDebounceTimer) {
+            clearTimeout(packDebounceTimer);
+            packDebounceTimer = null;
+        }
 
         var cantidadPedida = cantidadPackSolicitada();
         if (cantidadPedida <= 0) {
@@ -193,9 +228,15 @@
 
             var autorizadas = (data.clicks_validos !== undefined) ? (parseInt(data.clicks_validos, 10) || 0) : unidades.length;
             if (autorizadas <= 0 || unidades.length === 0) {
-                if (waitingClicks > 0) reembolsarWaiting(waitingClicks);
+                waitingClicks = 0;
+                if (data.coins !== undefined) sincronizarCoinsServidor(data.coins);
+                serverErrorCooldownUntil = Date.now() + 500;
             } else if (waitingClicks > cola.length) {
                 reembolsarWaiting(waitingClicks - cola.length);
+                if (data.coins !== undefined) {
+                    var maxVisual = Math.max(0, Math.floor((parseFloat(data.coins) || 0) + cola.length - waitingClicks));
+                    if (visualCoinsEnteras() > maxVisual) sincronizarCoinsServidor(maxVisual);
+                }
             }
 
             if (data.clicks_validos !== undefined && data.clicks_validos < cantidadPedida) {
@@ -246,7 +287,7 @@
                     break;
                 }
                 waitingClicks++;
-                if (debePedirPackPorEspera()) pedirPack();
+                if (debePedirPackPorEspera()) programarPedirPack();
             }
         }
 
@@ -260,7 +301,7 @@
             emitirUnidad(unidad);
             marcarConsumida(unidad);
         }
-        if (debePedirPackPorEspera() || debePrefetch()) pedirPack();
+        if (debePedirPackPorEspera()) programarPedirPack();
     }
 
     function emitirUnidad(unidad) {
@@ -279,10 +320,6 @@
             // NO mandamos coins aquí.
             // meta.coins es el valor del servidor al crear el pack,
             // no el valor real después de cada unidad consumida.
-    
-            points: meta.points,
-            coins_por_seg: meta.coins_por_seg,
-            points_por_seg: meta.points_por_seg,
     
             runas_ganadas: unidad.runas_ganadas || [],
             luck_multiplier: meta.luck_multiplier
@@ -313,7 +350,7 @@
         if (halted) return Promise.resolve(null);
         if (confirmInFlight) {
             programarConfirmacion();
-            return Promise.resolve(null);
+            return confirmPromise || Promise.resolve(null);
         }
 
         var packIds = Object.keys(consumidasPorPack);
@@ -323,7 +360,7 @@
         packIds.forEach(function (packId) { snapshot[packId] = consumidasPorPack[packId]; });
         confirmInFlight = true;
 
-        return Promise.all(packIds.map(function (packId) {
+        confirmPromise = Promise.all(packIds.map(function (packId) {
             return fetch(ENDPOINT_CONFIRM, {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -341,6 +378,7 @@
         }))
         .then(function (results) {
             confirmInFlight = false;
+            confirmPromise = null;
             // Si el servidor devuelve inventario confirmado, lo reenviamos al mismo listener
             // que usa tirada.js. Con el fix v112, esta actualización nunca puede bajar
             // cantidades visuales por una respuesta vieja; solo consolida/sube.
@@ -352,6 +390,7 @@
             if (Object.keys(consumidasPorPack).length > 0) programarConfirmacion();
             return results;
         });
+        return confirmPromise;
     }
 
     function confirmarBeacon() {
@@ -381,7 +420,9 @@
         solicitandoPack = false;
         consumidasPorPack = {};
         confirmInFlight = false;
+        confirmPromise = null;
         if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = null; }
+        if (packDebounceTimer) { clearTimeout(packDebounceTimer); packDebounceTimer = null; }
         if (retryPackTimer) { clearTimeout(retryPackTimer); retryPackTimer = null; }
     }
 
