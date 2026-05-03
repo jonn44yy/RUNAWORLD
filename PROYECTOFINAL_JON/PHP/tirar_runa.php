@@ -1,9 +1,11 @@
 <?php
-// 27/04 v3: sistema de cascada por rareza, sin suerte.
-// reemplaza el sistema de pesos+campana por cascada simple:
-// para cada tirada se rolea de la rareza mas rara a la mas comun,
-// la primera que acierta gana. comun es siempre el fallback final.
-// dentro de la misma rareza todas las runas tienen igual probabilidad.
+// 29/04 v4: sistema de cascada por rareza CON suerte controlada.
+// La suerte funciona como multiplicador directo de probabilidad por rareza:
+//   probabilidad efectiva = min(1, suerte / denominador)
+// Ejemplo: con suerte x3, una rareza 1/100 pasa a 3/100.
+// Si suerte >= denominador, esa rareza queda garantizada al llegar a ella
+// y todas las rarezas inferiores dejan de salir por el break del cascade.
+// Orden: eterna -> divina -> mitica -> legendaria -> epica -> rara -> poco_comun -> comun.
 // !hi al que este leyendo esto
 
 session_start();
@@ -21,6 +23,118 @@ define("MAX_CPS_HUMANO",   25);
 define("GRACIA_SEGUNDOS",  3);
 define("MAX_BATCH_CLICKS", 50000);
 define("ELAPSED_CAP",      600);
+
+// ── Config suerte ────────────────────────────────────────────
+// LUCK_MULTIPLIER_BASE es el multiplicador base del servidor.
+//   1.0 = probabilidades normales
+//   3.0 = x3 suerte: 1/100 pasa a 3/100
+//   10.0 = poco_comun queda garantizada si no sale algo superior; comun deja de salir
+//   25.0 = rara queda garantizada si no sale algo superior; poco_comun y comun dejan de salir
+//   100.0 = epica queda garantizada si no sale algo superior; rara hacia abajo desaparecen
+//   1000.0 = legendaria garantizada si no sale algo superior; epica hacia abajo desaparecen
+//   5000.0 = mitica garantizada si no sale algo superior
+//   25000.0 = divina garantizada si no sale eterna
+//   100000.0 = eterna garantizada
+define("LUCK_MULTIPLIER_BASE", 1.0);
+define("LUCK_MULTIPLIER_MAX",  100000.0);
+define("LUCK_HARD_CUT",        true);
+define("CORRUPT_VARIANT_CHANCE", 0.01);
+
+function rngFloat01(): float {
+    return mt_rand() / mt_getrandmax();
+}
+
+function clampFloat(float $value, float $min, float $max): float {
+    return max($min, min($max, $value));
+}
+
+/**
+ * Calcula la suerte final del jugador como multiplicador.
+ *
+ * Ahora mismo tu BD no tiene columna `suerte`, así que el sistema funciona
+ * con LUCK_MULTIPLIER_BASE. Para hacerlo escalable sin tocar este archivo,
+ * puedes crear mejoras con tipo `suerte`, `luck` o `luck_add`.
+ *
+ * Regla para mejoras futuras:
+ *   suerte_final = LUCK_MULTIPLIER_BASE + SUM(mejora.valor * cantidad)
+ *
+ * Ejemplo:
+ *   LUCK_MULTIPLIER_BASE = 1
+ *   mejora tipo `suerte`, valor = 2, cantidad = 1
+ *   suerte_final = 3 => x3 suerte
+ */
+function calcularMultiplicadorSuerte(mysqli $conexion, int $jugador_id): float {
+    if (function_exists('calcularMultiplicadorSuerteJugador')) {
+        return clampFloat((float)calcularMultiplicadorSuerteJugador($conexion, $jugador_id), 1.0, (float) LUCK_MULTIPLIER_MAX);
+    }
+    $luck = (float) LUCK_MULTIPLIER_BASE;
+    $stmt = $conexion->prepare("\n        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS suerte_bonus\n        FROM jugador_mejoras jm\n        INNER JOIN mejoras m ON jm.mejora_id = m.id\n        WHERE jm.jugador_id = ?\n          AND m.activa = 1\n          AND m.tipo IN ('suerte', 'luck', 'luck_add')\n    ");
+    if ($stmt) {
+        $stmt->bind_param("i", $jugador_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $luck += (float)($row["suerte_bonus"] ?? 0);
+    }
+    return clampFloat($luck, 1.0, (float) LUCK_MULTIPLIER_MAX);
+}
+
+/**
+ * Devuelve true si la rareza acierta con la suerte actual.
+ * Fórmula: P(acierto) = min(1, luck / denominador).
+ *
+ * Con esto, x3 suerte significa exactamente x3 sobre la probabilidad
+ * condicional de esa rareza dentro del cascade.
+ */
+function aciertaRarezaConSuerte(int $denom, float $luck): bool {
+    if ($denom <= 1) return true;
+
+    $probabilidad = $luck / $denom;
+
+    if (LUCK_HARD_CUT && $probabilidad >= 1.0) {
+        return true;
+    }
+
+    return rngFloat01() < min(1.0, $probabilidad);
+}
+
+
+
+function aplicarVarianteCorruptaSiToca(array $runa, bool $basicas_completas, array $corruptas_por_rareza): array {
+    if (!$basicas_completas) return $runa;
+    if (rngFloat01() >= CORRUPT_VARIANT_CHANCE) return $runa;
+
+    $rareza = (string)($runa["rareza"] ?? "");
+    if (isset($corruptas_por_rareza[$rareza])) {
+        $corrupta = $corruptas_por_rareza[$rareza];
+        $corrupta["variante"] = "corrupta";
+        $corrupta["variante_label"] = "Corrupta";
+        $corrupta["base_runa_id"] = (int)($runa["id"] ?? 0);
+        if ($rareza === "mitica") {
+            $corrupta["animacion_slug"] = "mitica_corrupta";
+            $corrupta["rareza_animacion"] = "mitica_corrupta";
+        }
+        if ($rareza === "legendaria") {
+            $corrupta["animacion_slug"] = "legendaria_corrupta";
+            $corrupta["rareza_animacion"] = "legendaria_corrupta";
+        }
+        return $corrupta;
+    }
+
+    $runa["variante"] = "corrupta";
+    $runa["variante_label"] = "Corrupta";
+    $runa["multiplicador"] = ((float)($runa["multiplicador"] ?? 1)) * 100;
+    if ($rareza === "mitica") {
+        $runa["animacion_slug"] = "mitica_corrupta";
+        $runa["rareza_animacion"] = "mitica_corrupta";
+    }
+    if ($rareza === "legendaria") {
+        $runa["animacion_slug"] = "legendaria_corrupta";
+        $runa["rareza_animacion"] = "legendaria_corrupta";
+    }
+    $runa["nombre"] = ($runa["nombre"] ?? "Runa") . " Corrupta";
+    return $runa;
+}
 
 // ── Payload del cliente ──────────────────────────────────────
 $datos       = json_decode(file_get_contents("php://input"), true);
@@ -52,7 +166,7 @@ if (in_array($batch_id, $_SESSION["batches_procesados"], true)) {
 $conexion->begin_transaction();
 
 try {
-    // ── Lock del jugador (sin la columna suerte que ya no existe) ──
+    // ── Lock del jugador ───────────────────────────────────────
     $stmt = $conexion->prepare("
         SELECT id, coins, points, coins_por_seg, points_por_seg,
                UNIX_TIMESTAMP(ultima_actualizacion) AS ult_ts
@@ -68,8 +182,11 @@ try {
         echo json_encode(["ok" => false, "error" => "Jugador no encontrado"]); exit;
     }
 
-    $jugador_id     = (int)   $jugador["id"];
-    $coins          = floatval($jugador["coins"]);
+    $jugador_id      = (int)   $jugador["id"];
+    $luck_multiplier = calcularMultiplicadorSuerte($conexion, $jugador_id);
+    $luck_detalle = function_exists('calcularSuerteJugadorDetalle') ? calcularSuerteJugadorDetalle($conexion, $jugador_id) : ["total"=>$luck_multiplier,"tienda"=>$luck_multiplier,"colecciones"=>1,"colecciones_completadas"=>0,"bonus_por_coleccion"=>1.5];
+    $basicas_completas = function_exists('coleccionBasicaCompletaJugador') ? coleccionBasicaCompletaJugador($conexion, $jugador_id) : false;
+    $coins           = floatval($jugador["coins"]);
     $points         = floatval($jugador["points"]);
     $coins_por_seg  = floatval($jugador["coins_por_seg"]);
     $points_por_seg = floatval($jugador["points_por_seg"]);
@@ -117,23 +234,28 @@ try {
             "motivo_corte"   => $clicks_max_coins <= 0 ? "sin_coins" : "fuera_de_tiempo",
             "coins"          => $coins_reales,
             "points"         => $points_reales,
-            "points_por_seg" => $points_por_seg
+            "points_por_seg" => $points_por_seg,
+            "luck_multiplier"   => $luck_multiplier,
+        "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
+        "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
+        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0)
         ]);
         exit;
     }
 
-    // ── Bulk desde BD ─────────────────────────────────────────
+    // Bulk real: sin mejora = 1 runa/click; nivel 1 = 2; nivel 2 = 3.
     $stmt = $conexion->prepare("
-        SELECT COALESCE(SUM(m.valor * jm.cantidad), 0) as total_bulk
+        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS bulk_add
         FROM jugador_mejoras jm
-        INNER JOIN mejoras m ON jm.mejora_id = m.id
-        WHERE jm.jugador_id = ? AND m.tipo = 'bulk' AND m.activa = 1
+        INNER JOIN mejoras m ON m.id = jm.mejora_id
+        WHERE jm.jugador_id = ? AND m.activa = 1
+          AND m.tipo IN ('bulk','bulk_normal')
     ");
     $stmt->bind_param("i", $jugador_id);
     $stmt->execute();
-    $bulk_row      = $stmt->get_result()->fetch_assoc();
+    $bulk_row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    $cantidad_bulk = 1 + (int)($bulk_row["total_bulk"] ?? 0);
+    $cantidad_bulk = max(1, 1 + (int)($bulk_row["bulk_add"] ?? 0));
 
     $total_sorteos = $clicks_validos * $cantidad_bulk;
 
@@ -172,10 +294,30 @@ try {
     }
 
     // ── Cargar runas activas y agruparlas por rareza ──────────
-    $stmt = $conexion->prepare("SELECT id, nombre, rareza, multiplicador FROM runas WHERE activa = 1");
+    $stmt = $conexion->prepare("SELECT id, nombre, rareza, multiplicador FROM runas
+        WHERE activa = 1
+          AND LOWER(nombre) NOT LIKE '%corrupt%'
+          AND LOWER(nombre) NOT LIKE '%caos%' ");
     $stmt->execute();
     $runas_all = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
+
+
+    $stmt = $conexion->prepare("
+        SELECT id, nombre, rareza, multiplicador
+        FROM runas
+        WHERE activa = 1
+          AND LOWER(nombre) LIKE '%corrupt%'
+          AND LOWER(nombre) NOT LIKE '%caos%'
+    ");
+    $stmt->execute();
+    $runas_corruptas_all = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $corruptas_por_rareza = [];
+    foreach ($runas_corruptas_all as $cr) {
+        $corruptas_por_rareza[$cr["rareza"]] = $cr;
+    }
 
     if (empty($runas_all)) {
         $conexion->rollback();
@@ -206,20 +348,24 @@ try {
             }
         }
 
-        // cascada normal: rareza mas rara primero, primera que acierte gana
+        // cascada normal con suerte:
+        // rareza mas rara primero, primera que acierte gana.
+        // La suerte multiplica la probabilidad condicional de cada rareza:
+        //   denom 100 con suerte x3 => 3/100
+        // Si luck >= denom, esa rareza queda garantizada al llegar a ella
+        // y las inferiores desaparecen porque hacemos break.
         if ($rareza_elegida === null) {
             foreach ($rarezas_cascade as $rar) {
                 $denom = (int)$rar["denominador"];
                 if ($denom <= 0) continue;
 
-                // probabilidad 1/denom de acertar esta rareza
-                if (mt_rand(1, $denom) === 1) {
+                if (aciertaRarezaConSuerte($denom, $luck_multiplier)) {
                     $rareza_elegida = $rar["slug"];
                     break;
                 }
             }
 
-            // si nada acerto -> fallback (comun)
+            // si nada acerto -> fallback (normalmente comun)
             if ($rareza_elegida === null) {
                 $rareza_elegida = $rareza_fallback;
             }
@@ -232,9 +378,10 @@ try {
         }
 
         if ($runa_elegida) {
-            $rid = (int) $runa_elegida["id"];
+            $runa_final = aplicarVarianteCorruptaSiToca($runa_elegida, $basicas_completas, $corruptas_por_rareza);
+            $rid = (int) $runa_final["id"];
             $contador_runas[$rid] = ($contador_runas[$rid] ?? 0) + 1;
-            $runas_ganadas[] = $runa_elegida;
+            $runas_ganadas[] = $runa_final;
             if (isset($counters_rar[$runa_elegida["rareza"]])) {
                 $counters_rar[$runa_elegida["rareza"]]++;
             }
@@ -270,17 +417,19 @@ try {
     // 28/04 v3.1: usar helper compartido para calcular stats reales
     // (runas + mejoras). antes esto solo miraba runas y dejaba mejoras
     // fuera de la cuenta, lo que causaba inconsistencias entre tirar y comprar
-    list($coins_ps_real, $points_por_seg_new) = calcularStatsJugador($conexion, $jugador_id);
+    list($coins_ps_real, $points_por_seg_new, $coins_ps_max_real, $points_ps_max_real) = calcularStatsJugadorConConfig($conexion, $jugador_id);
 
     // persistir estado del jugador
     $stmt = $conexion->prepare("
         UPDATE jugadores
         SET coins = ?, points = ?,
             coins_por_seg = ?, points_por_seg = ?,
+            coins_ps_max = GREATEST(coins_ps_max, ?),
+            points_ps_max = GREATEST(points_ps_max, ?),
             ultima_actualizacion = NOW()
         WHERE id = ?
     ");
-    $stmt->bind_param("ddddi", $coins_final, $points_final, $coins_ps_real, $points_por_seg_new, $jugador_id);
+    $stmt->bind_param("ddddddi", $coins_final, $points_final, $coins_ps_real, $points_por_seg_new, $coins_ps_max_real, $points_ps_max_real, $jugador_id);
     $stmt->execute();
     $stmt->close();
 
@@ -339,7 +488,11 @@ try {
         "coins_por_seg"     => $coins_por_seg,
         "points_por_seg"    => $points_por_seg_new,
         "runas"             => $mis_runas,
-        "motivo"            => $motivo
+        "motivo"            => $motivo,
+        "luck_multiplier"   => $luck_multiplier,
+        "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
+        "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
+        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0)
     ]);
 
 } catch (Exception $e) {

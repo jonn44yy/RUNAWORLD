@@ -53,6 +53,7 @@
 // del body). uso _i como alias para no repetir window.RW_INIT en cada linea.
 // si RW_INIT no existe (no deberia pasar nunca en prod), defaults a {} y
 // todos los parseFloat devuelven NaN --> los defaults posteriores entran
+window.RW_UI_VERSION = '8.0';
 const _i = window.RW_INIT || {};
 let coins         = parseFloat(_i.coins)        || 0;
 let points        = parseFloat(_i.points)       || 0;
@@ -61,6 +62,77 @@ let points_ps     = parseFloat(_i.points_ps)    || 0;
 let coins_ps_max  = parseFloat(_i.coins_ps_max) || coins_ps;
 let points_ps_max = parseFloat(_i.points_ps_max)|| points_ps;
 let bulk_runas    = parseInt(_i.bulk_total)     || 1;
+
+// suerte total = suerte de tienda x bonus de colección.
+// tienda: 1.0 -> 1.5 por los 5 niveles de +0.1x
+// colección básica completa: x1.5 adicional, por eso 1.5 pasa a 2.25
+const RW_COLLECTION_LUCK_BONUS = 1.5;
+const _luckInitTotal = parseFloat(_i.luck_multiplier) || 1.0;
+let completed_collections = parseInt(_i.completed_collections) || 0;
+let luck_collection_multiplier = Math.max(1.0, parseFloat(_i.luck_collection_multiplier) || 1.0);
+
+// compatibilidad: si el PHP todavía no manda luck_collection_multiplier pero
+// sí marca basic_collection_complete, activamos el bonus en cliente al cargar.
+if (completed_collections > 0 || _i.basic_collection_complete === true || _i.basic_collection_complete === 1 || _i.basic_collection_complete === '1') {
+    completed_collections = Math.max(1, completed_collections);
+    luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
+}
+
+// compatibilidad: si solo llega luck_multiplier=2.25, inferimos tienda=1.5
+// y colección=1.5 para que cualquier recalculo posterior no lo baje a 1.5.
+if (luck_collection_multiplier <= 1.0 && _luckInitTotal > 1.5) {
+    completed_collections = Math.max(1, completed_collections);
+    luck_collection_multiplier = RW_COLLECTION_LUCK_BONUS;
+}
+
+let luck_shop_multiplier = Math.max(1.0, Math.min(1.5,
+    parseFloat(_i.luck_shop_multiplier) || (_luckInitTotal / luck_collection_multiplier) || 1.0
+));
+let luck_multiplier = Math.max(1.0, luck_shop_multiplier * luck_collection_multiplier, _luckInitTotal);
+
+function recalcularLuckTotal() {
+    luck_shop_multiplier = Math.max(1.0, Math.min(1.5, parseFloat(luck_shop_multiplier) || 1.0));
+    luck_collection_multiplier = Math.max(1.0, parseFloat(luck_collection_multiplier) || 1.0);
+    luck_multiplier = Math.max(1.0, luck_shop_multiplier * luck_collection_multiplier);
+    window.luck_shop_multiplier = luck_shop_multiplier;
+    window.luck_collection_multiplier = luck_collection_multiplier;
+    window.completed_collections = completed_collections;
+    window.luck_multiplier = luck_multiplier;
+    return luck_multiplier;
+}
+recalcularLuckTotal();
+
+// detecta la colección básica completa usando los botones ya pintados.
+// esto arregla el caso donde la última runa llega por tirada y el PHP/pack
+// todavía no ha devuelto el nuevo multiplicador.
+function RW_recalcularSuerteColecciones(forzarCompleta) {
+    var completa = !!forzarCompleta;
+
+    if (!completa) {
+        var btns = Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection="basicas"]'));
+        if (btns.length > 0) {
+            completa = btns.every(function (el) {
+                var cant = parseInt(el.dataset.cantidad || '0', 10) || 0;
+                return cant > 0 || el.classList.contains('desbloqueada') || !el.classList.contains('bloqueada');
+            });
+        }
+    }
+
+    if (completa) {
+        completed_collections = Math.max(1, parseInt(completed_collections, 10) || 0);
+        luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
+    }
+
+    recalcularLuckTotal();
+    actualizarPantalla();
+    refrescarProbsAbiertas();
+    if (typeof refrescarEstadisticas === 'function') refrescarEstadisticas();
+    return luck_multiplier;
+}
+window.RW_recalcularSuerteColecciones = RW_recalcularSuerteColecciones;
+window.RW_marcarColeccionBasicaCompleta = function () {
+    return RW_recalcularSuerteColecciones(true);
+};
 
 // 27/04 v3: variables suerte y display_mode eliminadas (sistema retirado)
 
@@ -73,7 +145,13 @@ if (isNaN(coins_ps))  coins_ps  = 1;
 if (isNaN(points_ps)) points_ps = 0;
 
 const probMap         = _i.probMap      || {};
-const BOOST_TIPOS     = _i.boost_tipos  || [];
+const BOOST_TIPOS     = (_i.boost_tipos || []).filter(function (bt) {
+    var rareza = String(bt.rareza || "").toLowerCase();
+    var desbloqueadas = Array.isArray(_i.mejoras_desbloqueadas) ? _i.mejoras_desbloqueadas.map(Number) : [];
+    if (rareza === "legendario") return desbloqueadas.indexOf(14) !== -1;
+    if (rareza === "divino") return desbloqueadas.indexOf(15) !== -1;
+    return true;
+});
 const BOOST_INTERVALO = _i.boost_intervalo || 30000;
 let boostsActivos     = [];
 // coins_ps_base y points_ps_base: valor sin boosts. se rellenan cuando se
@@ -154,7 +232,7 @@ function recalcularStatsDesdeMejoras(mejoras) {
             // multiplicadores x2 por nivel (eterno y normal mismo comportamiento)
             case "coins_seg_multi":
             case "coins_seg_multi_eterno":
-                multi_coins *= Math.pow(2, n);
+                multi_coins *= Math.pow(Math.max(1, v), n);
                 break;
 
             // points lineal: cada nivel suma `valor` puntos/seg
@@ -166,16 +244,12 @@ function recalcularStatsDesdeMejoras(mejoras) {
 
             case "points_seg_multi":
             case "points_seg_multi_eterno":
-                multi_points *= Math.pow(2, n);
+                multi_points *= Math.pow(Math.max(1, v), n);
                 break;
-
-            // bulk: cada nivel suma 1 a runas/tirada (Tirada Multiple, Mano Diestra)
             case "bulk":
             case "bulk_normal":
-                bulk_add += n;
+                bulk_add += Math.round(v * n);
                 break;
-
-            // bulk de un solo nivel que da +5 (Cofre del Fragante)
             case "bulk_extra":
                 if (n >= 1) bulk_add += Math.round(v);
                 break;
@@ -197,12 +271,13 @@ function recalcularStatsDesdeMejoras(mejoras) {
     // y se guarda en points_ps_base). encima sumo el additive y multiplico
     // por el multi combinado. si points_ps_base es null es que el jugador
     // aun no tiene runas que den puntos, dejo points_ps como estaba
-    if (points_ps_base !== null) {
-        const nuevaPointsPs = (points_ps_base + points_add) * multi_points;
-        points_ps = nuevaPointsPs;
-    }
+    _mejora_points_add = points_add;
+    _mejora_multi_pts  = multi_points;
+    const runasBaseLimpia = parseFloat(_runas_points_ps) || 0;
+    const nuevaPointsPs   = (runasBaseLimpia + points_add) * multi_points;
+    points_ps_base = nuevaPointsPs;
+    points_ps      = nuevaPointsPs;
 
-    // bulk: runas por tirada. base 1, cada mejora suma niveles
     bulk_runas = 1 + bulk_add;
     const bulkEl = document.getElementById("bulk-display");
     if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
@@ -223,7 +298,15 @@ function actualizarPantalla() {
     document.getElementById("points-display").textContent    = formatNum(points);
     document.getElementById("coins-ps-display").textContent  = "+" + formatNum(coins_ps)   + "/seg";
     document.getElementById("points-ps-display").textContent = "+" + formatNum(points_ps)  + "/seg";
-    // 27/04 v3: bloque de suerte-display eliminado, ya no existe en el HTML
+
+    // algunos HTML antiguos usan luck-display y otros suerte-display.
+    // actualizo ambos para que desktop/móvil no se queden desincronizados.
+    var luckTxt = "x" + (parseFloat(luck_multiplier) || 1).toFixed(2);
+    var luckEl = document.getElementById("luck-display");
+    if (luckEl) luckEl.textContent = luckTxt;
+    var suerteEl = document.getElementById("suerte-display");
+    if (suerteEl) suerteEl.textContent = luckTxt;
+
     var bulkEl = document.getElementById("bulk-display");
     if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
 }
@@ -289,9 +372,11 @@ function toggleRunaProb(card) {
     });
 
     if (!abierto) {
-        // 27/04 v3: ahora solo hay un valor de prob (data-prob), no base ni suerte
         const p = parseFloat(card.dataset.prob || 0);
-        card.querySelector(".prob-base-val").textContent = formatProb(p);
+        const baseEl = card.querySelector(".prob-base-val");
+        const luckEl = card.querySelector(".prob-luck-val");
+        if (baseEl) baseEl.textContent = formatProb(p);
+        if (luckEl) luckEl.textContent = formatProb(Math.min(100, p * (parseFloat(luck_multiplier) || 1)));
 
         card.classList.add("expandida");
         prob.style.maxHeight = prob.scrollHeight + "px";
@@ -305,7 +390,10 @@ function toggleRunaProb(card) {
 function refrescarProbsAbiertas() {
     document.querySelectorAll(".runa-card-btn.expandida").forEach(card => {
         const p = parseFloat(card.dataset.prob || 0);
-        card.querySelector(".prob-base-val").textContent = formatProb(p);
+        const baseEl = card.querySelector(".prob-base-val");
+        const luckEl = card.querySelector(".prob-luck-val");
+        if (baseEl) baseEl.textContent = formatProb(p);
+        if (luckEl) luckEl.textContent = formatProb(Math.min(100, p * (parseFloat(luck_multiplier) || 1)));
     });
 }
 
@@ -328,6 +416,15 @@ function getProbBaseStr(runaId) {
     return getProbStr(runaId);
 }
 
+// Probabilidad real con la suerte total actual.
+// probMap[runaId].prob viene en porcentaje; luck_multiplier ya incluye tienda × colecciones.
+function getProbLuckStr(runaId) {
+    const p = probMap[runaId];
+    if (!p) return "—";
+    const luck = Math.max(1, parseFloat(luck_multiplier) || 1);
+    return formatProb(Math.min(100, (parseFloat(p.prob) || 0) * luck));
+}
+
 
 // cambiar de seccion desde el menu. oculta todas, muestra la pedida y marca
 // el boton activo. ademas gestiona varias cosas colaterales por seccion:
@@ -338,6 +435,8 @@ function getProbBaseStr(runaId) {
 //     mientras el jugador trastea con ajustes)
 //   - en movil --> scroll del centro al top para que no quede a medio camino
 function mostrarSeccion(id, btn) {
+    document.body.classList.remove("rw-sec-tirada", "rw-sec-tienda", "rw-sec-coleccion", "rw-sec-estadisticas", "rw-sec-ajustes");
+    document.body.classList.add("rw-sec-" + id);
     document.querySelectorAll(".seccion").forEach(s => s.classList.remove("activa"));
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
     document.getElementById("seccion-" + id).classList.add("activa");
@@ -417,9 +516,38 @@ window.addEventListener("load", () => {
     if (typeof mostrarCardEn === "function") {
         window._mostrarCardEn_original = mostrarCardEn;
         window.mostrarCardEn = function(elementId, runa) {
-            // no hacer nada: decision de producto, no bug
         };
     }
+
+    setTimeout(() => {
+        const todas = document.querySelectorAll('.runa-card-btn');
+
+        let hayCorruptaVisible = false;
+
+        todas.forEach(card => {
+            const cantidad = parseInt(card.dataset.cantidad || "0");
+
+            const esCorrupta =
+                card.textContent.toLowerCase().includes("corrupta");
+
+            if (esCorrupta && cantidad <= 0) {
+                card.style.display = "none";
+            }
+
+            if (esCorrupta && cantidad > 0) {
+                hayCorruptaVisible = true;
+            }
+        });
+
+        const titulos = document.querySelectorAll('.grupo-nombre');
+
+        titulos.forEach(titulo => {
+            if (titulo.textContent.toLowerCase().includes("corruptas")) {
+                titulo.style.display = hayCorruptaVisible ? "" : "none";
+            }
+        });
+
+    }, 100);
 });
 
 
@@ -441,6 +569,57 @@ window.addEventListener("load", () => {
 // hacia que tras comprar una mejora el sidebar siguiera mostrando el saldo
 // viejo). estos setters tocan tanto la variable de scope (coins, points)
 // como window por compatibilidad con codigo viejo
+function setLuck(v) {
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+        // si la colección ya está marcada como completa, no permitimos que
+        // una respuesta vieja del pack baje la suerte de 2.25 a 1.50.
+        luck_multiplier = Math.max(1.0, n, luck_shop_multiplier * luck_collection_multiplier);
+        window.luck_multiplier = luck_multiplier;
+        actualizarPantalla();
+        refrescarProbsAbiertas();
+    }
+}
+function setLuckDetalle(detalle) {
+    if (!detalle || typeof detalle !== "object") return;
+    if (detalle.tienda !== undefined) {
+        luck_shop_multiplier = Math.max(1.0, Math.min(1.5, parseFloat(detalle.tienda) || luck_shop_multiplier));
+    }
+    if (detalle.colecciones !== undefined) {
+        luck_collection_multiplier = Math.max(1.0, parseFloat(detalle.colecciones) || luck_collection_multiplier);
+    }
+    if (detalle.colecciones_completadas !== undefined) {
+        completed_collections = parseInt(detalle.colecciones_completadas) || completed_collections;
+        if (completed_collections > 0) luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
+    }
+    if (detalle.basic_collection_complete === true || detalle.basic_collection_complete === 1 || detalle.basic_collection_complete === '1') {
+        completed_collections = Math.max(1, completed_collections);
+        luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
+    }
+
+    const total = (detalle.total !== undefined) ? parseFloat(detalle.total) : recalcularLuckTotal();
+    if (!isNaN(total)) setLuck(total);
+}
+
+function setPointsPs(v) {
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+        points_ps_base = n;
+        points_ps      = n;
+        window.points_ps = n;
+        actualizarPantalla();
+    }
+}
+function setCoinsPs(v) {
+    const n = parseFloat(v);
+    if (!isNaN(n)) {
+        coins_ps_base = n;
+        coins_ps      = n;
+        window.coins_ps = n;
+        actualizarPantalla();
+    }
+}
+
 function setCoins(v) {
     const n = parseFloat(v);
     if (!isNaN(n)) {
@@ -457,6 +636,10 @@ function setPoints(v) {
         actualizarPantalla();
     }
 }
-window.setCoins  = setCoins;
-window.setPoints = setPoints;
+window.setCoins    = setCoins;
+window.setPoints   = setPoints;
+window.setLuck     = setLuck;
+window.setLuckDetalle = setLuckDetalle;
+window.setPointsPs = setPointsPs;
+window.setCoinsPs  = setCoinsPs;
 window.recalcularStatsDesdeMejoras = recalcularStatsDesdeMejoras;

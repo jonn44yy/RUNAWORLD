@@ -8,7 +8,7 @@
 // redimensiona se puede volver al desktop sin rehacer nada
 //
 // indice:
-//   1. early return si estamos en desktop (>768px), no pinta absolutamente nada
+//   1. early return si estamos en desktop (>1024px), no pinta absolutamente nada
 //   2. inyeccion del html movil (topbar + drawers + botones flotantes + stats bar)
 //   3. clonado del panel de runas desktop al drawer movil
 //   4. syncStats() — sync cada 800ms de stats numericas y cantidades de runas
@@ -38,10 +38,12 @@
 // IIFE: envuelvo todo el archivo en una funcion auto-invocada para no
 // ensuciar el scope global con variables como tx0, syncStats, etc. lo unico
 // que exporto al window es cerrarDrawers (ver mas abajo)
+window.RW_MOBILE_VERSION = '8.0';
+
 (function () {
-    // si el viewport es mayor de 768px es desktop, no inyecto nada. esto hace
+    // si el viewport es mayor de 1024px es desktop, no inyecto nada. esto hace
     // que este archivo sea practicamente free en desktop: carga y se va
-    if (window.innerWidth > 768) return;
+    if (window.innerWidth > 1024) return;
 
     // saco el nombre del usuario del header del desktop para ponerlo en la
     // topbar movil. si no existe dejo string vacio (no fallo)
@@ -53,8 +55,23 @@
     document.body.insertAdjacentHTML('beforeend', `
         <div id="mobile-overlay"></div>
         <div id="mobile-topbar">
-            <span class="topbar-title">RunaWorld</span>
-            <span class="topbar-user">Bienvenido, <strong>${username}</strong></span>
+            <button id="btn-menu-nav" class="mobile-topbar-btn" aria-label="Menú" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="1.7" stroke-linecap="round">
+                    <path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>
+                </svg>
+            </button>
+            <div class="topbar-main">
+                <span class="topbar-title">RunaWorld</span>
+                <span class="topbar-user">Bienvenido, <strong>${username}</strong></span>
+            </div>
+            <button id="btn-menu-runas" class="mobile-topbar-btn mobile-topbar-btn-runas" aria-label="Estadísticas de runa" type="button">
+                <svg viewBox="0 0 400 400" fill="none" stroke="#c080ff" stroke-width="18" stroke-linecap="round">
+                    <circle cx="200" cy="200" r="150"/><circle cx="200" cy="200" r="48"/>
+                    <line x1="200" y1="55" x2="200" y2="18"/><line x1="200" y1="345" x2="200" y2="382"/>
+                    <line x1="55" y1="200" x2="18" y2="200"/><line x1="345" y1="200" x2="382" y2="200"/>
+                    <circle cx="200" cy="200" r="16" fill="#c080ff" stroke="none"/>
+                </svg>
+            </button>
         </div>
         <div id="mobile-nav-drawer">
             <div class="drawer-titulo">Menú</div>
@@ -68,26 +85,9 @@
             <button class="mob-nav danger" onclick="window.location='PHP/logout.php'"><span>→</span> Cerrar Sesión</button>
         </div>
         <div id="mobile-runas-drawer">
-            <div class="drawer-titulo">Mis Runas <span id="m-runas-cnt" style="color:rgba(160,80,255,0.7);"></span></div>
+            <div class="drawer-titulo">Runas y estadísticas</div>
             <div id="mobile-runas-scroll"></div>
         </div>
-        <button id="btn-menu-nav" aria-label="Menú">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-        </button>
-        <button id="btn-menu-runas" aria-label="Mis Runas">
-            <svg viewBox="0 0 400 400" fill="none" stroke="#c080ff" stroke-width="14" stroke-linecap="round">
-                <circle cx="200" cy="200" r="170"/><circle cx="200" cy="200" r="65"/>
-                <line x1="200" y1="125" x2="200" y2="30"/><line x1="200" y1="275" x2="200" y2="370"/>
-                <line x1="275" y1="200" x2="370" y2="200"/><line x1="125" y1="200" x2="30" y2="200"/>
-                <line x1="245" y1="155" x2="305" y2="95"/><line x1="155" y1="155" x2="95" y2="95"/>
-                <line x1="245" y1="245" x2="305" y2="305"/><line x1="155" y1="245" x2="95" y2="305"/>
-                <line x1="200" y1="135" x2="200" y2="265"/><line x1="135" y1="200" x2="265" y2="200"/>
-                <circle cx="200" cy="200" r="18" fill="#c080ff" stroke="none" opacity="0.9"/>
-            </svg>
-        </button>
         <div id="mobile-stats-bar">
             <div class="mob-stat">
                 <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="17" stroke="#ffd700" stroke-width="1.5" opacity="0.5"/><text x="20" y="25" text-anchor="middle" fill="#ffd700" font-size="11" font-family="Oswald">C</text></svg>
@@ -115,19 +115,45 @@
         </div>
     `);
 
-    // clonar el panel de "mis runas" del desktop al drawer movil. ojo: CLONAR,
-    // no mover. si lo moviera, al agrandar la ventana y volver a desktop, el
-    // panel seguiria metido en el drawer movil (ya oculto) y el sidebar
-    // desktop se quedaria vacio. el clon lleva un id distinto para no chocar
-    // con el original
-    const panelRunas = document.getElementById('panel-mis-runas');
+    // clonar al drawer móvil tanto las estadísticas de la runa seleccionada
+    // como la lista completa de Mis Runas. Así el móvil mantiene la misma
+    // separación que PC: Runas Básicas / Runas Corruptas.
+    const panelStatsColeccion = document.getElementById('panel-col-stats');
+    const panelMisRunas = document.getElementById('panel-mis-runas');
     const scroll = document.getElementById('mobile-runas-scroll');
-    if (panelRunas && scroll) {
-        const clone = panelRunas.cloneNode(true);
-        clone.id = 'panel-mis-runas-mobile';
-        clone.style.display = 'block';
-        scroll.appendChild(clone);
+    if (scroll) {
+        if (panelStatsColeccion) {
+            const cloneStats = panelStatsColeccion.cloneNode(true);
+            cloneStats.id = 'panel-col-stats-mobile';
+            cloneStats.style.display = 'block';
+            scroll.appendChild(cloneStats);
+        }
+        if (panelMisRunas) {
+            const cloneRunas = panelMisRunas.cloneNode(true);
+            cloneRunas.id = 'panel-mis-runas-mobile';
+            cloneRunas.style.display = 'block';
+            cloneRunas.querySelectorAll('[id]').forEach(function(el){ el.removeAttribute('id'); });
+            scroll.appendChild(cloneRunas);
+        }
     }
+
+    window.rwSyncMobileCollectionStats = function () {
+        const origStats = document.getElementById("panel-col-stats");
+        const mobStats  = document.getElementById("panel-col-stats-mobile");
+        const mobRunas  = document.getElementById("panel-mis-runas-mobile");
+        const enColeccion = !!document.querySelector("#seccion-coleccion.activa");
+
+        // En Colección, el botón morado enseña SOLO las estadísticas
+        // de la runa seleccionada. El inventario móvil queda para
+        // Tirar Runa, Ajustes y Estadísticas.
+        if (mobRunas) mobRunas.style.display = enColeccion ? "none" : "block";
+
+        if (!origStats || !mobStats) return;
+        mobStats.style.display = enColeccion ? "block" : "none";
+        if (!enColeccion) return;
+
+        mobStats.innerHTML = origStats.innerHTML;
+    };
 
     // sync de stats: leo los valores del dom desktop (coins-display,
     // points-display, etc) y los copio al dom movil. polling cada 800ms.
@@ -136,53 +162,18 @@
     function syncStats() {
         const g = id => document.getElementById(id)?.textContent || '';
         document.getElementById('ms-coins').textContent     = g('coins-display');
-        document.getElementById('ms-coins-ps').textContent  = g('coins-ps-display');
-        document.getElementById('ms-points').textContent    = g('points-display');
+        const suerteTxt = g("luck-display") || g("suerte-display") || (
+            typeof window.luck_multiplier !== "undefined"
+                ? "x" + (parseFloat(window.luck_multiplier) || 1).toFixed(2)
+                : "x1.00"
+        );
+        const bulkTxt = g("bulk-display") || (typeof window.bulk_runas !== "undefined" ? String(window.bulk_runas) : "1");
+        document.getElementById("ms-suerte").textContent = suerteTxt;
+        document.getElementById("ms-bulk").textContent   = bulkTxt;
         document.getElementById('ms-points-ps').textContent = g('points-ps-display');
-        document.getElementById('ms-suerte').textContent    = g('suerte-display');
-        document.getElementById('ms-bulk').textContent      = g('bulk-display');
 
-        // contador de "mis runas" (X/Y desbloqueadas)
-        const cnt = document.getElementById('panel-runas-count');
-        const m   = document.getElementById('m-runas-cnt');
-        if (cnt && m) m.textContent = cnt.textContent;
-
-        // sync de las runas desde el panel original al clonado. AHORA incluye
-        // estado de desbloqueo, no solo la cantidad. antes solo copiaba el
-        // textContent de .runa-card-cantidad, asi que si una runa se desbloqueaba
-        // durante la partida el clon seguia mostrando el candado
-        const orig = document.getElementById('panel-mis-runas');
-        const mob  = document.getElementById('panel-mis-runas-mobile');
-        if (orig && mob) {
-            orig.querySelectorAll('[data-id]').forEach(el => {
-                const id = el.dataset.id;
-                const mobEl = mob.querySelector(`[data-id="${id}"]`);
-                if (!mobEl) return;
-
-                // sync de cantidad (texto)
-                const cantOrig = el.querySelector('.runa-card-cantidad');
-                const cantMob  = mobEl.querySelector('.runa-card-cantidad');
-                if (cantOrig && cantMob) {
-                    cantMob.textContent = cantOrig.textContent;
-                }
-
-                // sync de desbloqueo: si en desktop ya no esta bloqueada
-                // pero en movil si, copio el estado completo del lado derecho
-                // (cantidad + flecha) y quito la clase de bloqueada
-                if (!el.classList.contains('runa-bloqueada') && mobEl.classList.contains('runa-bloqueada')) {
-                    mobEl.classList.remove('runa-bloqueada');
-                    const rightOrig = el.querySelector('.runa-card-right');
-                    const rightMob  = mobEl.querySelector('.runa-card-right');
-                    if (rightOrig && rightMob) {
-                        rightMob.innerHTML = rightOrig.innerHTML;
-                    }
-                }
-
-                // sync del data-cantidad por si algun otro script lo lee
-                if (el.dataset.cantidad !== undefined) {
-                    mobEl.dataset.cantidad = el.dataset.cantidad;
-                }
-            });
+        if (typeof window.rwSyncMobileCollectionStats === 'function') {
+            window.rwSyncMobileCollectionStats();
         }
     }
     // polling estable cada 800ms + un sync extra a los 300ms para cubrir el

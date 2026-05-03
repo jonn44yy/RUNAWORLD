@@ -150,6 +150,15 @@ try {
     $coins_reales = $coins_bd  + ($coins_por_seg  * $elapsed);
     $points_reales= $points_bd + ($points_por_seg * $elapsed);
 
+    // v6.3: los boosts de puntos son client-side. Para que el jugador pueda
+    // gastar puntos obtenidos durante un boost sin que la compra los borre,
+    // aceptamos el saldo visible enviado por tienda.js si es mayor que el
+    // saldo autoritativo calculado y es un numero finito razonable.
+    $points_cliente = isset($datos["points_cliente"]) ? floatval($datos["points_cliente"]) : null;
+    if ($points_cliente !== null && is_finite($points_cliente) && $points_cliente >= $points_reales && $points_cliente < 1.0e30) {
+        $points_reales = $points_cliente;
+    }
+
     // ── Mejora ──────────────────────────────────────────────────
     $stmt = $conexion->prepare("
         SELECT id, nombre, tipo, valor, coste_base, coste_escala, nivel_maximo,
@@ -175,6 +184,34 @@ try {
         ]); exit;
     }
 
+    // v6.1 balance: mejoras eternas exclusivas.
+    // Solo se puede elegir UNA entre Tirada Múltiple, Reactor de Coins y Reactor de Puntos.
+    $mejoras_eternas_exclusivas = [2, 3, 4];
+    if (in_array($mejora_id, $mejoras_eternas_exclusivas, true)) {
+        $stmt = $conexion->prepare("
+            SELECT m.nombre
+            FROM jugador_mejoras jm
+            INNER JOIN mejoras m ON m.id = jm.mejora_id
+            WHERE jm.jugador_id = ?
+              AND jm.nivel >= 1
+              AND jm.mejora_id IN (2,3,4)
+              AND jm.mejora_id <> ?
+            LIMIT 1
+        ");
+        $stmt->bind_param("ii", $jugador_id, $mejora_id);
+        $stmt->execute();
+        $eterna_ya = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($eterna_ya) {
+            $conexion->rollback();
+            echo json_encode([
+                "ok" => false,
+                "error" => "Solo puedes elegir una mejora eterna. Ya elegiste: " . $eterna_ya["nombre"]
+            ]);
+            exit;
+        }
+    }
+
     // ── Nivel actual ───────────────────────────────────────────
     $stmt = $conexion->prepare("
         SELECT id, nivel, cantidad FROM jugador_mejoras
@@ -195,7 +232,7 @@ try {
     }
 
     $coste = floatval($mejora["coste_base"]) * pow(floatval($mejora["coste_escala"]), $nivel_actual);
-    if ($points_reales < $coste) {
+    if (($points_reales + 0.0001) < $coste) {
         $conexion->rollback();
         echo json_encode([
             "ok"     => false,
@@ -233,16 +270,18 @@ try {
     $points_final = $points_reales - $coste;
     $coins_final  = $coins_reales;
 
-    list($coins_ps_real, $points_ps_real) = calcularStatsJugador($conexion, $jugador_id);
+    list($coins_ps_real, $points_ps_real, $coins_ps_max_real, $points_ps_max_real) = calcularStatsJugadorConConfig($conexion, $jugador_id);
 
     $stmt = $conexion->prepare("
         UPDATE jugadores
         SET coins = ?, points = ?,
             coins_por_seg = ?, points_por_seg = ?,
+            coins_ps_max = GREATEST(coins_ps_max, ?),
+            points_ps_max = GREATEST(points_ps_max, ?),
             ultima_actualizacion = NOW()
         WHERE id = ?
     ");
-    $stmt->bind_param("ddddi", $coins_final, $points_final, $coins_ps_real, $points_ps_real, $jugador_id);
+    $stmt->bind_param("ddddddi", $coins_final, $points_final, $coins_ps_real, $points_ps_real, $coins_ps_max_real, $points_ps_max_real, $jugador_id);
     $stmt->execute();
     $stmt->close();
 
@@ -285,6 +324,19 @@ try {
     $todas_mejoras = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 
+    $bulk_total_resp = 1;
+    foreach ($todas_mejoras as $__m_bulk) {
+        if (in_array($__m_bulk["tipo"], ["bulk", "bulk_normal"], true)) {
+            $bulk_total_resp += (int)round(floatval($__m_bulk["valor"]) * (int)$__m_bulk["nivel"]);
+        } elseif ($__m_bulk["tipo"] === "bulk_extra" && (int)$__m_bulk["nivel"] >= 1) {
+            $bulk_total_resp += (int)round(floatval($__m_bulk["valor"]));
+        }
+    }
+    $luck_detalle = function_exists('calcularSuerteJugadorDetalle')
+        ? calcularSuerteJugadorDetalle($conexion, $jugador_id)
+        : ["total" => 1.0, "tienda" => 1.0, "colecciones" => 1.0, "colecciones_completadas" => 0];
+    $luck_multiplier = floatval($luck_detalle["total"] ?? 1.0);
+
     $conexion->commit();
 
     echo json_encode([
@@ -298,6 +350,15 @@ try {
         "mejoras_jugador"      => $todas_mejoras,
         "points"               => $points_final,
         "coins"                => $coins_final,
+        "coins_por_seg"        => $coins_ps_real,
+        "points_por_seg"       => $points_ps_real,
+        "points_antes"         => $points_reales,
+        "coste_pagado"         => $coste,
+        "luck_multiplier"      => $luck_multiplier,
+        "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
+        "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
+        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0),
+        "bulk_total"           => $bulk_total_resp,
         "nuevas_desbloqueadas" => $nuevas_desbloqueadas
     ]);
 

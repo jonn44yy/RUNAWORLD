@@ -1,3 +1,4 @@
+window.RW_TIRADA_VERSION = '8.0-fix-runas-visual-v112';
 // tirada.js — runaworld (v2: batch sync)
 // version 2: adaptado al sistema de lotes (runa-sync.js). antes cada click
 // disparaba un fetch. ahora tirarRuna() solo cuenta clicks en un buffer y
@@ -29,6 +30,99 @@
 // hecho entre marzo y abril, reescrito 23/04 para batching. !hi
 
 var syncSafetyTimer = null;
+
+
+// FIX V110 — helpers de runas corruptas y actualización visual por delta.
+function _rwNormTxt(v) { return String(v || '').toLowerCase(); }
+function _rwParseCantidad(v) {
+    if (v === undefined || v === null) return 0;
+    var txt = String(v).replace(/<[^>]*>/g, '').replace(/[^0-9.,-]/g, '');
+    if (!txt) return 0;
+    // En la UI usas formato x1,005. parseInt('1,005') devuelve 1; esto lo corrige.
+    txt = txt.replace(/[.,]/g, '');
+    var n = parseInt(txt, 10);
+    return isNaN(n) ? 0 : n;
+}
+function _rwCantidadDOM(el) {
+    if (!el) return 0;
+    var n = _rwParseCantidad(el.dataset ? el.dataset.cantidad : 0);
+    var spans = el.querySelectorAll ? el.querySelectorAll('.runa-card-cantidad, .col-runa-cantidad') : [];
+    spans.forEach(function (sp) { n = Math.max(n, _rwParseCantidad(sp.textContent)); });
+    return n;
+}
+function _rwCantidadVisualActual(id) {
+    id = String(id);
+    if (!window.RW_RUNAS_VISUAL) window.RW_RUNAS_VISUAL = {};
+    var n = _rwParseCantidad(window.RW_RUNAS_VISUAL[id]);
+    ['.runa-card-btn[data-id="' + id + '"]', '.col-runa-btn[data-id="' + id + '"]', '.col-runa-comun[data-id="' + id + '"]'].forEach(function (sel) {
+        document.querySelectorAll(sel).forEach(function (el) { n = Math.max(n, _rwCantidadDOM(el)); });
+    });
+    window.RW_RUNAS_VISUAL[id] = n;
+    return n;
+}
+function _rwPintarCantidadRuna(id, cantidad, rareza) {
+    id = String(id);
+    cantidad = _rwParseCantidad(cantidad);
+    if (!window.RW_RUNAS_VISUAL) window.RW_RUNAS_VISUAL = {};
+    window.RW_RUNAS_VISUAL[id] = Math.max(_rwParseCantidad(window.RW_RUNAS_VISUAL[id]), cantidad);
+    cantidad = window.RW_RUNAS_VISUAL[id];
+
+    ['.runa-card-btn[data-id="' + id + '"]', '.col-runa-btn[data-id="' + id + '"]', '.col-runa-comun[data-id="' + id + '"]'].forEach(function (sel) {
+        document.querySelectorAll(sel).forEach(function (el) {
+            el.dataset.cantidad = String(cantidad);
+            if (cantidad > 0) {
+                el.classList.remove('runa-bloqueada', 'bloqueada');
+                el.classList.add('desbloqueada');
+                if (rareza) el.classList.add(rareza);
+                if (!el.getAttribute('onclick') && (el.classList.contains('col-runa-btn') || el.classList.contains('col-runa-comun'))) {
+                    el.setAttribute('onclick', 'seleccionarRunaCol(this)');
+                }
+            }
+            var spans = el.querySelectorAll('.runa-card-cantidad, .col-runa-cantidad');
+            if (spans.length) {
+                spans.forEach(function (s) { s.textContent = 'x' + Number(cantidad).toLocaleString(); });
+            } else if (cantidad > 0) {
+                var candado = el.querySelector('.col-candado');
+                var right = candado ? candado.closest('.col-runa-right') : el.querySelector('.runa-card-right, .col-runa-right');
+                if (right) right.innerHTML = '<span class="col-runa-cantidad">x' + Number(cantidad).toLocaleString() + '</span><span class="runa-card-flecha">▾</span>';
+            }
+        });
+    });
+}
+function _rwTextoRuna(r) {
+    if (!r) return '';
+    return [r.nombre, r.imagen, r.slug, r.runa_file, r.runaFile, r.animacion_slug, r.rareza_animacion, r.variante].map(_rwNormTxt).join(' | ');
+}
+function _rwEsAnimCorrupta(r, key) {
+    var txt = _rwTextoRuna(r);
+    if (txt.indexOf(key) !== -1) return true;
+    if (key === 'mitica_corrupta' && (txt.indexOf('mítica corrupta') !== -1 || txt.indexOf('mitica corrupta') !== -1)) return true;
+    if (key === 'legendaria_corrupta' && txt.indexOf('legendaria corrupta') !== -1) return true;
+    if (r && r.variante === 'corrupta') {
+        if (key === 'mitica_corrupta' && r.rareza === 'mitica') return true;
+        if (key === 'legendaria_corrupta' && r.rareza === 'legendaria') return true;
+    }
+    return false;
+}
+function _rwAplicarDeltaVisualRunas(runasGanadas) {
+    if (!Array.isArray(runasGanadas) || runasGanadas.length === 0) return;
+    var map = {};
+    runasGanadas.forEach(function (r) {
+        if (!r || r.id === undefined || r.id === null) return;
+        var id = String(r.id);
+        if (!map[id]) map[id] = { id: r.id, rareza: r.rareza, delta: 0 };
+        map[id].delta += _rwParseCantidad(r.cantidad || 1) || 1;
+    });
+    Object.keys(map).forEach(function (id) {
+        var d = map[id];
+        var actual = _rwCantidadVisualActual(id);
+        var nuevo = actual + d.delta;
+        _rwPintarCantidadRuna(id, nuevo, d.rareza);
+    });
+}
+
+
+// ── 1. tirarRuna
 
 // ── 1. tirarRuna ─────────────────────────────────────────────
 // se llama al pulsar el boton. ya NO hace fetch; solo cuenta el click
@@ -109,6 +203,13 @@ function procesarRespuestaSync(data) {
         return;
     }
 
+    // si el server no manda data.runas completo, sumo las cantidades por delta en el DOM.
+    if (data.runas) {
+        actualizarPanelRunas(data.runas);
+    } else {
+        _rwAplicarDeltaVisualRunas(data.runas_ganadas);
+    }
+
     // separar especiales de normales
     var especiales = data.runas_ganadas.filter(function (r) {
         return r.rareza === "eterna" || r.rareza === "divina" ||
@@ -166,27 +267,51 @@ function procesarRespuestaSync(data) {
         }
     } else if (miticas.length > 0) {
         var totalMulti = miticas.reduce(function (s, r) { return s + parseFloat(r.multiplicador); }, 0);
+        var hayMiticaCorrupta = miticas.some(function(r){ return _rwEsAnimCorrupta(r, "mitica_corrupta"); });
+        var animKeyMitica = hayMiticaCorrupta ? "mitica_corrupta" : "mitica";
+        var runaMBase = miticas.find(function(r){ return hayMiticaCorrupta ? _rwEsAnimCorrupta(r, "mitica_corrupta") : true; }) || miticas[0];
         var runaM = {
-            nombre:        miticas.length > 1 ? "¡" + miticas.length + " Míticas!" : miticas[0].nombre,
+            id:            runaMBase.id,
+            nombre:        miticas.length > 1 ? (hayMiticaCorrupta ? "¡" + miticas.length + " Míticas Corruptas!" : "¡" + miticas.length + " Míticas!") : runaMBase.nombre,
             rareza:        "mitica",
+            imagen:        runaMBase.imagen,
+            runa_file:     runaMBase.runa_file,
+            animacion_slug: animKeyMitica,
+            rareza_animacion: animKeyMitica,
+            variante:      hayMiticaCorrupta ? "corrupta" : "normal",
             multiplicador: totalMulti.toFixed(2),
             cantidad:      miticas.length
         };
-        if (getAnimActiva("mitica")) {
-            lanzarMitica(runaM);
+        if (typeof getAnimActiva === "function" && getAnimActiva(animKeyMitica)) {
+            if (hayMiticaCorrupta && typeof window.RW_lanzarAnimacionCorruptaEspecial === "function") window.RW_lanzarAnimacionCorruptaEspecial(runaM, "mitica_corrupta");
+            else lanzarMitica(runaM);
         } else {
-            mostrarResultado(runaM);
+            mostrarCardEn("resultado-tirada", runaM);
         }
     } else if (legendarias.length > 0) {
         var totalMulti = legendarias.reduce(function (s, r) { return s + parseFloat(r.multiplicador); }, 0);
+        var hayLegendariaCorrupta = legendarias.some(function(r){ return _rwEsAnimCorrupta(r, "legendaria_corrupta"); });
+        var animKeyLegendaria = hayLegendariaCorrupta ? "legendaria_corrupta" : "legendaria";
+        var runaLBase = legendarias.find(function(r){ return hayLegendariaCorrupta ? _rwEsAnimCorrupta(r, "legendaria_corrupta") : true; }) || legendarias[0];
         var runaL = {
-            nombre:        legendarias.length > 1 ? "¡" + legendarias.length + " Legendarias!" : legendarias[0].nombre,
+            id:            runaLBase.id,
+            nombre:        legendarias.length > 1 ? (hayLegendariaCorrupta ? "¡" + legendarias.length + " Legendarias Corruptas!" : "¡" + legendarias.length + " Legendarias!") : runaLBase.nombre,
             rareza:        "legendaria",
+            imagen:        runaLBase.imagen,
+            runa_file:     runaLBase.runa_file,
+            animacion_slug: animKeyLegendaria,
+            rareza_animacion: animKeyLegendaria,
+            variante:      hayLegendariaCorrupta ? "corrupta" : "normal",
             multiplicador: totalMulti.toFixed(2),
             cantidad:      legendarias.length
         };
-        mostrarResultado(runaL);
-        if (!animLegendariaActiva) setTimeout(desactivarNeon, 100);
+        if (typeof getAnimActiva === "function" && getAnimActiva(animKeyLegendaria)) {
+            if (hayLegendariaCorrupta && typeof window.RW_lanzarAnimacionCorruptaEspecial === "function") window.RW_lanzarAnimacionCorruptaEspecial(runaL, "legendaria_corrupta");
+            else mostrarResultado(runaL);
+        } else {
+            mostrarCardEn("resultado-tirada", runaL);
+            if (typeof desactivarNeon === "function") setTimeout(desactivarNeon, 100);
+        }
     }
 
     // refrescar cantidades en panel lateral y coleccion
@@ -220,7 +345,21 @@ function actualizarPanelRunas(runas) {
 
     // panel derecho (sidebar "mis runas")
     runas.forEach(function (r) {
+        var cantidadServer = _rwParseCantidad(r.cantidad);
+        var cantidadFinal = Math.max(_rwCantidadVisualActual(r.id), cantidadServer);
+        r.cantidad = cantidadFinal;
+        _rwPintarCantidadRuna(r.id, cantidadFinal, r.rareza);
         var card = document.querySelector('.runa-card-btn[data-id="' + r.id + '"]');
+        if (!card) return;
+        const esCorrupta =
+        String(r.nombre || "").toLowerCase().includes("corrupta") ||
+        String(r.variante || "").toLowerCase() === "corrupta";
+        if (esCorrupta && r.cantidad <= 0) {
+            card.style.display = "none";
+            return;
+        } else {
+            card.style.display = "";
+        }
         if (card) {
             card.dataset.cantidad = r.cantidad;
             var cantEl = card.querySelector(".runa-card-cantidad");
@@ -251,7 +390,7 @@ function actualizarPanelRunas(runas) {
     runas.forEach(function (r) {
         var btnEsp = document.querySelector('.col-runa-btn[data-id="' + r.id + '"]');
         if (btnEsp) {
-            var cantAnterior = parseInt(btnEsp.dataset.cantidad) || 0;
+            var cantAnterior = _rwParseCantidad(btnEsp.dataset.cantidad);
             btnEsp.dataset.cantidad = r.cantidad;
 
             var cantSpan = btnEsp.querySelector(".col-runa-cantidad");
@@ -284,7 +423,7 @@ function actualizarPanelRunas(runas) {
         // comunes (con mini canvas)
         var btnCom = document.querySelector('.col-runa-comun[data-id="' + r.id + '"]');
         if (btnCom) {
-            var cantAnterior = parseInt(btnCom.dataset.cantidad) || 0;
+            var cantAnterior = _rwParseCantidad(btnCom.dataset.cantidad);
             btnCom.dataset.cantidad = r.cantidad;
 
             var cantSpan = btnCom.querySelector(".col-runa-cantidad");

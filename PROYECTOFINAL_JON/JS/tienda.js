@@ -1,3 +1,4 @@
+window.RW_TIENDA_VERSION = '8.0';
 // tienda.js v3 — !hi
 // rediseno horizontal de la tienda. cada mejora es .mejora-fila con:
 //   icono (44px) | barra segmentada de niveles | info derecha
@@ -46,13 +47,13 @@
                 return "+" + formatear(n * (n + 1) / 2 * v) + " coins/seg";
             case "coins_seg_multi":
             case "coins_seg_multi_eterno":
-                return n > 0 ? "x" + Math.pow(2, n) + " coins" : "x1 coins";
+                return n > 0 ? "x" + Math.pow(Math.max(1, v), n) + " coins" : "x1 coins";
             case "points_seg":
                 // 28/04 v3.1: lineal (v * n) en vez de geometrica (v * 10^(n-1))
                 return n > 0 ? "+" + formatear(v * n) + " pts/seg" : "+0 pts/seg";
             case "points_seg_multi":
             case "points_seg_multi_eterno":
-                return n > 0 ? "x" + Math.pow(2, n) + " pts" : "x1 pts";
+                return n > 0 ? "x" + Math.pow(Math.max(1, v), n) + " pts" : "x1 pts";
             case "bulk":
             case "bulk_normal":
                 return (1 + n) + " runas/tirada";
@@ -74,13 +75,13 @@
                 return "+" + formatear(nProx * (nProx + 1) / 2 * v) + " coins/seg";
             case "coins_seg_multi":
             case "coins_seg_multi_eterno":
-                return "x" + Math.pow(2, nProx) + " coins";
+                return "x" + Math.pow(Math.max(1, v), nProx) + " coins";
             case "points_seg":
                 // 28/04 v3.1: lineal (v * nProx) en vez de geometrica
                 return "+" + formatear(v * nProx) + " pts/seg";
             case "points_seg_multi":
             case "points_seg_multi_eterno":
-                return "x" + Math.pow(2, nProx) + " pts";
+                return "x" + Math.pow(Math.max(1, v), nProx) + " pts";
             case "bulk":
             case "bulk_normal":
                 return (1 + nProx) + " runas/tirada";
@@ -110,6 +111,7 @@
                 return "morada";
             case "coins_seg_multi":
             case "points_seg_multi":
+            case "bulk_normal":
             case "bulk_extra":
                 return "dorada";
             default:

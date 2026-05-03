@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier Prime', monospace; }
+
+    /* Contenedor principal con esquinas cortadas - Legendaria pero corrupta */
+    #marco-ui {
+        position: absolute; inset: 20px;
+        border: 2px solid rgba(255, 215, 0, 0.35);
+        clip-path: polygon(
+            50px 0, calc(100% - 50px) 0, 100% 50px, 100% calc(100% - 50px),
+            calc(100% - 50px) 100%, 50px 100%, 0 calc(100% - 50px), 0 50px
+        );
+        box-shadow: inset 0 0 60px rgba(255, 200, 0, 0.08), inset 0 0 120px rgba(170,0,255,0.06);
+    }
+
+    /* Bordes de corrupción - mezcla dorado + corrupto */
+    .corruption-edge {
+        position: absolute;
+        box-shadow: 0 0 20px currentColor, 0 0 50px currentColor;
+        animation: glitchFlicker var(--spd, 0.45s) infinite;
+    }
+    .edge-t  { top: 0;    left: 18%; right: 18%; height: 3px; background: #ffd700; color: #ffd700; }
+    .edge-b  { bottom: 0; left: 25%; right: 25%; height: 3px; background: #ffd700; color: #ffd700; animation-delay: 0.15s; }
+    .edge-l  { left: 0;   top: 25%;  bottom: 25%; width: 3px; background: #aa00ff; color: #aa00ff; animation-delay: 0.28s; }
+    .edge-r  { right: 0;  top: 8%;   bottom: 55%; width: 4px; background: #ff2244; color: #ff2244; animation-delay: 0.07s; --spd: 0.3s; }
+
+    /* Esquinas decorativas doradas */
+    .corner {
+        position: absolute; width: 60px; height: 60px;
+        border-color: #ffd700; border-style: solid; opacity: 0.7;
+        animation: cornerPulse 2.5s ease-in-out infinite alternate;
+    }
+    .c-tl { top: 18px;    left: 18px;    border-width: 2px 0 0 2px; }
+    .c-tr { top: 18px;    right: 18px;   border-width: 2px 2px 0 0; }
+    .c-bl { bottom: 18px; left: 18px;    border-width: 0 0 2px 2px; }
+    .c-br { bottom: 18px; right: 18px;   border-width: 0 2px 2px 0; }
+
+    @keyframes cornerPulse {
+        0%   { opacity: 0.4; box-shadow: 0 0 6px #ffd700; }
+        100% { opacity: 0.9; box-shadow: 0 0 18px #ffd700, 0 0 35px rgba(255,215,0,0.3); }
+    }
+
+    @keyframes glitchFlicker {
+        0%, 100% { opacity: 1; transform: scaleX(1); }
+        30%      { opacity: 0.2; transform: scaleX(0.85); }
+        65%      { opacity: 0.9; transform: scaleX(1.08); }
+        72%      { opacity: 0; }
+        75%      { opacity: 1; }
+    }
+
+    /* Título superior - LEGENDARIA pero con aberración */
+    .title-box {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        background: #04020a; padding: 5px 36px;
+        border: 1px solid #ffd700; border-top: none;
+        z-index: 30; white-space: nowrap;
+    }
+    .top-box    { top: 0;    border-top: none; border-bottom: 1px solid #ffd700; }
+    .bottom-box { bottom: 0; border-top: 1px solid #ffd700; border-bottom: none; }
+
+    .glitch-text {
+        color: #ffd700; font-size: 18px; letter-spacing: 10px; font-weight: bold;
+        position: relative;
+        text-shadow: 2px 0 #ff2244, -2px 0 #aa00ff;
+        animation: textJitter 3s infinite;
+    }
+    .glitch-text.sub {
+        font-size: 13px; letter-spacing: 6px; color: #cc8800;
+        text-shadow: 1px 0 #ff2244, -1px 0 #aa00ff;
+        animation: textJitter 2.3s 0.7s infinite;
+    }
+
+    @keyframes textJitter {
+        0%, 85%, 100% { transform: translate(0,0) skew(0deg);    text-shadow:  2px 0 #ff2244, -2px 0 #aa00ff; }
+        87%            { transform: translate(-3px,1px) skew(-12deg); text-shadow: -4px 0 #ff2244,  4px 0 #aa00ff; }
+        89%            { transform: translate(3px,-1px) skew(8deg);   text-shadow:  4px 0 #ffd700, -4px 0 #aa00ff; }
+        91%            { transform: translate(0,0) skew(0deg);    opacity: 0.4; }
+        93%            { transform: translate(-1px,0) skew(-3deg); opacity: 1; }
+    }
+
+    /* Detalles HUD corruptos en esquinas */
+    .hud-corner {
+        position: absolute; font-size: 9px; color: rgba(255,215,0,0.5);
+        font-family: 'Courier Prime', monospace; letter-spacing: 2px;
+        animation: hudFlicker 4s infinite;
+    }
+    .hud-tl { top: 28px;    left: 28px; }
+    .hud-tr { top: 28px;    right: 28px; text-align: right; }
+    .hud-bl { bottom: 28px; left: 28px; }
+    .hud-br { bottom: 28px; right: 28px; text-align: right; }
+
+    @keyframes hudFlicker {
+        0%, 95%, 100% { opacity: 0.5; }
+        96%            { opacity: 0.1; }
+        97%            { opacity: 0.7; }
+        98%            { opacity: 0; }
+        99%            { opacity: 0.5; }
+    }
+</style>
+</head>
+<body>
+    <div id="marco-ui">
+        <div class="corruption-edge edge-t"></div>
+        <div class="corruption-edge edge-b"></div>
+        <div class="corruption-edge edge-l"></div>
+        <div class="corruption-edge edge-r"></div>
+        <div class="corner c-tl"></div>
+        <div class="corner c-tr"></div>
+        <div class="corner c-bl"></div>
+        <div class="corner c-br"></div>
+
+        <div class="hud-corner hud-tl">LGD.CRP<br>SYS::ERR</div>
+        <div class="hud-corner hud-tr">TIER_5<br>0xFF2244</div>
+        <div class="hud-corner hud-bl">VOID::ANCHOR<br>UNSTABLE</div>
+        <div class="hud-corner hud-br">PWR:∞<br>BREACH</div>
+    </div>
+
+    <div class="title-box top-box">
+        <div class="glitch-text">LEGENDARIA.CORRUPTA</div>
+    </div>
+    <div class="title-box bottom-box">
+        <div class="glitch-text sub">ERROR_TIER5_OVERFLOW</div>
+    </div>
+</body>
+</html>

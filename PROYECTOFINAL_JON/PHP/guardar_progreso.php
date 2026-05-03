@@ -63,10 +63,10 @@ try {
     $ult_ts         = (int)$j["ult_ts"];
 
     // ── recalcular tasas pasivas reales ──────────────────────
-    // 28/04 v3.1: usa calcular_stats.php, que aplica las formulas
-    // correctas (lineales) y combina runas + mejoras. fuente unica
-    // de verdad para coins_ps y points_ps en TODO el server.
-    list($coins_ps_real, $points_ps_real) = calcularStatsJugador($conexion, $jugador_id);
+    // Fuente unica: calcular maximos desde mejoras/runas y aplicar, si existe,
+    // el cap manual configurado en Ajustes. Asi un coins/seg reducido a 1
+    // no vuelve a 56 al tirar/guardar/comprar.
+    list($coins_ps_real, $points_ps_real, $coins_ps_max_real, $points_ps_max_real) = calcularStatsJugadorConConfig($conexion, $jugador_id);
 
     // ── aplicar pasivos del periodo idle ─────────────────────
     // capamos elapsed a 1 hora para evitar que el jugador se pase 3 dias
@@ -81,8 +81,8 @@ try {
 
     // tracking de maximo historico (lo lee juego.php para mostrar
     // "tu maximo: X/seg" en ajustes)
-    if ($coins_ps_real  > $coins_ps_max)  $coins_ps_max  = $coins_ps_real;
-    if ($points_ps_real > $points_ps_max) $points_ps_max = $points_ps_real;
+    if ($coins_ps_max_real  > $coins_ps_max)  $coins_ps_max  = $coins_ps_max_real;
+    if ($points_ps_max_real > $points_ps_max) $points_ps_max = $points_ps_max_real;
 
     // ── persistir TODO (incluido el rate) ─────────────────────
     $stmt = $conexion->prepare("

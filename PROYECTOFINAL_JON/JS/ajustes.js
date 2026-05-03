@@ -259,61 +259,19 @@ function cambiarPassword() {
 }
 
 
-// configurar produccion de coins/seg o points/seg. el jugador puede poner
-// un valor menor al maximo que le dan sus mejoras si quiere grindear mas
-// despacio (o por estetica). 0 = restablecer al maximo.
-// anti-trampas: si alguien edita el HTML y manda un valor mayor al maximo,
-// se lo pongo en 1 como castigo. disfruta de tu cheateo
+// configurar produccion de coins/seg o points/seg.
+// DESACTIVADO temporalmente: estaba causando desincronizaciones con el sistema
+// de packs. Se mantiene la funcion para que el HTML no rompa si queda algun
+// boton viejo en cache, pero no envia nada al servidor.
 function configurarProduccion(tipo) {
     const inputEl = document.getElementById("config-" + tipo + "-ps");
     const msgEl   = document.getElementById("msg-" + tipo + "-ps");
-    const maxVal  = tipo === "coins" ? coins_ps_max : points_ps_max;
-
-    let valor = parseFloat(inputEl.value);
-
-    // 0 o nada = que te lo restablezca al maximo
-    if (isNaN(valor) || valor === 0) {
-        valor = maxVal;
-    }
-
-    // si intenta pasarse de listo, se queda en 1 y le aviso
-    if (valor > maxVal) {
-        valor = 1;
-        msgEl.textContent = "Valor superior a tu maximo. Se ha puesto en 1.";
+    if (msgEl) {
+        msgEl.textContent = "Configuracion manual de produccion desactivada temporalmente.";
         msgEl.className   = "ajuste-msg error";
-    } else {
-        msgEl.textContent = "";
-        msgEl.className   = "ajuste-msg";
     }
-
-    // minimo 1 si es que tiene algun maximo (para que no se ponga a 0)
-    if (valor < 1 && maxVal > 0) valor = 1;
-
-    fetch("PHP/ajustes_action.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accion: "produccion_" + tipo, valor: valor })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            if (tipo === "coins") coins_ps  = valor;
-            else                  points_ps = valor;
-            actualizarPantalla();
-            // solo pongo el mensaje de exito si no habia uno de error antes
-            if (!msgEl.textContent) {
-                msgEl.textContent = "Produccion actualizada a " + formatNum(valor) + "/seg.";
-                msgEl.className   = "ajuste-msg";
-            }
-            inputEl.value = "";
-        } else {
-            msgEl.textContent = data.error || "Error.";
-            msgEl.className   = "ajuste-msg error";
-        }
-    });
+    if (inputEl) inputEl.value = "";
 }
-
-
 // panel desplegable para contactar al admin. abre/cierra animado con CSS,
 // las clases .abierto estan en style.css
 function toggleContacto() {

@@ -191,13 +191,13 @@ body::before {
    los <span class="letra"> con su animation-delay individual */
 .hero h1 .letra {
     display: inline-block;
-    animation: letraDrop 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: letraDrop 0.34s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes letraDrop {
     from {
         opacity: 0;
-        transform: translateY(60px);
+        transform: translateY(34px);
     }
     to {
         opacity: 1;
@@ -211,7 +211,8 @@ body::before {
     font-family: 'EB Garamond', serif;
     font-style: italic;
     font-size: clamp(1rem, 1.5vw, 1.3rem);
-    color: var(--text-dim);
+    color: rgba(255,248,226,0.96);
+    text-shadow: 0 3px 18px rgba(0,0,0,1), 0 0 28px rgba(0,0,0,0.95), 0 0 18px rgba(212,175,55,0.32);
     margin-bottom: 4rem;
     position: relative; z-index: 2;
     opacity: 0;
@@ -571,6 +572,38 @@ body::before {
     color: var(--text-dim);
 }
 
+
+.version-entry {
+    margin-bottom: 5rem;
+    padding-bottom: 4rem;
+    border-bottom: 1px solid var(--line);
+}
+.version-entry:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.version-entry .seccion-h { margin-bottom: 2.5rem; }
+.version-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: -1.5rem 0 2.4rem;
+}
+
+
+/* ─── ACCESIBILIDAD / NAVEGACIÓN DE VERSIONES ─────────────── */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.skip-link { position:fixed; top:.8rem; left:.8rem; z-index:9999; transform:translateY(-140%); background:#000; color:var(--gold-bright); border:1px solid var(--gold); padding:.7rem 1rem; font-family:'JetBrains Mono',monospace; font-size:.75rem; letter-spacing:.08em; text-decoration:none; transition:transform .2s ease; }
+.skip-link:focus { transform:translateY(0); outline:2px solid var(--gold-bright); outline-offset:3px; }
+a:focus-visible, button:focus-visible { outline:2px solid var(--gold-bright); outline-offset:4px; }
+.version-shell { display:grid; grid-template-columns:minmax(130px,190px) minmax(0,1fr); gap:clamp(1.5rem,3vw,3rem); align-items:start; }
+.version-side-nav { position:sticky; top:2rem; align-self:start; border:1px solid rgba(212,175,55,.16); background:rgba(10,10,10,.52); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); padding:.9rem; z-index:5; }
+.version-side-nav-title { font-family:'JetBrains Mono',monospace; font-size:.58rem; letter-spacing:.22em; color:var(--text-dim); text-transform:uppercase; margin-bottom:.75rem; }
+.version-side-nav a { display:block; color:var(--text-dim); text-decoration:none; font-family:'Cinzel',serif; font-size:.82rem; letter-spacing:.08em; padding:.58rem .7rem; border-left:1px solid rgba(212,175,55,.18); transition:color .2s ease, background .2s ease, border-color .2s ease; }
+.version-side-nav a:hover, .version-side-nav a:focus-visible { color:var(--gold); background:rgba(212,175,55,.06); border-left-color:var(--gold); }
+.version-list { min-width:0; }
+.version-entry { scroll-margin-top:2rem; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; } #bg-eterno { display:none !important; } }
+
 /* ─── RANKING ─────────────────────────────────────────────── */
 
 .ranking {
@@ -785,6 +818,11 @@ footer {
 
     #bg-eterno,
     #bg-eterno-veil { display: none !important; }
+    .version-shell { display:block; }
+    .version-side-nav { position:sticky; top:.75rem; display:flex; gap:.55rem; overflow-x:auto; padding:.65rem; margin-bottom:2rem; background:rgba(8,8,8,.54); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-color:rgba(212,175,55,.2); }
+    .version-side-nav-title { display:none; }
+    .version-side-nav a { flex:0 0 auto; border-left:none; border:1px solid rgba(212,175,55,.16); background:rgba(0,0,0,.24); padding:.55rem .8rem; }
+
 }
 
 @media (max-width: 480px) {
@@ -803,9 +841,9 @@ footer {
     border: none;
     z-index: -20;
     pointer-events: none;
-    filter: blur(14px) saturate(1.5);
-    transform: scale(1.1);   /* hide blur edges */
-    will-change: filter;
+    filter: blur(24px) saturate(0.62) brightness(0.42);
+    opacity: 0.40;
+    transform: scale(1.18);   /* hide blur edges */
 }
 
 /* veil oscuro encima del bg para que el contenido se lea bien.
@@ -816,22 +854,23 @@ footer {
     z-index: -10;
     pointer-events: none;
     background:
-        radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.85) 100%);
+        radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.96) 100%);
 }
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Saltar al contenido</a>
 
-<div class="spine"></div>
+<div class="spine" aria-hidden="true"></div>
 <!-- Fondo animado eterno (bucle infinito) + veil para oscurecer -->
-<iframe id="bg-eterno" data-src="RUNAS_HTML/RUNAS_ANIMADAS/eterna.html" 
+<iframe id="bg-eterno" data-src="RUNAS_HTML/RUNAS/eterna_index_low_quality.html" 
         loading="lazy" scrolling="no" tabindex="-1" aria-hidden="true"></iframe>
 <div id="bg-eterno-veil" aria-hidden="true"></div>
 <!-- ─── HERO ─────────────────────────────────────────────── -->
 <header class="hero">
-    <a href="#version" class="hero-version" aria-label="Ir a la sección de versión">v0.1V · BETA</a>
+    <a href="#version-v02" class="hero-version" aria-label="Ir a las notas del parche de versiones">PARCHE DE VERSIONES</a>
     <h1 id="hero-h1">
-        <span class="letra" style="animation-delay:0.40s">R</span><span class="letra" style="animation-delay:0.48s">U</span><span class="letra" style="animation-delay:0.56s">N</span><span class="letra" style="animation-delay:0.64s">A</span><span class="letra" style="animation-delay:0.72s">W</span><span class="letra" style="animation-delay:0.80s">O</span><span class="letra" style="animation-delay:0.88s">R</span><span class="letra" style="animation-delay:0.96s">L</span><span class="letra" style="animation-delay:1.04s">D</span>
+        <span class="letra" style="animation-delay:0.03s">R</span><span class="letra" style="animation-delay:0.06s">U</span><span class="letra" style="animation-delay:0.09s">N</span><span class="letra" style="animation-delay:0.12s">A</span><span class="letra" style="animation-delay:0.15s">W</span><span class="letra" style="animation-delay:0.18s">O</span><span class="letra" style="animation-delay:0.21s">R</span><span class="letra" style="animation-delay:0.24s">L</span><span class="letra" style="animation-delay:0.27s">D</span>
     </h1>
     <p class="hero-tagline">colecciona, asciende, descubre lo eterno</p>
     <div class="hero-cta">
@@ -845,6 +884,7 @@ footer {
     </div>
 </header>
 
+<main id="main-content">
 <!-- ─── SECCIÓN 1: QUÉ ES ─────────────────────────────────── -->
 <section class="seccion" id="el-juego">
     <div class="seccion-titulo fade-up">EL JUEGO</div>
@@ -872,7 +912,7 @@ footer {
                  el JS de mas abajo cambia el src a la rareza que el visitante
                  clickee en las cards de la siguiente seccion. cuando tengas
                  capturas reales, sustituye este iframe por: <img src="..."> -->
-            <iframe id="preview-runa-1" src="RUNAS_HTML/RUNAS/eterna.html" loading="lazy" scrolling="no" tabindex="-1" title="Preview rúnico"></iframe>
+            <iframe id="preview-runa-1" src="RUNAS_HTML/RUNAS/eterna_index_low_quality.html" loading="lazy" scrolling="no" tabindex="-1" title="Preview rúnico"></iframe>
         </div>
     </div>
 </section>
@@ -888,7 +928,7 @@ footer {
                  clickea cualquier card de rareza, manteniendo el blur (el
                  efecto: ves runas pero borrosas, "para descubrirlas
                  jugando") -->
-            <iframe id="preview-runa-2" src="RUNAS_HTML/RUNAS/eterna.html" loading="lazy" scrolling="no" tabindex="-1" title="Preview rúnico"></iframe>
+            <iframe id="preview-runa-2" src="RUNAS_HTML/RUNAS/eterna_index_low_quality.html" loading="lazy" scrolling="no" tabindex="-1" title="Preview rúnico"></iframe>
         </div>
         <div class="seccion-texto fade-up delay-3">
             <p>Cada runa pertenece a una rareza. Subir desde común a divina lleva tiempo, paciencia y suerte. Lo que viene después es otra historia.</p>
@@ -910,31 +950,73 @@ footer {
     </div>
 </section>
 
-<!-- ─── SECCIÓN 3: VERSIÓN actual ─────────────────────────── -->
-<section class="seccion" id="version">
+<!-- ─── SECCIÓN 3: VERSIONES / ESTADO ACTUAL ─────────────── -->
+<section class="seccion" id="version" aria-labelledby="version-title">
     <div class="seccion-titulo fade-up">ESTADO ACTUAL</div>
-    <h2 class="seccion-h fade-up delay-1">v0.1V · Beta abierta</h2>
-    <div class="seccion-grid">
-        <div class="seccion-texto fade-up delay-2">
-            <div class="cambios-titulo">Implementado</div>
-            <ul class="cambios">
-                <li>Motor de probabilidades estilo campana</li>
-                <li>Tienda de mejoras con tres tiers (eternas, especiales, normales)</li>
-                <li>Sistema de boosts temporales con multiplicadores</li>
-                <li>Bonus por colecciones completas</li>
-                <li>Sincronización servidor-autoritativa anti-trampas</li>
-                <li>Mobile responsive completo</li>
-            </ul>
+    <h2 id="version-title" class="sr-only">Historial de versiones de RunaWorld</h2>
+    <div class="version-shell">
+        <nav class="version-side-nav" aria-label="Navegación de versiones">
+            <div class="version-side-nav-title">Versiones</div>
+            <a href="#version-v02">0.2V</a>
+            <a href="#version-v01">0.1V</a>
+        </nav>
+        <div class="version-list">
+    <article class="version-entry" id="version-v02">
+        <h2 class="seccion-h fade-up delay-1">0.2V · Mejoras del juego</h2>
+        <p class="version-note fade-up delay-1">Avance del proyecto, fase critica, avance en un nuevo campo y contenido</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Cambios principales</div>
+                <ul class="cambios">
+                    <li>Sistema de suerte rediseñado con límite máximo de x1.50.</li>
+                    <li>Sincronización de tiradas por packs para reducir peticiones al servidor.</li>
+                    <li>Tirada visual unitaria: una apertura muestra una única runa.</li>
+                    <li>Nerfeo completo de tienda para alargar la progresión y evitar escalado excesivo.</li>
+                    <li>Revisión de boosts legendarios/divinos para que dependan de desbloqueos.</li>
+                    <li>Rediseño inicial de colección con listas de runas y variantes futuras.</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Próximamente</div>
+                <ul class="cambios proximo">
+                    <li>Nuevas runas básicas, intermedias y avanzadas.</li>
+                    <li>Variantes futuras: normales, corruptas y caos.</li>
+                    <li>Más mejoras en la tienda y nuevos desbloqueos progresivos.</li>
+                    <li>La sección Estadísticas pasará a convertirse en Perfil.</li>
+                    <li>Mejoras internas del sistema de seguridad y validación del servidor.</li>
+                    <li>Posible reset de progreso: se podría borrar el progreso de usuarios existentes.</li>
+                </ul>
+            </div>
         </div>
-        <div class="seccion-texto fade-up delay-3">
-            <div class="cambios-titulo proximo">Próximamente</div>
-            <ul class="cambios proximo">
-                <li>Balanceo completo de tienda</li>
-                <li>Perfil de jugador con estadísticas detalladas</li>
-                <li>Sistema de prestigio / renacimiento</li>
-                <li>Logros y desafíos</li>
-                <li>Más runas eternas</li>
-            </ul>
+    </article>
+
+    <article class="version-entry" id="version-v01">
+        <h2 class="seccion-h fade-up delay-1">0.1V · Beta abierta</h2>
+        <p class="version-note fade-up delay-1">Registro original de la primera beta pública</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Implementado</div>
+                <ul class="cambios">
+                    <li>Motor de probabilidades estilo campana</li>
+                    <li>Tienda de mejoras con tres tiers (eternas, especiales, normales)</li>
+                    <li>Sistema de boosts temporales con multiplicadores</li>
+                    <li>Bonus por colecciones completas</li>
+                    <li>Sincronización servidor-autoritativa anti-trampas</li>
+                    <li>Mobile responsive completo</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Próximamente</div>
+                <ul class="cambios proximo">
+                    <li>Balanceo completo de tienda</li>
+                    <li>Perfil de jugador con estadísticas detalladas</li>
+                    <li>Sistema de prestigio / renacimiento</li>
+                    <li>Logros y desafíos</li>
+                    <li>Más runas eternas</li>
+                </ul>
+            </div>
+        </div>
+    </article>
         </div>
     </div>
 </section>
@@ -968,6 +1050,8 @@ footer {
         <p class="stack">PHP · MySQL · JAVASCRIPT · HTML · CSS</p>
     </div>
 </section>
+
+</main>
 
 <!-- Footer con iconos a redes sociales / contacto. los SVG son inline
      (no dependo de fontawesome ni cdn) y heredan el color del padre, asi
@@ -1055,7 +1139,7 @@ footer {
     // porque la real lleva canvas+JS+filtros gaussian que matan la GPU.
     // las demas runas son ligeras y van directas a [runa].html
     function archivoRuna(runa) {
-        if (runa === 'eterna') return 'RUNAS_HTML/RUNAS/eterna.html';
+        if (runa === 'eterna') return 'RUNAS_HTML/RUNAS/eterna_index_low_quality.html';
         return 'RUNAS_HTML/RUNAS/' + runa + '.html';
     }
 
@@ -1083,11 +1167,8 @@ footer {
     const bg = document.getElementById('bg-eterno');
     if (!bg || !bg.dataset.src) return;
 
-    const DURACION_MS = 25000;
-
     function arrancar() {
         bg.src = bg.dataset.src;
-        setInterval(function() { bg.src = bg.dataset.src; }, DURACION_MS);
     }
 
     if (document.readyState === 'complete') {

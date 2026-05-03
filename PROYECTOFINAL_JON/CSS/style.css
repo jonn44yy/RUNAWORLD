@@ -2151,3 +2151,354 @@ body {
     - el boost-notif tiene demasiados estados, se podria simplificar con custom properties
     - dark mode ya lo tenemos, pero podria valer la pena un modo de alto contraste para accesibilidad
 */
+/* ===== COLECCIÓN v8.1 — variantes independientes ===== */
+.col-hidden-collection { display: none !important; }
+.coleccion-empty-state {
+    margin: 14px 0;
+    padding: 18px 14px;
+    border: 1px solid rgba(160,80,255,0.18);
+    background: rgba(10,8,18,0.55);
+    color: rgba(190,190,215,0.72);
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+.coleccion-empty-lock { font-size: 1.5rem; opacity: .65; margin-bottom: 8px; }
+.coleccion-empty-title { color: rgba(255,255,255,.82); font-size: .72rem; margin-bottom: 6px; }
+.coleccion-empty-desc { color: rgba(170,170,195,.55); font-size: .58rem; line-height: 1.45; text-transform: none; letter-spacing: 1px; }
+.col-corrupta-section {
+    color: rgba(255,34,90,.9) !important;
+    border-color: rgba(255,34,90,.16) !important;
+}
+.col-corrupta-item {
+    border-color: rgba(255,34,90,.26) !important;
+    background: linear-gradient(90deg, rgba(255,34,90,.055), rgba(160,60,255,.025)) !important;
+}
+.col-corrupta-item.desbloqueada {
+    box-shadow: inset 2px 0 0 rgba(255,34,90,.85), 0 0 12px rgba(255,34,90,.08);
+}
+.col-corrupta-item.bloqueada {
+    opacity: .42;
+    filter: grayscale(.35);
+}
+.col-corrupta-item .col-comun-rareza,
+.col-corrupta-item .col-runa-meta {
+    color: rgba(255,80,140,.65) !important;
+}
+
+
+/* ==========================================================
+   RUNAWORLD COLECCIÓN v8.2 — FIX CSS CONTROLES/CORRUPTAS
+   Repara botones nativos, modal visible y listas corruptas.
+   ========================================================== */
+
+#seccion-coleccion .coleccion-topbar-v71 {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto 14px;
+    padding: 0 2px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    position: relative;
+    z-index: 5;
+}
+
+#seccion-coleccion .coleccion-listas-scroll {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,215,0,.35) rgba(255,255,255,.04);
+    -webkit-overflow-scrolling: touch;
+}
+
+#seccion-coleccion .coleccion-listas-scroll::-webkit-scrollbar { height: 5px; }
+#seccion-coleccion .coleccion-listas-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,.04); }
+#seccion-coleccion .coleccion-listas-scroll::-webkit-scrollbar-thumb { background: rgba(255,215,0,.35); border-radius: 999px; }
+
+#seccion-coleccion .coleccion-lista-pill,
+#seccion-coleccion .coleccion-variante-pill {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid rgba(255,215,0,.28);
+    background: rgba(12,13,20,.82);
+    color: rgba(200,205,225,.72);
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: .66rem;
+    line-height: 1;
+    min-height: 34px;
+    padding: 0 16px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    transition: color .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease, opacity .16s ease;
+}
+
+#seccion-coleccion .coleccion-lista-pill {
+    min-width: 148px;
+}
+
+#seccion-coleccion .coleccion-lista-pill:hover,
+#seccion-coleccion .coleccion-variante-pill:hover {
+    color: #ffd700;
+    border-color: rgba(255,215,0,.65);
+    background: rgba(255,215,0,.055);
+    box-shadow: 0 0 18px rgba(255,215,0,.09);
+}
+
+#seccion-coleccion .coleccion-lista-pill.active,
+#seccion-coleccion .coleccion-variante-pill.active {
+    color: #ffd700;
+    border-color: rgba(255,215,0,.9);
+    background: linear-gradient(90deg, rgba(255,215,0,.16), rgba(255,215,0,.045));
+    box-shadow: inset 0 0 18px rgba(255,215,0,.08), 0 0 16px rgba(255,215,0,.08);
+}
+
+#seccion-coleccion .coleccion-lista-pill.locked,
+#seccion-coleccion .coleccion-variante-pill.locked,
+#seccion-coleccion .coleccion-lista-pill:disabled,
+#seccion-coleccion .coleccion-variante-pill:disabled {
+    color: rgba(150,155,175,.34);
+    border-color: rgba(255,215,0,.12);
+    background: rgba(7,8,13,.55);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: .72;
+}
+
+#seccion-coleccion .coleccion-lock-only {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    opacity: .58;
+    filter: grayscale(.25);
+}
+
+#seccion-coleccion .coleccion-variantes-v71 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 2px;
+    scrollbar-width: none;
+}
+#seccion-coleccion .coleccion-variantes-v71::-webkit-scrollbar { display:none; }
+
+#seccion-coleccion .coleccion-variante-pill {
+    min-width: 112px;
+    min-height: 30px;
+    font-size: .58rem;
+    border-color: rgba(165,75,255,.32);
+    color: rgba(190,160,255,.78);
+}
+
+#seccion-coleccion .coleccion-variante-pill.active {
+    color: #d86cff;
+    border-color: rgba(216,108,255,.9);
+    background: rgba(150,50,255,.12);
+    box-shadow: inset 0 0 16px rgba(150,50,255,.12), 0 0 16px rgba(150,50,255,.12);
+}
+
+#seccion-coleccion .coleccion-variante-pill.corrupta-unlocked {
+    border-color: rgba(255,34,90,.55);
+    color: rgba(255,82,130,.9);
+    background: rgba(255,34,90,.055);
+}
+#seccion-coleccion .coleccion-variante-pill.corrupta-unlocked.active {
+    border-color: rgba(255,34,90,.95);
+    color: #ff386f;
+    background: rgba(255,34,90,.14);
+    box-shadow: inset 0 0 18px rgba(255,34,90,.12), 0 0 20px rgba(255,34,90,.16);
+}
+
+#seccion-coleccion .coleccion-bonus-suerte-v74 {
+    border: 1px solid rgba(255,215,0,.22);
+    background: linear-gradient(135deg, rgba(255,215,0,.075), rgba(120,50,255,.05));
+    padding: 8px 10px;
+    width: max-content;
+    max-width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(210,215,235,.72);
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74 strong {
+    color: #ffd700;
+    font-size: .78rem;
+    line-height: 1;
+    text-shadow: 0 0 12px rgba(255,215,0,.2);
+}
+#seccion-coleccion .coleccion-bonus-label,
+#seccion-coleccion .coleccion-bonus-sub {
+    font-size: .48rem;
+    line-height: 1.15;
+    color: rgba(180,185,205,.62);
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74.activo {
+    border-color: rgba(255,215,0,.46);
+    background: linear-gradient(135deg, rgba(255,215,0,.12), rgba(255,34,90,.05));
+}
+#seccion-coleccion .coleccion-bonus-mobile { display: none; }
+#seccion-coleccion .coleccion-bonus-desktop { margin-top: 14px; width: 100%; max-width: none; }
+
+/* Modal: antes quedaba como HTML plano porque faltaba CSS */
+#seccion-coleccion .coleccion-completa-modal[aria-hidden="true"] { display: none !important; }
+#seccion-coleccion .coleccion-completa-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 20px;
+}
+#seccion-coleccion .coleccion-completa-box {
+    width: min(520px, 92vw);
+    position: relative;
+    border: 1px solid rgba(255,215,0,.45);
+    background: radial-gradient(circle at 50% 0%, rgba(255,215,0,.13), transparent 38%), rgba(7,8,13,.97);
+    box-shadow: 0 0 45px rgba(255,215,0,.12), inset 0 0 35px rgba(255,255,255,.025);
+    padding: 24px 26px;
+    color: rgba(230,235,255,.86);
+}
+#seccion-coleccion .coleccion-completa-close {
+    appearance: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.035);
+    color: rgba(255,255,255,.65);
+    cursor: pointer;
+    font-size: 18px;
+}
+#seccion-coleccion .coleccion-completa-eyebrow {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    font-size: .58rem;
+    color: rgba(255,215,0,.72);
+    margin-bottom: 8px;
+}
+#seccion-coleccion .coleccion-completa-box h3 {
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: 1.45rem;
+    color: #ffd700;
+    margin: 0 0 12px;
+}
+#seccion-coleccion .coleccion-completa-box p {
+    font-family: 'Cinzel', serif;
+    font-size: .86rem;
+    line-height: 1.55;
+    color: rgba(225,230,250,.8);
+    margin: 0 0 12px;
+}
+#seccion-coleccion .coleccion-completa-rewards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+#seccion-coleccion .coleccion-completa-rewards > div {
+    border: 1px solid rgba(255,215,0,.18);
+    background: rgba(255,255,255,.035);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+#seccion-coleccion .coleccion-completa-rewards strong {
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #ffd700;
+}
+#seccion-coleccion .coleccion-completa-rewards span,
+#seccion-coleccion .coleccion-completa-note {
+    font-size: .7rem !important;
+    color: rgba(190,195,215,.7) !important;
+}
+#seccion-coleccion .coleccion-completa-ok {
+    appearance: none;
+    border: 1px solid rgba(255,215,0,.55);
+    background: rgba(255,215,0,.1);
+    color: #ffd700;
+    padding: 10px 16px;
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    cursor: pointer;
+}
+
+#seccion-coleccion .col-hidden-collection { display: none !important; }
+#seccion-coleccion .coleccion-empty-state {
+    border: 1px solid rgba(255,34,90,.18);
+    background: rgba(255,34,90,.045);
+    padding: 16px 12px;
+    margin: 12px 0;
+    text-align: center;
+    color: rgba(220,225,245,.72);
+}
+#seccion-coleccion .coleccion-empty-lock { font-size: 1.4rem; margin-bottom: 6px; opacity: .65; }
+#seccion-coleccion .coleccion-empty-title {
+    font-family: 'Oswald', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255,82,130,.95);
+    font-size: .78rem;
+}
+#seccion-coleccion .coleccion-empty-desc {
+    margin-top: 6px;
+    font-size: .68rem;
+    line-height: 1.35;
+    color: rgba(190,195,215,.62);
+}
+#seccion-coleccion .col-corrupta-section {
+    color: rgba(255,82,130,.95) !important;
+    border-color: rgba(255,34,90,.35) !important;
+    text-shadow: 0 0 12px rgba(255,34,90,.18);
+}
+#seccion-coleccion .col-corrupta-item.desbloqueada,
+#seccion-coleccion .col-corrupta-item:not(.bloqueada) {
+    border-color: rgba(255,34,90,.45) !important;
+    background: linear-gradient(90deg, rgba(255,34,90,.105), rgba(120,50,255,.035)) !important;
+}
+#seccion-coleccion .col-corrupta-item.bloqueada {
+    opacity: .48;
+    filter: grayscale(.25);
+}
+#seccion-coleccion .col-corrupta-item .col-comun-nombre,
+#seccion-coleccion .col-corrupta-item .col-runa-nombre {
+    color: rgba(255,82,130,.95) !important;
+}
+
+
+/* ================================================================
+   FIX V110 — efecto visual 60s cuando sale Mítica Corrupta
+   ================================================================ */
+#btn-tirar.mitica-corrupta-activa { border-color:#ff2244 !important; color:#ffccd4 !important; box-shadow:0 0 18px rgba(255,34,68,.55),0 0 46px rgba(160,0,255,.22) !important; }
+#btn-tirar.rune-btn.mitica-corrupta-activa { background:transparent !important; border:none !important; box-shadow:none !important; }
+#btn-tirar.mitica-corrupta-activa .rune-core { border-color:rgba(255,34,68,.95) !important; background:radial-gradient(circle at 50% 38%,#260009,#070007 72%) !important; box-shadow:inset 0 0 58px rgba(255,34,68,.24),0 0 35px rgba(255,34,68,.36),0 0 70px rgba(130,0,255,.16) !important; }
+#btn-tirar.mitica-corrupta-activa .rune-energy { background:radial-gradient(circle at 50% 32%,rgba(255,34,68,.22),transparent 62%) !important; }
+#btn-tirar.mitica-corrupta-activa .rune-symbol,#btn-tirar.mitica-corrupta-activa .rune-orbit span { color:#ff2244 !important; text-shadow:0 0 18px rgba(255,34,68,.95),0 0 42px rgba(170,0,255,.42) !important; }
+#btn-tirar.mitica-corrupta-activa .rune-click-hint { border-color:rgba(255,34,68,.55) !important; box-shadow:0 0 22px rgba(255,34,68,.35) !important; }
+#btn-tirar.mitica-corrupta-activa .rune-mandala-out,#btn-tirar.mitica-corrupta-activa .rune-mandala-in,#btn-tirar.mitica-corrupta-activa .rune-orbit { filter:drop-shadow(0 0 8px rgba(255,34,68,.75)) drop-shadow(0 0 18px rgba(170,0,255,.28)) !important; }

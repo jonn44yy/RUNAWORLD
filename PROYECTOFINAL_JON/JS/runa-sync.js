@@ -1,32 +1,35 @@
-// 24/04 v3: anadido runaSync.reset() para usarlo desde el flujo de
-// "borrar progreso". sin eso, los clicks que estuvieran buffereados o
-// en vuelo cuando el jugador reseteaba se aplicaban sobre la cuenta
-// recien borrada (por eso le "volvian" coins y stats viejas).
+// runa-sync.js — Runaworld v6.5: packs grandes + visual unitario estable
 //
-// reset() vacia el buffer, marca un epoch nuevo para invalidar respuestas
-// de batches en vuelo, y para el latido base. el llamador (ajustes.js)
-// debe forzar un location.reload() despues de la respuesta de
-// borrar_progreso.php para tener el RW_INIT fresco.
-//
-// !hi
+// Objetivo:
+//   - El servidor genera y reserva/cobra packs de hasta 25 tiradas.
+//   - El jugador ve consumo de 1 en 1: click -> -1 coin -> runa; el inventario se confirma por lotes.
+//   - Cuando quedan pocas unidades del pack, se pide el siguiente pack.
+//   - Las coins visuales se calculan como: coins_servidor + unidades_prepagadas - clicks_en_espera.
 
 (function () {
-    var ENDPOINT    = "PHP/tirar_runa.php";
-    var INTERVAL_MS = 30000;   // latido base
-    var BURST_SIZE  = 3;       // flush cada N clicks acumulados
-    var HARD_CAP    = 2000;    // tope por seguridad
+    'use strict';
 
-    var buffer    = 0;
-    var inFlight  = false;
-    var pending   = false;
-    var epoch     = 0;        // se incrementa en reset(): si una request en
-                              //   vuelo termina con epoch viejo, se ignora
-    var halted    = false;    // si true, dejamos de aceptar clicks (post-reset
-                              //   hasta que la pagina recargue)
-    var heartbeat = null;     // ref del setInterval para poder pararlo
+    var ENDPOINT_PACK    = 'PHP/crear_pack_tiradas.php';
+    var ENDPOINT_CONFIRM = 'PHP/confirmar_pack_tiradas.php';
 
-    // uuid v4 para idempotencia
-    function nuevoBatchId() {
+    var PACK_SIZE        = 25;
+    var PREFETCH_AT      = 5;
+    var CONFIRM_INTERVAL = 15000;
+    var HARD_QUEUE_CAP   = 80;
+
+    var cola = [];
+    var solicitandoPack = false;
+    var retryPackTimer = null;
+    var halted = false;
+    var epoch = 0;
+    var waitingClicks = 0;
+
+    var consumidasPorPack = {};
+    var confirmTimer = null;
+    var confirmInFlight = false;
+    var serverErrorCooldownUntil = 0;
+
+    function nuevoId() {
         var bytes = new Uint8Array(16);
         crypto.getRandomValues(bytes);
         bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -34,142 +37,346 @@
         var hex = [];
         for (var i = 0; i < 16; i++) {
             var h = bytes[i].toString(16);
-            hex.push(h.length === 1 ? "0" + h : h);
+            hex.push(h.length === 1 ? '0' + h : h);
         }
-        return hex[0]+hex[1]+hex[2]+hex[3]+"-"+hex[4]+hex[5]+"-"+hex[6]+hex[7]+
-               "-"+hex[8]+hex[9]+"-"+hex[10]+hex[11]+hex[12]+hex[13]+hex[14]+hex[15];
+        return hex[0]+hex[1]+hex[2]+hex[3]+'-'+hex[4]+hex[5]+'-'+hex[6]+hex[7]+'-'+hex[8]+hex[9]+'-'+hex[10]+hex[11]+hex[12]+hex[13]+hex[14]+hex[15];
     }
 
-    // se llama desde el onclick del boton. aqui NO hay sorteo, solo cuento
-    function registrarClic(cantidad) {
-        if (halted) return;          // tras reset(), ignoramos hasta el reload
-        if (!cantidad) cantidad = 1;
-        buffer += cantidad;
-
-        if (buffer >= BURST_SIZE) {
-            flush("burst");
-            return;
-        }
-        if (buffer >= HARD_CAP) {
-            flush("burst");
-        }
+    function visualCoinsEnteras() {
+        if (typeof coins === 'undefined') return 0;
+        return Math.max(0, Math.floor(parseFloat(coins) || 0));
     }
 
-    // latido base
-    heartbeat = setInterval(function () {
-        if (halted) return;
-        if (buffer > 0) flush("interval");
-    }, INTERVAL_MS);
-
-    // sendBeacon al cerrar pestana
-    function flushBeacon() {
-        if (halted) return;          // sin esto, un beacon residual aplicaria batch viejo
-        if (buffer <= 0) return;
-        var body = JSON.stringify({
-            clicks:   buffer,
-            batch_id: nuevoBatchId(),
-            reason:   "unload"
-        });
-        try {
-            var blob = new Blob([body], { type: "application/json" });
-            navigator.sendBeacon(ENDPOINT, blob);
-        } catch (e) { /* nada que hacer si falla al cerrar */ }
-        buffer = 0;
-    }
-    window.addEventListener("pagehide",     flushBeacon);
-    window.addEventListener("beforeunload", flushBeacon);
-    document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "hidden") flushBeacon();
-    });
-
-    function flushSync(reason) {
-        return flush(reason || "critical");
+    function aplicarDeltaCoins(delta) {
+        if (!delta || typeof coins === 'undefined') return;
+        coins = Math.max(0, (parseFloat(coins) || 0) + delta);
+        if (typeof actualizarPantalla === 'function') actualizarPantalla();
     }
 
-    function flush(reason) {
-        if (halted)        return Promise.resolve(null);
-        if (buffer <= 0)   return Promise.resolve(null);
-        if (inFlight)    { pending = true; return Promise.resolve(null); }
+    function estimarCoinsServidorDisponibles() {
+        return Math.max(0, Math.floor(visualCoinsEnteras() - cola.length + waitingClicks));
+    }
 
-        var enviados = buffer;
-        var miEpoch  = epoch;        // congelar el epoch al lanzar
-        buffer   = 0;
-        inFlight = true;
+    function recalcularCoinsVisualDesdeServidor(serverCoins) {
+        if (typeof coins === 'undefined') return;
+        var base = parseFloat(serverCoins);
+        if (isNaN(base)) return;
+        coins = Math.max(0, base + cola.length - waitingClicks);
+        if (typeof actualizarPantalla === 'function') actualizarPantalla();
+    }
 
-        var payload = {
-            clicks:   enviados,
-            batch_id: nuevoBatchId(),
-            reason:   reason
+    function sumarMultiplicadoresUnidad(unidad) {
+        var total = 0;
+        var arr = Array.isArray(unidad && unidad.runas_ganadas) ? unidad.runas_ganadas : [];
+        arr.forEach(function (r) { total += parseFloat(r.multiplicador) || 0; });
+        return total;
+    }
+
+    function getVisualState() {
+        var pendingRawPps = 0;
+        cola.forEach(function (u) { pendingRawPps += sumarMultiplicadoresUnidad(u); });
+        return {
+            prepaidCoins: cola.length,
+            waitingClicks: waitingClicks,
+            coinAdjustment: cola.length - waitingClicks,
+            pendingUnits: cola.length + waitingClicks + (solicitandoPack ? 1 : 0),
+            pendingRawPps: pendingRawPps,
+            hasPendingVisual: cola.length > 0 || waitingClicks > 0 || solicitandoPack
         };
+    }
 
-        return fetch(ENDPOINT, {
-            method:      "POST",
-            credentials: "same-origin",
-            headers:     { "Content-Type": "application/json" },
-            body:        JSON.stringify(payload)
+    function tieneCola() { return cola.length > 0; }
+
+    function puedeIntentarTirada() {
+        if (halted) return false;
+        return visualCoinsEnteras() > 0 || cola.length > 0;
+    }
+
+    function cantidadPackSolicitada() {
+        var capacidadServidor = estimarCoinsServidorDisponibles();
+        if (capacidadServidor <= 0) return 0;
+        var espacioCola = Math.max(0, HARD_QUEUE_CAP - cola.length);
+        if (espacioCola <= 0) return 0;
+        return Math.max(1, Math.min(PACK_SIZE, capacidadServidor, espacioCola));
+    }
+
+    function debePedirPackPorEspera() {
+        return !halted && !solicitandoPack && waitingClicks > 0 && cola.length < waitingClicks;
+    }
+
+    function debePrefetch() {
+        return !halted && !solicitandoPack && waitingClicks === 0 && cola.length > 0 && cola.length <= PREFETCH_AT && cantidadPackSolicitada() > 0;
+    }
+
+    function programarRetryPack(ms) {
+        if (retryPackTimer || halted) return;
+        retryPackTimer = setTimeout(function () {
+            retryPackTimer = null;
+            if (debePedirPackPorEspera() || debePrefetch()) pedirPack();
+        }, Math.max(250, ms || 800));
+    }
+
+    function reembolsarWaiting(cantidad) {
+        cantidad = Math.max(0, Math.min(waitingClicks, parseInt(cantidad, 10) || 0));
+        if (cantidad <= 0) return;
+        waitingClicks -= cantidad;
+        aplicarDeltaCoins(cantidad);
+    }
+
+    function pedirPack() {
+        if (halted || solicitandoPack) return Promise.resolve(null);
+        if (Date.now() < serverErrorCooldownUntil) return Promise.resolve(null);
+
+        var cantidadPedida = cantidadPackSolicitada();
+        if (cantidadPedida <= 0) {
+            if (waitingClicks > 0 && cola.length === 0) reembolsarWaiting(waitingClicks);
+            return Promise.resolve(null);
+        }
+
+        solicitandoPack = true;
+        var miEpoch = epoch;
+        var packId = nuevoId();
+
+        return fetch(ENDPOINT_PACK, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cantidad: cantidadPedida, pack_id: packId })
         })
         .then(function (res) {
-            if (!res.ok) throw new Error("HTTP " + res.status);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
         })
         .then(function (data) {
-            // si entre el envio y la respuesta hicimos reset(), tiramos los datos
-            if (miEpoch !== epoch) {
-                console.info("[runa-sync] descartando respuesta de batch pre-reset");
-                return null;
-            }
+            if (miEpoch !== epoch || halted) return null;
+
             if (!data.ok) {
-                console.warn("[runa-sync]", data.error);
-                document.dispatchEvent(new CustomEvent("runas:error", { detail: data }));
+                var retry = parseInt(data.retry_ms, 10) || 1000;
+                serverErrorCooldownUntil = Date.now() + retry;
+
+                // Si el servidor falla, NO dejamos deuda de clicks. Se devuelve
+                // la coin visual reservada para que cada click futuro sea limpio.
+                if (waitingClicks > 0 && cola.length === 0) reembolsarWaiting(waitingClicks);
+
+                if (data.retry_ms !== undefined) {
+                    programarRetryPack(retry);
+                } else {
+                    document.dispatchEvent(new CustomEvent('runas:error', { detail: data }));
+                }
                 return data;
             }
-            document.dispatchEvent(new CustomEvent("runas:sync", { detail: data }));
-            if (data.clicks_validos < data.clicks_enviados) {
-                document.dispatchEvent(new CustomEvent("runas:recorte", {
+
+            if (data.luck_multiplier !== undefined && typeof window.setLuck === 'function') {
+                window.setLuck(data.luck_multiplier);
+            }
+
+            var unidades = Array.isArray(data.unidades) ? data.unidades : [];
+            unidades.forEach(function (u) {
+                u._pack_meta = {
+                    coins: data.coins,
+                    points: data.points,
+                    coins_por_seg: data.coins_por_seg,
+                    points_por_seg: data.points_por_seg,
+                    luck_multiplier: data.luck_multiplier,
+                    total_clicks: data.clicks_validos || unidades.length
+                };
+                cola.push(u);
+            });
+
+            if (data.coins !== undefined) recalcularCoinsVisualDesdeServidor(data.coins);
+
+            var autorizadas = (data.clicks_validos !== undefined) ? (parseInt(data.clicks_validos, 10) || 0) : unidades.length;
+            if (autorizadas <= 0 || unidades.length === 0) {
+                if (waitingClicks > 0) reembolsarWaiting(waitingClicks);
+            } else if (waitingClicks > cola.length) {
+                reembolsarWaiting(waitingClicks - cola.length);
+            }
+
+            if (data.clicks_validos !== undefined && data.clicks_validos < cantidadPedida) {
+                document.dispatchEvent(new CustomEvent('runas:recorte', {
                     detail: {
-                        enviados: data.clicks_enviados,
-                        validos:  data.clicks_validos,
-                        motivo:   data.motivo_corte || "coins_o_tiempo"
+                        enviados: cantidadPedida,
+                        validos: data.clicks_validos,
+                        motivo: data.motivo_corte || 'sin_coins'
                     }
                 }));
             }
+
+            consumirPendientes();
             return data;
         })
         .catch(function (err) {
-            console.warn("[runa-sync] fallo red, re-encolando", err);
-            // si reset paso entre medias, NO reencolar (era pre-reset)
-            if (miEpoch === epoch && !halted) {
-                buffer += enviados;
-            }
+            console.warn('[runa-sync] fallo creando pack', err);
+            serverErrorCooldownUntil = Date.now() + 1000;
+            if (waitingClicks > 0 && cola.length === 0) reembolsarWaiting(waitingClicks);
+            programarRetryPack(1000);
         })
-        .then(function (result) {
-            inFlight = false;
-            if (pending && !halted) {
-                pending = false;
-                if (buffer > 0) flush("interval");
-            }
-            return result;
+        .then(function (data) {
+            solicitandoPack = false;
+            if (Date.now() >= serverErrorCooldownUntil && (debePedirPackPorEspera() || debePrefetch())) programarRetryPack(250);
+            return data;
         });
     }
 
-    // reset(): limpia buffer y para el sistema. se llama ANTES de hacer
-    // fetch a borrar_progreso.php. el llamador hara location.reload() tras
-    // recibir la respuesta del server, asi entra a la pagina con RW_INIT
-    // fresco y un runa-sync nuevo
-    function reset() {
-        epoch++;                     // invalida respuestas de fetch en vuelo
-        buffer  = 0;
-        pending = false;
-        halted  = true;              // ignora clics y latidos hasta el reload
-        if (heartbeat) {
-            clearInterval(heartbeat);
-            heartbeat = null;
+    function registrarClic(cantidad) {
+        if (halted) return false;
+        cantidad = cantidad || 1;
+        var hizoAlgo = false;
+
+        for (var i = 0; i < cantidad; i++) {
+            if (visualCoinsEnteras() <= 0) break;
+
+            aplicarDeltaCoins(-1);
+            hizoAlgo = true;
+
+            if (cola.length > 0) {
+                var unidad = cola.shift();
+                emitirUnidad(unidad);
+                marcarConsumida(unidad);
+                if (debePrefetch()) pedirPack();
+            } else {
+                if (waitingClicks >= HARD_QUEUE_CAP) {
+                    aplicarDeltaCoins(1);
+                    break;
+                }
+                waitingClicks++;
+                if (debePedirPackPorEspera()) pedirPack();
+            }
         }
+
+        return hizoAlgo;
+    }
+
+    function consumirPendientes() {
+        while (!halted && waitingClicks > 0 && cola.length > 0) {
+            waitingClicks--;
+            var unidad = cola.shift();
+            emitirUnidad(unidad);
+            marcarConsumida(unidad);
+        }
+        if (debePedirPackPorEspera() || debePrefetch()) pedirPack();
+    }
+
+    function emitirUnidad(unidad) {
+        var meta = unidad._pack_meta || {};
+        var data = {
+            ok: true,
+            mode: 'pack_unit',
+            local_visual: true,
+            pack_id: unidad.pack_id,
+            seq: unidad.seq,
+            clicks_enviados: 1,
+            clicks_validos: 1,
+            coins_delta: 0,
+            runas_ganadas: unidad.runas_ganadas || [],
+            luck_multiplier: meta.luck_multiplier
+        };
+        document.dispatchEvent(new CustomEvent('runas:sync', { detail: data }));
+    }
+
+    function marcarConsumida(unidad) {
+        if (!unidad || !unidad.pack_id) return;
+        var packId = unidad.pack_id;
+        var seq = parseInt(unidad.seq, 10) || 0;
+        if (!consumidasPorPack[packId] || seq > consumidasPorPack[packId]) {
+            consumidasPorPack[packId] = seq;
+        }
+        programarConfirmacion();
+    }
+
+    function programarConfirmacion() {
+        if (confirmTimer || halted) return;
+        confirmTimer = setTimeout(function () {
+            confirmTimer = null;
+            confirmarConsumos();
+        }, CONFIRM_INTERVAL);
+    }
+
+    function confirmarConsumos() {
+        if (halted) return Promise.resolve(null);
+        if (confirmInFlight) {
+            programarConfirmacion();
+            return Promise.resolve(null);
+        }
+
+        var packIds = Object.keys(consumidasPorPack);
+        if (packIds.length === 0) return Promise.resolve(null);
+
+        var snapshot = {};
+        packIds.forEach(function (packId) { snapshot[packId] = consumidasPorPack[packId]; });
+        confirmInFlight = true;
+
+        return Promise.all(packIds.map(function (packId) {
+            return fetch(ENDPOINT_CONFIRM, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pack_id: packId, consumidas: snapshot[packId] })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.ok && consumidasPorPack[packId] === snapshot[packId]) {
+                    delete consumidasPorPack[packId];
+                }
+                return data;
+            })
+            .catch(function () { return null; });
+        }))
+        .then(function (results) {
+            confirmInFlight = false;
+            // Si el servidor devuelve inventario confirmado, lo reenviamos al mismo listener
+            // que usa tirada.js. Con el fix v112, esta actualización nunca puede bajar
+            // cantidades visuales por una respuesta vieja; solo consolida/sube.
+            (results || []).forEach(function (data) {
+                if (data && data.ok && Array.isArray(data.runas)) {
+                    document.dispatchEvent(new CustomEvent('runas:sync', { detail: data }));
+                }
+            });
+            if (Object.keys(consumidasPorPack).length > 0) programarConfirmacion();
+            return results;
+        });
+    }
+
+    function confirmarBeacon() {
+        Object.keys(consumidasPorPack).forEach(function (packId) {
+            var body = JSON.stringify({ pack_id: packId, consumidas: consumidasPorPack[packId] });
+            try {
+                navigator.sendBeacon(ENDPOINT_CONFIRM, new Blob([body], { type: 'application/json' }));
+                delete consumidasPorPack[packId];
+            } catch (e) { /* no critico */ }
+        });
+    }
+
+    window.addEventListener('pagehide', confirmarBeacon);
+    window.addEventListener('beforeunload', confirmarBeacon);
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') confirmarBeacon();
+    });
+
+    function flushSync() { return confirmarConsumos(); }
+    function prefetch() { if (debePrefetch()) return pedirPack(); return Promise.resolve(null); }
+
+    function reset() {
+        epoch++;
+        halted = true;
+        cola = [];
+        waitingClicks = 0;
+        solicitandoPack = false;
+        consumidasPorPack = {};
+        confirmInFlight = false;
+        if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = null; }
+        if (retryPackTimer) { clearTimeout(retryPackTimer); retryPackTimer = null; }
     }
 
     window.runaSync = {
+        version: '6.8-fix-confirm-dispatch',
         registrarClic: registrarClic,
-        flushSync:     flushSync,
-        reset:         reset
+        flushSync: flushSync,
+        reset: reset,
+        prefetch: prefetch,
+        tieneCola: tieneCola,
+        puedeIntentarTirada: puedeIntentarTirada,
+        getVisualState: getVisualState,
+        _debugState: function () { return { cola: cola.length, waitingClicks: waitingClicks, solicitandoPack: solicitandoPack, visualCoins: visualCoinsEnteras(), capacidadServidor: estimarCoinsServidorDisponibles(), cooldownMs: Math.max(0, serverErrorCooldownUntil - Date.now()) }; }
     };
 })();

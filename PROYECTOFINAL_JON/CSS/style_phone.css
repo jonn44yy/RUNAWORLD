@@ -21,7 +21,7 @@
 /* ---- RESET EN ESCRITORIO ---- */
 
 /* oculta todos los elementos exclusivos de movil en pantallas grandes. !hi al responsive */
-@media (min-width: 769px) {
+@media (min-width: 1025px) {
     #mobile-topbar,
     #mobile-nav-drawer,
     #mobile-runas-drawer,
@@ -34,7 +34,7 @@
 
 /* ---- SOLO MOVIL ---- */
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
 
     /* evita el scroll doble en movil y el efecto rebote de ios. mecachis con safari */
     body { overflow: hidden; overscroll-behavior: none; }
@@ -411,4 +411,961 @@
        oculta en movil, la info va en el drawer de runas o en la propia card */
     #panel-col-stats { display: none !important; }
 
+}
+/* ===== COLECCIÓN móvil v8.1 — variantes independientes ===== */
+@media (max-width: 1024px) {
+    .col-hidden-collection { display: none !important; }
+    .coleccion-empty-state {
+        margin: 10px 0;
+        padding: 14px 10px;
+        font-size: .7rem;
+    }
+    .coleccion-empty-desc { font-size: .55rem; }
+}
+
+
+/* ==========================================================
+   RUNAWORLD MOBILE v8.2 — FIX colección/corruptas
+   ========================================================== */
+@media (max-width: 1024px) {
+    #seccion-coleccion .coleccion-topbar-v71 {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        padding: 8px 10px;
+        margin: 0;
+        background: rgba(6,7,10,.72);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(255,215,0,.08);
+    }
+    #seccion-coleccion .coleccion-lista-pill {
+        min-width: 118px;
+        min-height: 32px;
+        padding: 0 12px;
+        font-size: .58rem;
+    }
+    #seccion-coleccion .coleccion-variante-pill {
+        min-width: 88px;
+        min-height: 30px;
+        padding: 0 10px;
+        font-size: .52rem;
+    }
+    #seccion-coleccion .coleccion-bonus-mobile {
+        display: flex !important;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+    }
+    #seccion-coleccion .coleccion-bonus-desktop { display: none !important; }
+    #seccion-coleccion .coleccion-completa-box { padding: 20px 18px; }
+    #seccion-coleccion .coleccion-completa-rewards { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v8.3 — scroll real para colección/corruptas
+   ========================================================== */
+@media (max-width: 1024px) {
+    #seccion-coleccion,
+    #seccion-coleccion.seccion-coleccion-full {
+        min-height: calc(100dvh - 130px) !important;
+        height: calc(100dvh - 130px) !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion .coleccion-layout {
+        height: 100% !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion .coleccion-columna-lista {
+        order: 3 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+        min-height: 150px !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain !important;
+        touch-action: pan-y !important;
+        padding: 10px 12px 26px !important;
+    }
+
+    #mobile-runas-drawer,
+    #mobile-runas-scroll {
+        min-height: 0 !important;
+    }
+    #mobile-runas-scroll {
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        padding-bottom: 24px !important;
+    }
+
+    #seccion-coleccion .col-runa-btn.col-especial {
+        min-height: 44px !important;
+        padding: 10px 11px !important;
+    }
+
+    #seccion-coleccion .col-runa-nombre,
+    #seccion-coleccion .col-comun-nombre,
+    #panel-col-stats-mobile .runa-card-nombre {
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v8.4 — scroll fiable en colección
+   Corrige el caso donde el topbar + preview consumían toda la altura
+   y la lista de básicas/corruptas quedaba sin scroll táctil real.
+   ========================================================== */
+@media (max-width: 1024px) {
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        display: flex !important;
+        flex-direction: column !important;
+        height: calc(100dvh - 130px) !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        flex: 0 0 auto !important;
+        max-height: 112px !important;
+        overflow: visible !important;
+    }
+
+    #seccion-coleccion .coleccion-layout {
+        flex: 1 1 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion .coleccion-centro {
+        order: 1 !important;
+        flex: 0 0 clamp(140px, 28dvh, 230px) !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: 230px !important;
+    }
+
+    #seccion-coleccion .coleccion-canvas-wrap {
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion #btn-anim-row {
+        flex: 0 0 auto !important;
+    }
+
+    #seccion-coleccion .coleccion-columna-lista {
+        order: 3 !important;
+        flex: 1 1 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: scroll !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain !important;
+        touch-action: pan-y !important;
+        padding: 10px 12px 96px !important;
+    }
+
+    #seccion-coleccion .col-runa-btn,
+    #seccion-coleccion .col-runa-comun,
+    #seccion-coleccion .col-runa-nombre,
+    #seccion-coleccion .col-comun-nombre {
+        touch-action: pan-y !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v8.5 — menú de navegación en barra superior
+   ========================================================== */
+@media (max-width: 1024px) {
+    #mobile-topbar {
+        display: grid !important;
+        grid-template-columns: 44px 1fr 44px !important;
+        gap: 8px !important;
+        align-items: center !important;
+        padding: 0 10px !important;
+        z-index: 9200 !important;
+    }
+
+    #mobile-topbar .topbar-main {
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+    }
+
+    #mobile-topbar .topbar-title,
+    #mobile-topbar .topbar-user {
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+
+    #mobile-topbar .topbar-title {
+        font-size: 0.92rem !important;
+        letter-spacing: 5px !important;
+    }
+
+    #mobile-topbar .topbar-user {
+        margin-top: 4px !important;
+        font-size: 0.56rem !important;
+        letter-spacing: 2px !important;
+    }
+
+    #btn-menu-nav.mobile-topbar-btn,
+    #btn-menu-runas.mobile-topbar-btn {
+        position: static !important;
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 10px !important;
+        background: rgba(255,255,255,0.035) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: auto !important;
+        cursor: pointer !important;
+        -webkit-tap-highlight-color: transparent !important;
+        touch-action: manipulation !important;
+        transition: transform .12s ease, border-color .15s ease, background .15s ease !important;
+    }
+
+    #btn-menu-nav.mobile-topbar-btn {
+        border: 1px solid rgba(255,215,0,.34) !important;
+        box-shadow: 0 0 12px rgba(255,215,0,.10) !important;
+    }
+
+    #btn-menu-runas.mobile-topbar-btn {
+        border: 1px solid rgba(160,80,255,.36) !important;
+        box-shadow: 0 0 12px rgba(160,80,255,.12) !important;
+    }
+
+    #btn-menu-nav.mobile-topbar-btn:active,
+    #btn-menu-runas.mobile-topbar-btn:active {
+        transform: scale(.92) !important;
+    }
+
+    #btn-menu-nav.mobile-topbar-btn svg,
+    #btn-menu-runas.mobile-topbar-btn svg {
+        width: 21px !important;
+        height: 21px !important;
+        flex-shrink: 0 !important;
+    }
+
+    #mobile-nav-drawer,
+    #mobile-runas-drawer,
+    #mobile-overlay {
+        z-index: 9300 !important;
+    }
+
+    #mobile-nav-drawer.open,
+    #mobile-runas-drawer.open {
+        z-index: 9400 !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE/TABLET v8.6 — navegación, preview y paneles
+   ========================================================== */
+@media (max-width: 1024px) {
+    /* deja aire entre la barra superior móvil y los controles de colección */
+    #centro {
+        top: 60px !important;
+        bottom: 78px !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        margin-top: 8px !important;
+        padding-top: 8px !important;
+        flex: 0 0 auto !important;
+        max-height: 128px !important;
+        overflow: visible !important;
+    }
+
+    /* preview bastante más grande en móvil/tablet */
+    #seccion-coleccion .coleccion-centro {
+        order: 1 !important;
+        flex: 0 0 clamp(220px, 40dvh, 340px) !important;
+        height: auto !important;
+        min-height: 220px !important;
+        max-height: 340px !important;
+    }
+
+    #seccion-coleccion .coleccion-canvas-wrap {
+        height: 100% !important;
+        min-height: 220px !important;
+    }
+
+    #seccion-coleccion #col-iframe,
+    #seccion-coleccion #col-canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* la lista de colección conserva scroll aunque el preview sea mayor */
+    #seccion-coleccion .coleccion-columna-lista {
+        flex: 1 1 0 !important;
+        min-height: 120px !important;
+        overflow-y: auto !important;
+        padding-bottom: 110px !important;
+    }
+
+    /* drawers adaptativos para móvil y tablets pequeñas */
+    #mobile-nav-drawer {
+        left: 0 !important;
+        width: min(320px, 86vw) !important;
+        transform: translateX(-105%) !important;
+        transition: transform 0.26s cubic-bezier(0.4,0,0.2,1) !important;
+    }
+    #mobile-nav-drawer.open { transform: translateX(0) !important; }
+
+    #mobile-runas-drawer {
+        right: 0 !important;
+        width: min(380px, 90vw) !important;
+        transform: translateX(105%) !important;
+        transition: transform 0.26s cubic-bezier(0.4,0,0.2,1) !important;
+    }
+    #mobile-runas-drawer.open { transform: translateX(0) !important; }
+
+    .mobile-runas-separator {
+        margin: 18px 16px 10px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255,215,0,.12);
+        font-family: 'Oswald', sans-serif;
+        font-size: .62rem;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        color: rgba(255,215,0,.75);
+    }
+
+    #panel-mis-runas-mobile {
+        padding: 0 14px 28px !important;
+    }
+
+    #panel-mis-runas-mobile .grupo-nombre,
+    #panel-mis-runas .grupo-nombre {
+        color: rgba(255,215,0,.72) !important;
+        background: rgba(255,215,0,.045) !important;
+        border-left: 2px solid rgba(255,215,0,.35) !important;
+        padding: 8px 10px !important;
+        margin-top: 10px !important;
+    }
+
+    #panel-mis-runas-mobile .runa-card-nombre,
+    #panel-mis-runas .runa-card-nombre {
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.2 !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE/TABLET v8.7 — limpieza tablet/drawer
+   ========================================================== */
+@media (max-width: 1024px) {
+    html, body {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    #layout {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+
+    #panel-mis-runas,
+    #panel-col-stats,
+    #sidebar,
+    #header {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    #centro {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        margin: 0 !important;
+        top: 64px !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        margin-top: 24px !important;
+        padding-top: 12px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        max-height: 150px !important;
+    }
+
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        height: calc(100dvh - 142px) !important;
+    }
+
+    #panel-col-stats-mobile {
+        padding: 18px 16px 20px !important;
+        margin: 0 !important;
+        border-bottom: 1px solid rgba(255,215,0,.10) !important;
+    }
+
+    #panel-col-stats-mobile #col-stats-contenido,
+    #panel-col-stats-mobile .col-stats-contenido {
+        padding: 0 4px !important;
+    }
+
+    #panel-col-stats-mobile .col-stat-fila {
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+    }
+
+    .mobile-runas-separator {
+        display: none !important;
+    }
+
+    #panel-mis-runas-mobile {
+        padding-top: 12px !important;
+    }
+
+    #mobile-runas-drawer {
+        position: fixed !important;
+        top: 52px !important;
+        bottom: 78px !important;
+        right: 0 !important;
+        left: auto !important;
+        width: min(420px, 94vw) !important;
+        max-width: 94vw !important;
+        transform: translateX(110%) !important;
+        will-change: transform !important;
+        box-shadow: -18px 0 40px rgba(0,0,0,.45) !important;
+    }
+
+    #mobile-runas-drawer.open {
+        transform: translateX(0) !important;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    #mobile-runas-drawer {
+        width: min(560px, 72vw) !important;
+        max-width: 72vw !important;
+    }
+
+    #seccion-tirada.activa {
+        min-height: calc(100dvh - 150px) !important;
+    }
+
+    #zona-tirada {
+        max-width: 520px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    #mobile-runas-drawer {
+        width: 94vw !important;
+        max-width: 94vw !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE/TABLET v8.8 — fix definitivo 801-1024
+   ========================================================== */
+@media (max-width: 1024px) {
+    /* El panel derecho de escritorio era el bloque azul/lateral que seguia
+       saliendo entre 801px y 1024px. En tablet debe funcionar como movil:
+       solo topbar + drawers, sin columna fija derecha. */
+    #panel-derecho,
+    #panel-mis-runas,
+    #panel-col-stats,
+    #sidebar,
+    #header {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+    }
+
+    body,
+    #layout,
+    #centro,
+    .seccion,
+    #seccion-tirada,
+    #seccion-coleccion {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        max-width: 100vw !important;
+    }
+
+    #layout {
+        width: 100vw !important;
+        display: block !important;
+    }
+
+    /* Bajo mucho mas el contenido para que las pestañas de coleccion no
+       queden tapadas por la topbar fija en movil/tablet. */
+    #centro {
+        top: 92px !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 78px !important;
+        width: 100vw !important;
+        padding: 0 !important;
+    }
+
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        height: calc(100dvh - 170px) !important;
+        min-height: calc(100dvh - 170px) !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        margin-top: 34px !important;
+        padding-top: 18px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        position: relative !important;
+        z-index: 2 !important;
+    }
+
+    /* En tablet no dejo ninguna columna/drawer visible por defecto: solo aparece
+       al pulsar el boton morado de la topbar. */
+    #mobile-runas-drawer {
+        position: fixed !important;
+        top: 52px !important;
+        bottom: 78px !important;
+        right: 0 !important;
+        left: auto !important;
+        width: min(420px, 94vw) !important;
+        max-width: 94vw !important;
+        transform: translateX(115%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: transform .26s cubic-bezier(.4,0,.2,1), opacity .18s ease !important;
+        box-shadow: -18px 0 40px rgba(0,0,0,.45) !important;
+    }
+
+    #mobile-runas-drawer.open {
+        transform: translateX(0) !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+}
+
+@media (min-width: 801px) and (max-width: 1024px) {
+    /* El rango exacto que estaba roto: sin panel lateral permanente. */
+    #panel-derecho,
+    #panel-mis-runas,
+    #panel-col-stats {
+        display: none !important;
+    }
+
+    #mobile-runas-drawer {
+        width: min(460px, 86vw) !important;
+        max-width: 86vw !important;
+        transform: translateX(115%) !important;
+    }
+
+    #mobile-runas-drawer.open {
+        transform: translateX(0) !important;
+    }
+
+    #zona-tirada {
+        max-width: 540px !important;
+    }
+}
+
+@media (max-width: 800px) {
+    #centro {
+        top: 88px !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        margin-top: 30px !important;
+        padding-top: 16px !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE/TABLET v8.9 — layout limpio 801-1024 + stats legibles
+   ========================================================== */
+@media (max-width: 1024px) {
+    html,
+    body {
+        width: 100vw !important;
+        height: 100dvh !important;
+        min-height: 100dvh !important;
+        max-height: 100dvh !important;
+        overflow: hidden !important;
+    }
+
+    body::before,
+    body::after,
+    #layout::before,
+    #layout::after,
+    #centro::before,
+    #centro::after {
+        display: none !important;
+        content: none !important;
+    }
+
+    #layout,
+    #centro,
+    .seccion,
+    #seccion-tirada,
+    #seccion-tienda,
+    #seccion-coleccion,
+    #seccion-estadisticas,
+    #seccion-ajustes {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        border-right: 0 !important;
+    }
+
+    /* El contenido general empieza justo bajo la topbar. Solo Colección baja
+       sus pestañas; Tirar Runa no necesita ese hueco gigante. */
+    #centro {
+        position: fixed !important;
+        top: 52px !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 92px !important;
+        height: auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        padding: 0 !important;
+        scrollbar-width: none !important;
+    }
+    #centro::-webkit-scrollbar { display: none !important; }
+
+    #seccion-tirada.activa {
+        min-height: calc(100dvh - 144px) !important;
+        height: calc(100dvh - 144px) !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+    }
+
+    /* Las pestañas de Colección quedan bastante más abajo de la topbar,
+       pero sin empujar el resto de secciones ni crear scroll de página. */
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        height: calc(100dvh - 144px) !important;
+        min-height: calc(100dvh - 144px) !important;
+        overflow: hidden !important;
+        padding-top: 78px !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        margin-top: 0 !important;
+        padding: 0 10px 10px !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    /* Mismo lenguaje visual que PC: rectángulos limpios, sin bloque amarillo
+       relleno. Activo = borde/texto brillante, no pastilla pintada. */
+    #seccion-coleccion .coleccion-listas-scroll,
+    #seccion-coleccion .coleccion-variantes-v71 {
+        justify-content: flex-start !important;
+        gap: 8px !important;
+        padding-bottom: 8px !important;
+    }
+
+    #seccion-coleccion .coleccion-lista-pill,
+    #seccion-coleccion .coleccion-variante-pill {
+        background: rgba(8, 9, 13, .74) !important;
+        box-shadow: none !important;
+        border-width: 1px !important;
+        border-style: solid !important;
+        line-height: 1 !important;
+    }
+
+    #seccion-coleccion .coleccion-lista-pill.active {
+        color: #ffd700 !important;
+        border-color: rgba(255, 215, 0, .92) !important;
+        background: rgba(8, 9, 13, .88) !important;
+        text-shadow: 0 0 10px rgba(255, 215, 0, .22) !important;
+    }
+
+    #seccion-coleccion .coleccion-variante-pill.active {
+        color: #d86cff !important;
+        border-color: rgba(216,108,255,.95) !important;
+        background: rgba(8, 9, 13, .88) !important;
+        text-shadow: 0 0 10px rgba(216,108,255,.22) !important;
+    }
+
+    #seccion-coleccion .coleccion-variante-pill.corrupta-unlocked.active {
+        color: #ff386f !important;
+        border-color: rgba(255,56,111,.95) !important;
+        background: rgba(8, 9, 13, .88) !important;
+        text-shadow: 0 0 10px rgba(255,56,111,.22) !important;
+    }
+
+    /* El panel derecho/drawer no debe existir visualmente hasta abrirlo. */
+    #panel-derecho,
+    #panel-mis-runas,
+    #panel-col-stats,
+    #sidebar,
+    #header {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        opacity: 0 !important;
+    }
+
+    #mobile-runas-drawer,
+    #mobile-nav-drawer {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    #mobile-runas-drawer.open,
+    #mobile-nav-drawer.open {
+        display: flex !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+
+    #mobile-runas-drawer {
+        position: fixed !important;
+        top: 52px !important;
+        bottom: 92px !important;
+        right: 0 !important;
+        left: auto !important;
+        width: min(420px, 94vw) !important;
+        max-width: 94vw !important;
+        transform: translateX(0) !important;
+        opacity: 1 !important;
+    }
+
+    #mobile-nav-drawer {
+        position: fixed !important;
+        top: 52px !important;
+        bottom: 92px !important;
+        left: 0 !important;
+        right: auto !important;
+        width: min(320px, 86vw) !important;
+        max-width: 86vw !important;
+        transform: translateX(0) !important;
+        opacity: 1 !important;
+    }
+
+    /* Barra inferior más grande y legible. */
+    #mobile-stats-bar {
+        height: 92px !important;
+        padding: 6px 8px 8px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .mob-stat svg {
+        width: 20px !important;
+        height: 20px !important;
+        margin-bottom: 2px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .mob-val {
+        font-size: 1.22rem !important;
+        line-height: 1.05 !important;
+        letter-spacing: .5px !important;
+        max-width: 22vw !important;
+    }
+
+    .mob-rate {
+        font-size: .72rem !important;
+        line-height: 1.05 !important;
+        max-width: 22vw !important;
+    }
+
+    .mob-sep {
+        height: 42px !important;
+    }
+
+    #ms-suerte {
+        color: #ffd700 !important;
+        text-shadow: 0 0 10px rgba(255,215,0,.25) !important;
+    }
+
+    #panel-col-stats-mobile {
+        padding: 22px 20px 24px !important;
+    }
+
+    #panel-col-stats-mobile .panel-titulo,
+    #panel-col-stats-mobile #col-stats-titulo {
+        padding-left: 4px !important;
+        padding-right: 4px !important;
+    }
+
+    #panel-col-stats-mobile #col-stats-contenido {
+        padding: 0 4px !important;
+    }
+}
+
+@media (min-width: 801px) and (max-width: 1024px) {
+    /* Tablet: usa la versión móvil a ancho completo, sin columna lateral ni
+       scrollbar de página. */
+    #centro {
+        top: 52px !important;
+        bottom: 92px !important;
+    }
+
+    #seccion-tirada.activa {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        min-height: calc(100dvh - 144px) !important;
+        height: calc(100dvh - 144px) !important;
+    }
+
+    #zona-tirada {
+        max-width: 560px !important;
+    }
+
+    #mobile-runas-drawer.open {
+        width: min(460px, 86vw) !important;
+        max-width: 86vw !important;
+    }
+}
+
+@media (max-width: 520px) {
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        padding-top: 90px !important;
+    }
+
+    #seccion-coleccion .coleccion-lista-pill {
+        min-width: 128px !important;
+        font-size: .6rem !important;
+        letter-spacing: 2.4px !important;
+    }
+
+    #seccion-coleccion .coleccion-variante-pill {
+        min-width: 104px !important;
+        font-size: .55rem !important;
+        letter-spacing: 2.2px !important;
+    }
+
+    .mob-val { font-size: 1.04rem !important; }
+    .mob-rate { font-size: .64rem !important; }
+}
+
+/* ---- v9.0: barra inferior móvil más legible + suerte visible ---- */
+@media (max-width: 1024px) {
+    #centro {
+        bottom: 112px !important;
+    }
+
+    #mobile-runas-drawer,
+    #mobile-nav-drawer {
+        bottom: 112px !important;
+    }
+
+    #mobile-stats-bar {
+        height: 112px !important;
+        padding: 10px 10px 12px !important;
+        display: grid !important;
+        grid-template-columns: 1fr 1px 1fr 1px 1fr 1px 1fr !important;
+        align-items: center !important;
+        column-gap: 8px !important;
+    }
+
+    .mob-stat {
+        gap: 5px !important;
+        overflow: visible !important;
+        min-width: 0 !important;
+    }
+
+    .mob-stat svg {
+        width: 24px !important;
+        height: 24px !important;
+        margin-bottom: 1px !important;
+    }
+
+    .mob-val {
+        display: block !important;
+        font-size: clamp(1.22rem, 4.3vw, 1.55rem) !important;
+        line-height: 1 !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+    }
+
+    .mob-rate {
+        display: block !important;
+        font-size: clamp(.72rem, 2.2vw, .86rem) !important;
+        line-height: 1.05 !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+    }
+
+    .mob-sep {
+        width: 1px !important;
+        height: 58px !important;
+        background: rgba(255,255,255,.075) !important;
+    }
+
+    #ms-suerte {
+        color: #ffd700 !important;
+        min-width: 3.4em !important;
+        text-shadow: 0 0 12px rgba(255,215,0,.38) !important;
+    }
+
+    #seccion-tirada.activa {
+        min-height: calc(100dvh - 164px) !important;
+        height: calc(100dvh - 164px) !important;
+    }
+}
+
+@media (max-width: 420px) {
+    #mobile-stats-bar {
+        column-gap: 5px !important;
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+    }
+
+    .mob-stat svg {
+        width: 21px !important;
+        height: 21px !important;
+    }
+
+    .mob-val {
+        font-size: 1.16rem !important;
+        letter-spacing: 0 !important;
+    }
+
+    .mob-rate {
+        font-size: .66rem !important;
+    }
 }

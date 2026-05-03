@@ -1,3 +1,4 @@
+window.RW_COLECCION_VERSION = '8.2';
 // coleccion.js — runaworld
 // todo lo que pasa en la seccion de coleccion: cuando el jugador clica una
 // runa desbloqueada se carga su animacion en el iframe central, se pinta el
@@ -78,6 +79,7 @@ function seleccionarRunaCol(el) {
     el.classList.add("sel");
 
     const rareza       = el.dataset.rareza;
+    const runaFile     = el.dataset.runaFile || rareza;
     const nombre       = el.dataset.nombre;
     const peso         = el.dataset.peso;
     const multiplicador= el.dataset.multiplicador;
@@ -85,7 +87,8 @@ function seleccionarRunaCol(el) {
     const imagen       = el.dataset.imagen;
 
     // hint solo se ve si no hay ninguna runa seleccionada, lo escondo ya
-    document.getElementById("col-canvas-hint").style.display = "none";
+    var hintEl = document.getElementById("col-canvas-hint");
+    if (hintEl) hintEl.style.display = "none";
 
     // el boton "ver animacion" + toggle ON/OFF solo aplica a rarezas que
     // tienen animacion pesada (las que duran >5s y pueden molestar). para
@@ -106,16 +109,17 @@ function seleccionarRunaCol(el) {
     // cargar el html de la rareza en el iframe. pararAnimColeccion ya limpia
     // cualquier animacion canvas central anterior, asi empiezo limpio
     pararAnimColeccion();
-    colRunaActual = rareza;
+    colRunaActual = runaFile;
     // sincronizar el texto del toggle (ANIM ON / ANIM OFF) con el estado
     // guardado en localStorage para esta rareza. ver toggles.js
-    if (rareza === "eterna" || rareza === "divina" || rareza === "legendaria" || rareza === "mitica") actualizarEstadoToggle(rareza);
+    if (rareza === "eterna" || rareza === "divina" || rareza === "legendaria" || rareza === "mitica") actualizarEstadoToggle(runaFile);
 
     const iframe = document.getElementById("col-iframe");
-    if (iframe) iframe.src = "RUNAS_HTML/RUNAS/" + rareza + ".html";
+    if (iframe) iframe.src = "RUNAS_HTML/RUNAS/" + runaFile + ".html";
 
     // panel stats de la derecha. titulo con el nombre y color por rareza
-    document.getElementById("col-stats-titulo").textContent = nombre;
+    var statsTituloEl = document.getElementById("col-stats-titulo");
+    if (statsTituloEl) statsTituloEl.textContent = nombre;
 
     // mapas de color y etiqueta. podria meterlos arriba como constantes pero
     // solo se usan aqui y tampoco es un drama que esten inline. si anado una
@@ -131,7 +135,7 @@ function seleccionarRunaCol(el) {
     };
     const colorRareza = colores[rareza] || "var(--silver)";
     const labelRareza = labels[rareza]  || rareza;
-    document.getElementById("col-stats-titulo").style.color = colorRareza;
+    if (statsTituloEl) statsTituloEl.style.color = colorRareza;
 
     // 27/04 v3: probabilidad fija (sin "Con tu suerte"). getProbStr y
     // getProbBaseStr ahora devuelven el mismo valor (la fraccion 1/X)
@@ -142,26 +146,46 @@ function seleccionarRunaCol(el) {
     // se repinta solo al seleccionar otra runa, no merece la pena DOM API
     // nodo a nodo. el onerror del img elimina el contenedor si la imagen
     // no existe, asi no queda un hueco feo con el icono de imagen rota
-    document.getElementById("col-stats-contenido").innerHTML = `
-        <div class="col-stat-fila">
-            <span class="col-stat-label">Rareza</span>
-            <span class="col-stat-valor" style="color:${colorRareza}">${labelRareza}</span>
-        </div>
-        <div class="col-stat-fila">
-            <span class="col-stat-label">Probabilidad</span>
-            <span class="col-stat-valor" style="color:${colorRareza}">${probStr}</span>
-        </div>
-        <div class="col-stat-fila">
-            <span class="col-stat-label">Multiplicador</span>
-            <span class="col-stat-valor" style="color:${colorRareza}">x${parseFloat(multiplicador).toFixed(2)}</span>
-            <span class="col-stat-pts">${parseFloat(multiplicador).toFixed(2)} pts/seg</span>
-        </div>
-        <div class="col-stat-fila">
-            <span class="col-stat-label">En tu poder</span>
-            <span class="col-stat-valor">${Number(cantidad).toLocaleString()}</span>
-        </div>
-        ${imagen ? `<div class="col-stat-imagen"><img src="IMG/${imagen}" alt="${nombre}" onerror="this.parentNode.remove()"></div>` : ""}
-    `;
+    var statsContenidoEl = document.getElementById("col-stats-contenido");
+    var puntosPorRuna = parseFloat(multiplicador) || 0;
+    var cantidadNum = parseInt(cantidad, 10) || 0;
+    var totalPuntosRuna = puntosPorRuna * cantidadNum;
+    var fmt = (typeof formatNum === "function") ? formatNum : function(n){ return Math.floor(parseFloat(n) || 0).toLocaleString(); };
+    var probLuckStr = (typeof getProbLuckStr === "function") ? getProbLuckStr(runaId) : probStr;
+
+    if (statsContenidoEl) {
+        statsContenidoEl.innerHTML = `
+            <div class="col-stat-fila">
+                <span class="col-stat-label">Rareza</span>
+                <span class="col-stat-valor" style="color:${colorRareza}">${labelRareza}</span>
+            </div>
+            <div class="col-stat-fila">
+                <span class="col-stat-label">Rareza base</span>
+                <span class="col-stat-valor" style="color:${colorRareza}">${probStr}</span>
+            </div>
+            <div class="col-stat-fila">
+                <span class="col-stat-label">Con suerte</span>
+                <span class="col-stat-valor" style="color:${colorRareza}">${probLuckStr}</span>
+            </div>
+            <div class="col-stat-fila">
+                <span class="col-stat-label">Puntos por runa</span>
+                <span class="col-stat-valor" style="color:${colorRareza}">${fmt(puntosPorRuna)} pts/s</span>
+            </div>
+            <div class="col-stat-fila">
+                <span class="col-stat-label">En tu poder</span>
+                <span class="col-stat-valor">${cantidadNum.toLocaleString()}</span>
+            </div>
+            <div class="col-stat-fila col-stat-total-runa">
+                <span class="col-stat-label">Total generado</span>
+                <span class="col-stat-valor" style="color:${colorRareza}">${fmt(totalPuntosRuna)} pts/s</span>
+            </div>
+            ${imagen ? `<div class="col-stat-imagen"><img src="IMG/${imagen}" alt="${nombre}" onerror="this.parentNode.remove()"></div>` : ""}
+        `;
+    }
+
+    if (typeof window.rwSyncMobileCollectionStats === "function") {
+        window.rwSyncMobileCollectionStats();
+    }
 }
 
 
@@ -1233,3 +1257,387 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
 //     demasiado fuerte en tactil, hay que probar
 //   - el mini canvas de comun dice "COMÚN" como texto. podria ser i18n si
 //     algun dia saco el juego en ingles, pero todo el juego es espanol fijo
+
+// ---- COLECCIÓN v7.1: navegación por listas y variantes ----
+(function(){
+    var coleccionActual = 'basicas';
+
+    function actualizarContadorColeccion(){
+        var visibles = Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection]'))
+            .filter(function(el){ return el.dataset.collection === coleccionActual; });
+        var total = visibles.length;
+        var unlocked = visibles.filter(function(el){ return !el.classList.contains('bloqueada'); }).length;
+        var num = document.querySelector('#seccion-coleccion .col-contador-num');
+        if (num) num.innerHTML = unlocked + '<span class="col-contador-sep">/</span>' + total + '<span class="col-contador-txt"> runas</span>';
+    }
+
+    function aplicarFiltroColeccion(slug){
+        coleccionActual = slug || 'basicas';
+        document.querySelectorAll('.coleccion-lista-pill').forEach(function(btn){
+            btn.classList.toggle('active', btn.dataset.collection === coleccionActual);
+        });
+        document.querySelectorAll('.coleccion-columna-lista [data-collection]').forEach(function(el){
+            el.classList.toggle('col-hidden-collection', el.dataset.collection !== coleccionActual);
+        });
+        document.querySelectorAll('.col-runa-btn.sel, .col-runa-comun.sel').forEach(function(el){ el.classList.remove('sel'); });
+        var hint = document.getElementById('col-canvas-hint');
+        if (hint) hint.style.display = '';
+        pararAnimColeccion();
+        actualizarContadorColeccion();
+        iniciarMiniCanvas();
+        iniciarNeonBotones();
+        if (window.RW_aplicarVistaColeccionV81 || window.RW_aplicarVistaColeccionV78) {
+            setTimeout(window.RW_aplicarVistaColeccionV81 || window.RW_aplicarVistaColeccionV78, 0);
+        }
+    }
+
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest && e.target.closest('.coleccion-lista-pill');
+        if (!btn || btn.disabled || btn.classList.contains('locked')) return;
+        aplicarFiltroColeccion(btn.dataset.collection || 'basicas');
+    });
+
+    document.addEventListener('click', function(e){
+        var btn = e.target.closest && e.target.closest('.coleccion-variante-pill');
+        if (!btn || btn.disabled) return;
+        document.querySelectorAll('.coleccion-variante-pill').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+    });
+
+    function resetScrollColecciones() {
+        var sc = document.getElementById('coleccion-listas-scroll');
+        if (!sc) return;
+        sc.scrollLeft = 0;
+        var basicas = sc.querySelector('.coleccion-lista-pill[data-collection="basicas"]');
+        if (basicas && typeof basicas.scrollIntoView === 'function') {
+            basicas.scrollIntoView({ inline: 'start', block: 'nearest' });
+            sc.scrollLeft = 0;
+        }
+    }
+
+    function activarRuedaHorizontal() {
+        var sc = document.getElementById('coleccion-listas-scroll');
+        if (!sc || sc.dataset.wheelReady === '1') return;
+        sc.dataset.wheelReady = '1';
+        sc.addEventListener('wheel', function(ev){
+            if (Math.abs(ev.deltaY) <= Math.abs(ev.deltaX)) return;
+            sc.scrollLeft += ev.deltaY;
+            ev.preventDefault();
+        }, { passive: false });
+    }
+
+    window.RW_filtrarColeccion = aplicarFiltroColeccion;
+    window.addEventListener('load', function(){
+        activarRuedaHorizontal();
+        aplicarFiltroColeccion('basicas');
+        setTimeout(resetScrollColecciones, 30);
+        setTimeout(resetScrollColecciones, 250);
+    });
+})();
+
+
+// ---- COLECCIÓN v7.9: popup real al completar Básicas + desbloqueo corruptas en vivo ----
+(function(){
+    const POPUP_KEY_VERSION = 'v2_real_completion_7_9';
+
+    function userKey(){
+        var uid = (window.RW_INIT && window.RW_INIT.user_id) ? String(window.RW_INIT.user_id) : 'anon';
+        return 'rw_col_basicas_complete_popup_' + POPUP_KEY_VERSION + '_' + uid;
+    }
+
+    function getBasicasBtns(){
+        return Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection="basicas"]'));
+    }
+
+    function estaDesbloqueada(el){
+        if (!el) return false;
+        var cant = parseInt(el.dataset.cantidad || '0', 10) || 0;
+        return cant > 0 || el.classList.contains('desbloqueada') || !el.classList.contains('bloqueada');
+    }
+
+    function estadoBasicas(){
+        var btns = getBasicasBtns();
+        var total = btns.length;
+        var desbloqueadas = btns.filter(estaDesbloqueada).length;
+        return {
+            total: total,
+            desbloqueadas: desbloqueadas,
+            completa: total > 0 && desbloqueadas >= total
+        };
+    }
+
+    function abrirPopupColeccion(){
+        var st = estadoBasicas();
+        if (!st.completa) return;
+        var modal = document.getElementById('coleccion-completa-modal');
+        if (!modal) return;
+        modal.classList.add('visible');
+        modal.setAttribute('aria-hidden','false');
+        var ok = modal.querySelector('.coleccion-completa-ok');
+        if (ok) setTimeout(function(){ ok.focus(); }, 50);
+    }
+
+    function cerrarPopupColeccion(){
+        var modal = document.getElementById('coleccion-completa-modal');
+        if (!modal) return;
+        modal.classList.remove('visible');
+        modal.setAttribute('aria-hidden','true');
+        // Solo marco visto si realmente está completa. Así evitamos que un bug previo 6/8 bloquee el popup bueno.
+        if (estadoBasicas().completa) {
+            try { localStorage.setItem(userKey(), '1'); } catch(e) {}
+        }
+    }
+
+    function desbloquearCorruptaUI(){
+        var st = estadoBasicas();
+        if (!st.completa) return false;
+
+        if (window.RW_INIT) window.RW_INIT.basic_collection_complete = true;
+
+        var pill = document.querySelector('.coleccion-variante-pill[data-variant="corrupta"]');
+        if (pill) {
+            pill.disabled = false;
+            pill.classList.remove('locked');
+            pill.classList.add('corrupta-unlocked');
+            pill.textContent = 'Corrupta · 1%';
+            pill.title = 'Variante corrupta desbloqueada: 1% de la runa base';
+            pill.setAttribute('aria-label', 'Corrupta desbloqueada, uno por ciento de la runa base');
+        }
+
+        document.querySelectorAll('.coleccion-bonus-suerte-v74').forEach(function(box){
+            box.classList.add('activo');
+            var label = box.querySelector('.coleccion-bonus-label');
+            var sub = box.querySelector('.coleccion-bonus-sub');
+            if (label) label.textContent = 'Bonus activo';
+            if (sub) sub.textContent = 'Colección Básica completada · Total colección x1.50';
+        });
+
+        return true;
+    }
+
+    function seccionTiradaActiva(){
+        var tiradaActiva = document.getElementById('seccion-tirada');
+        return !!(tiradaActiva && tiradaActiva.classList.contains('activa'));
+    }
+
+    function popupVisto(){
+        try { return localStorage.getItem(userKey()) === '1'; } catch(e) { return false; }
+    }
+
+    function intentarPopupSoloMenuPrincipal(){
+        var st = estadoBasicas();
+        if (!st.completa) return false;
+        desbloquearCorruptaUI();
+        if (!seccionTiradaActiva()) return false;
+        if (popupVisto()) return false;
+        abrirPopupColeccion();
+        return true;
+    }
+
+    function intentarPopupCuandoTerminenAnimaciones(maxMs){
+        var inicio = Date.now();
+        maxMs = maxMs || 32000;
+        function tick(){
+            desbloquearCorruptaUI();
+            if (!estadoBasicas().completa) return;
+            var bloqueada = (typeof window.tiradaBloqueada !== 'undefined' && window.tiradaBloqueada) || (typeof tiradaBloqueada !== 'undefined' && tiradaBloqueada);
+            if (!bloqueada) {
+                intentarPopupSoloMenuPrincipal();
+                return;
+            }
+            if (Date.now() - inicio < maxMs) setTimeout(tick, 700);
+        }
+        setTimeout(tick, 250);
+    }
+
+    window.RW_cerrarPopupColeccion = cerrarPopupColeccion;
+    window.RW_abrirPopupColeccion = abrirPopupColeccion;
+    window.RW_estadoBasicasColeccion = estadoBasicas;
+    window.RW_desbloquearCorruptaColeccion = desbloquearCorruptaUI;
+    window.RW_intentarPopupColeccionCompleta = intentarPopupSoloMenuPrincipal;
+    window.RW_intentarPopupColeccionTrasAnimacion = intentarPopupCuandoTerminenAnimaciones;
+
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarPopupColeccion(); });
+    document.addEventListener('click', function(e){
+        var modal = document.getElementById('coleccion-completa-modal');
+        if (modal && e.target === modal) cerrarPopupColeccion();
+    });
+
+    window.addEventListener('load', function(){
+        setTimeout(function(){
+            desbloquearCorruptaUI();
+            intentarPopupSoloMenuPrincipal();
+        }, 700);
+    });
+
+    document.addEventListener('click', function(e){
+        var nav = e.target.closest && e.target.closest('[data-sec="tirada"], .nav-btn, .mob-nav');
+        if (!nav) return;
+        setTimeout(intentarPopupSoloMenuPrincipal, 250);
+    });
+
+    // Cuando llega una tirada del servidor, el panel de colección se actualiza en tirada.js.
+    // Esperamos un poco y luego comprobamos. Si hubo animación especial, esperamos a que se libere tiradaBloqueada.
+    document.addEventListener('runas:sync', function(){
+        setTimeout(function(){
+            desbloquearCorruptaUI();
+            intentarPopupCuandoTerminenAnimaciones(35000);
+        }, 500);
+        setTimeout(function(){
+            desbloquearCorruptaUI();
+            intentarPopupCuandoTerminenAnimaciones(35000);
+        }, 2500);
+    });
+
+    // Fallback para cualquier actualización visual manual del inventario.
+    document.addEventListener('runaworld:coleccion-actualizada', function(){
+        setTimeout(function(){
+            desbloquearCorruptaUI();
+            intentarPopupCuandoTerminenAnimaciones(35000);
+        }, 250);
+    });
+})();
+
+// ---- COLECCIÓN v8.1: variantes independientes y corruptas listadas ----
+(function(){
+    function getColeccionActiva(){
+        var b = document.querySelector('.coleccion-lista-pill.active');
+        return (b && b.dataset.collection) ? b.dataset.collection : 'basicas';
+    }
+    function getVarianteActiva(){
+        var b = document.querySelector('.coleccion-variante-pill.active');
+        return (b && b.dataset.variant) ? b.dataset.variant : 'normal';
+    }
+    function setContador(unlocked, total){
+        var num = document.querySelector('#seccion-coleccion .col-contador-num');
+        if (num) num.innerHTML = unlocked + '<span class="col-contador-sep">/</span>' + total + '<span class="col-contador-txt"> runas</span>';
+    }
+    function mostrarEmpty(tipo){
+        document.querySelectorAll('.coleccion-empty-state').forEach(function(el){
+            el.classList.toggle('col-hidden-collection', el.dataset.emptyCollection !== tipo);
+        });
+    }
+    function ocultarEmpty(){
+        document.querySelectorAll('.coleccion-empty-state').forEach(function(el){ el.classList.add('col-hidden-collection'); });
+    }
+    function resetSeleccionVisual(){
+        document.querySelectorAll('.col-runa-btn.sel, .col-runa-comun.sel').forEach(function(el){ el.classList.remove('sel'); });
+        var hint = document.getElementById('col-canvas-hint');
+        if (hint) hint.style.display = '';
+        if (typeof pararAnimColeccion === 'function') pararAnimColeccion();
+        var titulo = document.getElementById('col-stats-titulo');
+        var cont = document.getElementById('col-stats-contenido');
+        if (titulo) titulo.textContent = 'Estadísticas';
+        if (cont) cont.innerHTML = '<p class="col-stats-vacio">Selecciona una runa</p>';
+    }
+    function esOwned(el){
+        return !el.classList.contains('bloqueada') && ((parseInt(el.dataset.cantidad || '0', 10) || 0) > 0 || el.classList.contains('desbloqueada'));
+    }
+    function matchesVista(el, col, variante){
+        var elCol = el.dataset.collection || 'basicas';
+        var elVar = el.dataset.variant || 'normal';
+        if (variante === 'normal') return elCol === col && elVar === 'normal';
+        if (variante === 'corrupta') return elCol === col && elVar === 'corrupta';
+        return false;
+    }
+    function aplicarVista(){
+        var col = getColeccionActiva();
+        var variante = getVarianteActiva();
+        var items = Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection]'));
+        ocultarEmpty();
+
+        document.querySelectorAll('.col-corrupta-section').forEach(function(el){ el.classList.add('col-hidden-collection'); });
+
+        if (variante === 'caos') {
+            items.forEach(function(el){ el.classList.add('col-hidden-collection'); });
+            mostrarEmpty('caos');
+            setContador(0, 0);
+            return;
+        }
+
+        var visibles = items.filter(function(el){ return matchesVista(el, col, variante); });
+        items.forEach(function(el){
+            el.classList.toggle('col-hidden-collection', visibles.indexOf(el) === -1);
+        });
+        if (variante === 'corrupta' && col === 'basicas' && visibles.length > 0) {
+            document.querySelectorAll('.col-corrupta-section').forEach(function(el){ el.classList.remove('col-hidden-collection'); });
+        }
+
+        if ((col === 'intermedias' || col === 'avanzadas') && visibles.length === 0) {
+            mostrarEmpty(col);
+            setContador(0, 0);
+            return;
+        }
+
+        if (variante === 'corrupta' && visibles.length === 0) {
+            mostrarEmpty('corrupta');
+            setContador(0, 0);
+            return;
+        }
+
+        var unlocked = visibles.filter(esOwned).length;
+        setContador(unlocked, visibles.length);
+    }
+
+    window.RW_aplicarVistaColeccionV81 = aplicarVista;
+    window.RW_aplicarVistaColeccionV78 = aplicarVista;
+
+    document.addEventListener('click', function(e){
+        if (e.target.closest && (e.target.closest('.coleccion-lista-pill') || e.target.closest('.coleccion-variante-pill'))) {
+            resetSeleccionVisual();
+            setTimeout(aplicarVista, 0);
+            setTimeout(function(){
+                if (typeof iniciarMiniCanvas === 'function') iniciarMiniCanvas();
+                if (typeof iniciarNeonBotones === 'function') iniciarNeonBotones();
+            }, 60);
+        }
+    });
+    window.addEventListener('load', function(){ setTimeout(aplicarVista, 80); setTimeout(aplicarVista, 400); });
+})();
+
+// ================================================================
+// FIX V107 — mostrar fila de animación para corruptas especiales
+// ================================================================
+(function () {
+    'use strict';
+
+    function esAnimKey(key) {
+        if (typeof window.RW_esAnimacionEspecialKey === 'function') return window.RW_esAnimacionEspecialKey(key);
+        return ['eterna','divina','mitica','legendaria','mitica_corrupta','legendaria_corrupta'].indexOf(String(key || '').toLowerCase()) !== -1;
+    }
+
+    function animKeyDeBoton(el) {
+        var rareza = String((el && el.dataset && el.dataset.rareza) || '').toLowerCase();
+        var file = String((el && el.dataset && el.dataset.runaFile) || rareza).toLowerCase();
+        var variant = String((el && el.dataset && el.dataset.variant) || '').toLowerCase();
+        var nombre = String((el && el.dataset && el.dataset.nombre) || '').toLowerCase();
+        if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'mitica' || file === 'mitica_corrupta')) return 'mitica_corrupta';
+        if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'legendaria' || file === 'legendaria_corrupta')) return 'legendaria_corrupta';
+        return file || rareza;
+    }
+
+    var oldSeleccionarV107 = window.seleccionarRunaCol || seleccionarRunaCol;
+    window.seleccionarRunaCol = seleccionarRunaCol = function (el) {
+        oldSeleccionarV107(el);
+
+        var key = animKeyDeBoton(el);
+        var row = document.getElementById('btn-anim-row');
+        var ver = document.getElementById('btn-ver-anim');
+        var toggle = document.getElementById('btn-toggle-anim');
+
+        if (row) row.style.display = esAnimKey(key) ? 'flex' : 'none';
+        if (esAnimKey(key)) {
+            colRunaActual = key;
+            window.colRunaActual = key;
+            if (ver) {
+                var base = key.indexOf('legendaria') !== -1 ? 'legendaria' : key.indexOf('mitica') !== -1 ? 'mitica' : key;
+                ver.className = 'btn-ver-anim btn-ver-anim-' + base;
+            }
+            if (toggle) {
+                var baseToggle = key.indexOf('legendaria') !== -1 ? 'legendaria' : key.indexOf('mitica') !== -1 ? 'mitica' : key;
+                toggle.className = 'btn-toggle-anim btn-toggle-anim-' + baseToggle;
+            }
+            if (typeof actualizarEstadoToggle === 'function') actualizarEstadoToggle(key);
+        }
+    };
+})();

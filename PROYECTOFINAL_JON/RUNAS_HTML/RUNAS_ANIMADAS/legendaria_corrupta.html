@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #08090d; overflow: hidden; }
+
+    /* ── FASE NORMAL (idéntica a legendaria.html) ─────────── */
+    #neon-overlay {
+        position: fixed; inset: 0; z-index: 100; pointer-events: none; opacity: 0;
+    }
+    .neon-line {
+        position: absolute; border-radius: 3px;
+        background: #ffd700;
+        box-shadow: 0 0 25px #ffd700, 0 0 60px rgba(255,215,0,0.7);
+        transition: background 1s, box-shadow 1s;
+    }
+    #neon-overlay .neon-top    { top:0;    left:0; right:0;  height:5px; }
+    #neon-overlay .neon-bottom { bottom:0; left:0; right:0;  height:5px; }
+    #neon-overlay .neon-left   { left:0;   top:0;  bottom:0; width:5px; }
+    #neon-overlay .neon-right  { right:0;  top:0;  bottom:0; width:5px; }
+
+    @keyframes neonPulse       { from{opacity:0.5;}   to{opacity:1;} }
+    @keyframes neonPulseCorrupt{ from{opacity:0.35;}  to{opacity:1;} }
+
+    /* ── FLASH ───────────────────────────────────────────── */
+    #flash {
+        position: fixed; inset: 0; z-index: 9000; opacity: 0; pointer-events: none;
+        background: #ffd700;
+        transition: opacity 0.08s;
+    }
+
+    /* ── RUNA SVG ─────────────────────────────────────────── */
+    #legendaria-runa {
+        position: fixed; z-index: 9500; pointer-events: none;
+        opacity: 0; transform-origin: center center;
+        filter: drop-shadow(0 0 18px rgba(255,215,0,0.9)) drop-shadow(0 0 50px rgba(255,200,0,0.5));
+        transition: filter 0.5s;
+    }
+
+    /* ── CANVAS CORRUPTO (capa encima cuando se activa) ──── */
+    #corrupt-canvas {
+        position: fixed; inset: 0; z-index: 9600; pointer-events: none;
+        opacity: 0; transition: opacity 0.3s;
+    }
+
+    /* ── CAPA DE SCANLINES ───────────────────────────────── */
+    #scanlines {
+        position: fixed; inset: 0; z-index: 9700; pointer-events: none;
+        opacity: 0; mix-blend-mode: overlay;
+        background: repeating-linear-gradient(0deg, rgba(0,0,0,0.5), rgba(0,0,0,0.5) 1px, transparent 2px, transparent 4px);
+        animation: scanMove 0.08s linear infinite;
+    }
+    @keyframes scanMove { from { background-position: 0 0; } to { background-position: 0 8px; } }
+
+    /* ── DISTORSIÓN CROMÁTICA (pseudo-elemento overlay) ─── */
+    #chroma-r, #chroma-b {
+        position: fixed; inset: 0; z-index: 9800; pointer-events: none;
+        opacity: 0; mix-blend-mode: screen;
+    }
+    #chroma-r { background: rgba(255,0,80,0.12); }
+    #chroma-b { background: rgba(0,80,255,0.10); }
+</style>
+</head>
+<body>
+
+<div id="flash"></div>
+
+<div id="neon-overlay">
+    <div class="neon-line neon-top"></div>
+    <div class="neon-line neon-bottom"></div>
+    <div class="neon-line neon-left"></div>
+    <div class="neon-line neon-right"></div>
+</div>
+
+<!-- La runa legendaria (igual que legendaria.html) -->
+<svg id="legendaria-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <!-- Anillos exteriores -->
+    <circle cx="200" cy="200" r="185" fill="none" stroke="#ffd700" stroke-width="1.8" opacity="0.9"/>
+    <circle cx="200" cy="200" r="148" fill="none" stroke="#ffd700" stroke-width="0.9" opacity="0.65"
+            stroke-dasharray="42 14"/>
+    <circle cx="200" cy="200" r="108" fill="none" stroke="#ffd700" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="200" cy="200" r="72"  fill="none" stroke="#ffd700" stroke-width="1.3" opacity="0.8"/>
+
+    <!-- Estrella de 8 puntas -->
+    <polygon points="200,110 217,183 290,200 217,217 200,290 183,217 110,200 183,183"
+             fill="none" stroke="#ffd700" stroke-width="1.6" opacity="0.85"/>
+
+    <!-- Flechas en 8 direcciones (desde anillo exterior) -->
+    <g stroke="#ffd700" stroke-width="2.5" stroke-linecap="round" opacity="1">
+        <!-- N  --> <line x1="200" y1="122" x2="200" y2="92"/><line x1="193" y1="107" x2="200" y2="92"/><line x1="207" y1="107" x2="200" y2="92"/>
+        <!-- S  --> <line x1="200" y1="278" x2="200" y2="308"/><line x1="193" y1="293" x2="207" y2="293"/>
+        <!-- E  --> <line x1="278" y1="200" x2="308" y2="200"/><line x1="293" y1="193" x2="308" y2="200"/><line x1="293" y1="207" x2="308" y2="200"/>
+        <!-- W  --> <line x1="122" y1="200" x2="92"  y2="200"/><line x1="107" y1="193" x2="92"  y2="200"/><line x1="107" y1="207" x2="92"  y2="200"/>
+        <!-- NE --> <line x1="261" y1="139" x2="282" y2="118"/>
+        <!-- NW --> <line x1="139" y1="139" x2="118" y2="118"/>
+        <!-- SE --> <line x1="261" y1="261" x2="282" y2="282"/>
+        <!-- SW --> <line x1="139" y1="261" x2="118" y2="282"/>
+    </g>
+
+    <!-- Cruz central + subcruces -->
+    <g stroke="#ffd700" stroke-width="2" opacity="0.9">
+        <line x1="200" y1="135" x2="200" y2="265"/>
+        <line x1="135" y1="200" x2="265" y2="200"/>
+        <line x1="149" y1="149" x2="251" y2="251"/>
+        <line x1="251" y1="149" x2="149" y2="251"/>
+        <circle cx="200" cy="200" r="22" fill="none"/>
+        <circle cx="200" cy="200" r="7"  fill="#ffd700"/>
+    </g>
+
+    <!-- Runas perimetrales -->
+    <g font-size="13" fill="#ffd700" opacity="0.85" font-family="serif" text-anchor="middle">
+        <text transform="rotate(0,200,200)   translate(200,20)">ᚠ</text>
+        <text transform="rotate(22.5,200,200)  translate(200,20)">ᚢ</text>
+        <text transform="rotate(45,200,200)  translate(200,20)">ᚦ</text>
+        <text transform="rotate(67.5,200,200) translate(200,20)">ᚨ</text>
+        <text transform="rotate(90,200,200)  translate(200,20)">ᚱ</text>
+        <text transform="rotate(112.5,200,200)translate(200,20)">ᚲ</text>
+        <text transform="rotate(135,200,200) translate(200,20)">ᚷ</text>
+        <text transform="rotate(157.5,200,200)translate(200,20)">ᚹ</text>
+        <text transform="rotate(180,200,200) translate(200,20)">ᚺ</text>
+        <text transform="rotate(202.5,200,200)translate(200,20)">ᚾ</text>
+        <text transform="rotate(225,200,200) translate(200,20)">ᛁ</text>
+        <text transform="rotate(247.5,200,200)translate(200,20)">ᛃ</text>
+        <text transform="rotate(270,200,200) translate(200,20)">ᛇ</text>
+        <text transform="rotate(292.5,200,200)translate(200,20)">ᛈ</text>
+        <text transform="rotate(315,200,200) translate(200,20)">ᛉ</text>
+        <text transform="rotate(337.5,200,200)translate(200,20)">ᛊ</text>
+    </g>
+</svg>
+
+<!-- Canvas para la animación corrupta -->
+<canvas id="corrupt-canvas"></canvas>
+
+<!-- Capas de distorsión visual -->
+<div id="scanlines"></div>
+<div id="chroma-r"></div>
+<div id="chroma-b"></div>
+
+<script>
+const runa        = document.getElementById("legendaria-runa");
+const flash       = document.getElementById("flash");
+const neon        = document.getElementById("neon-overlay");
+const neonLines   = neon.querySelectorAll('.neon-line');
+const corruptCanvas = document.getElementById("corrupt-canvas");
+const cctx        = corruptCanvas.getContext("2d");
+const scanlines   = document.getElementById("scanlines");
+const chromaR     = document.getElementById("chroma-r");
+const chromaB     = document.getElementById("chroma-b");
+
+const VW = window.innerWidth, VH = window.innerHeight;
+const CX = VW/2, CY = VH/2;
+const TAM_INICIAL = 80;
+const TAM_MAXIMO  = Math.min(VW,VH) * 0.80;
+
+let angulo = 0, velAngular = 0;
+let explosionHecha = false, terminada = false;
+let corrupcionActiva = false;
+let corruptT = 0;
+let startTime = null, raf = null;
+let corruptRaf = null;
+
+corruptCanvas.width  = VW;
+corruptCanvas.height = VH;
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function easeIn(t) { return t*t*t; }
+function easeOut(t){ return 1-Math.pow(1-t,3); }
+
+/* ──────────────────────────────────────────────────────────────
+   RUNA PRINCIPAL
+────────────────────────────────────────────────────────────── */
+function posRuna(x, y, size, opacity, extraFilter='') {
+    runa.style.width   = size + "px";
+    runa.style.height  = size + "px";
+    runa.style.left    = x + "px";
+    runa.style.top     = y + "px";
+    runa.style.opacity = opacity;
+    runa.style.transform = `translate(-50%,-50%) rotate(${angulo}deg)`;
+    if (extraFilter) runa.style.filter = extraFilter;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   PARTÍCULAS NORMALES (doradas)
+────────────────────────────────────────────────────────────── */
+function lanzarParticulasNormales(cantidad) {
+    const color = "#ffaa00";
+    const w = VW, h = VH;
+    for (let i = 0; i < cantidad; i++) {
+        setTimeout(() => {
+            const p = document.createElement("div");
+            const lado = Math.floor(Math.random() * 4);
+            let x, y, tx, ty;
+            if      (lado===0){ x=Math.random()*w; y=0; tx=(Math.random()-.5)*160; ty=90+Math.random()*160; }
+            else if (lado===1){ x=Math.random()*w; y=h; tx=(Math.random()-.5)*160; ty=-(90+Math.random()*160); }
+            else if (lado===2){ x=0; y=Math.random()*h; tx=90+Math.random()*160; ty=(Math.random()-.5)*160; }
+            else              { x=w; y=Math.random()*h; tx=-(90+Math.random()*160); ty=(Math.random()-.5)*160; }
+            const size = 4+Math.random()*5, dur = 1.2+Math.random()*1;
+            p.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${size}px;height:${size}px;
+                border-radius:50%;background:${color};
+                box-shadow:0 0 8px ${color},0 0 16px ${color};
+                pointer-events:none;z-index:200;
+                transition:transform ${dur}s ease-out,opacity ${dur}s ease-out;`;
+            document.body.appendChild(p);
+            p.getBoundingClientRect();
+            p.style.transform = `translate(${tx}px,${ty}px) scale(0)`;
+            p.style.opacity   = "0";
+            setTimeout(()=>p.remove(), dur*1000);
+        }, i * 55);
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   PARTÍCULAS CORRUPTAS (rojo/violeta, más caóticas)
+────────────────────────────────────────────────────────────── */
+function lanzarParticulasCorruptas(cantidad) {
+    for (let i = 0; i < cantidad; i++) {
+        setTimeout(() => {
+            const p = document.createElement("div");
+            const color = Math.random() > 0.5 ? '#ff2244' : '#aa00ff';
+            const x = CX + (Math.random()-0.5)*TAM_MAXIMO*0.8;
+            const y = CY + (Math.random()-0.5)*TAM_MAXIMO*0.8;
+            const ang = Math.random()*Math.PI*2, d = 40+Math.random()*VW*0.4;
+            const tx = Math.cos(ang)*d, ty = Math.sin(ang)*d;
+            const sz = 2+Math.random()*7, dur = 2+Math.random()*6;
+            p.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${sz}px;height:${sz}px;
+                border-radius:${Math.random()>0.5?'50%':'2px'};
+                background:${color};box-shadow:0 0 12px ${color},0 0 24px ${color};
+                pointer-events:none;z-index:9002;
+                transition:transform ${dur}s ease-out,opacity ${dur}s ease-out;`;
+            document.body.appendChild(p);
+            p.getBoundingClientRect();
+            p.style.transform = `translate(${tx}px,${ty}px) scale(0) rotate(${Math.random()*720}deg)`;
+            p.style.opacity   = "0";
+            setTimeout(()=>p.remove(), dur*1000+200);
+        }, i*10);
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   CANVAS CORRUPTO — se activa en la fase de corrupción
+────────────────────────────────────────────────────────────── */
+function drawCorruptOverlay() {
+    corruptT += 0.02;
+    const TAU = Math.PI * 2;
+    const R   = TAM_MAXIMO * 0.4;
+
+    cctx.globalCompositeOperation = 'source-over';
+    cctx.fillStyle = 'rgba(0,0,5,0.35)';
+    cctx.fillRect(0,0,VW,VH);
+    cctx.globalCompositeOperation = 'lighter';
+
+    // Grietas
+    cctx.save(); cctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+        let a  = Math.random()*TAU, rr = R*(0.2+Math.random()*0.85);
+        let x  = CX+Math.cos(a)*rr, y = CY+Math.sin(a)*rr;
+        cctx.beginPath(); cctx.moveTo(x,y);
+        const steps = 2+Math.floor(Math.random()*5);
+        for (let s=0; s<steps; s++) {
+            const a2=a+(Math.random()-.5)*1.5;
+            x+=Math.cos(a2)*R*(0.04+Math.random()*0.1);
+            y+=Math.sin(a2)*R*(0.04+Math.random()*0.1);
+            cctx.lineTo(x,y);
+        }
+        cctx.strokeStyle = Math.random()>0.4
+            ? `rgba(255,34,68,${0.4+Math.random()*0.5})`
+            : `rgba(190,0,255,${0.4+Math.random()*0.5})`;
+        cctx.lineWidth = 0.5+Math.random()*2.5;
+        cctx.shadowColor = cctx.strokeStyle; cctx.shadowBlur = 10;
+        cctx.stroke();
+    }
+    cctx.restore();
+
+    // Glitch bars
+    cctx.save(); cctx.globalCompositeOperation = 'lighter';
+    for (let i=0; i<12; i++) {
+        const y  = CY+(Math.random()-.5)*R*2.2;
+        const x1 = CX-R+(Math.random()*R*0.8);
+        const w  = 15+Math.random()*R*0.6;
+        cctx.globalAlpha = 0.05+Math.random()*0.18;
+        cctx.fillStyle = Math.random()>0.5 ? '#ffd700' : (Math.random()>0.5?'#ff2244':'#aa00ff');
+        cctx.fillRect(x1,y,w,1+Math.random()*3);
+    }
+    cctx.restore();
+
+    // Fragmentos geométricos girando
+    cctx.save(); cctx.translate(CX,CY); cctx.rotate(-corruptT*1.4);
+    for (let i=0; i<20; i++) {
+        const a = (i/20)*TAU;
+        const rDist = R*0.3+Math.random()*(R*0.9);
+        cctx.save(); cctx.translate(Math.cos(a)*rDist, Math.sin(a)*rDist);
+        cctx.rotate(corruptT*2+i);
+        cctx.globalAlpha = 0.3+Math.random()*0.4;
+        const col = i%3===0 ? '#ffd700' : (i%3===1 ? '#ff2244' : '#aa00ff');
+        cctx.strokeStyle = col; cctx.fillStyle = col+'33';
+        cctx.lineWidth = 0.8;
+        const sz = 4+Math.random()*8;
+        cctx.beginPath(); cctx.rect(-sz/2,-sz/2,sz,sz);
+        cctx.fill(); cctx.stroke();
+        cctx.restore();
+    }
+    cctx.restore();
+
+    corruptRaf = requestAnimationFrame(drawCorruptOverlay);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   ACTIVAR CORRUPCIÓN
+   Se llama cuando "boom" — la animación pasa de normal a corrupta
+────────────────────────────────────────────────────────────── */
+function activarCorrupcion() {
+    corrupcionActiva = true;
+
+    // 1. Flash dorado → rojo
+    flash.style.background = '#ff0022';
+    flash.style.opacity = '0.85';
+    requestAnimationFrame(() => {
+        flash.style.transition = 'opacity 0.12s';
+        flash.style.opacity = '0';
+        setTimeout(() => {
+            flash.style.transition = 'opacity 1.5s ease-out';
+        }, 200);
+    });
+
+    // 2. Neon cambia a rojo/violeta
+    neonLines.forEach((line, i) => {
+        const colors = ['#ff2244','#aa00ff','#ff2244','#aa00ff'];
+        line.style.background  = colors[i];
+        line.style.boxShadow   = `0 0 25px ${colors[i]}, 0 0 60px ${colors[i]}88`;
+    });
+    neon.style.animation = 'neonPulseCorrupt 0.2s ease-in-out infinite alternate';
+
+    // 3. Runa cambia su glow a corrupto
+    runa.style.transition = 'filter 0.3s';
+    runa.style.filter = `
+        drop-shadow(0 0 20px rgba(255,34,68,0.9))
+        drop-shadow(0 0 50px rgba(170,0,255,0.6))
+        drop-shadow(0 0 80px rgba(255,34,68,0.3))
+    `;
+
+    // 4. Scanlines aparecen
+    scanlines.style.transition = 'opacity 0.2s';
+    scanlines.style.opacity    = '1';
+
+    // 5. Aberración cromática
+    chromaR.style.transition = 'opacity 0.3s';
+    chromaB.style.transition = 'opacity 0.3s';
+    chromaR.style.opacity = '1';
+    chromaB.style.opacity = '1';
+
+    // 6. Canvas corrupto
+    corruptCanvas.style.opacity = '1';
+    drawCorruptOverlay();
+
+    // 7. Partículas corruptas
+    lanzarParticulasCorruptas(80);
+
+    // 8. Segundo flash más tarde
+    setTimeout(() => {
+        flash.style.transition = 'none';
+        flash.style.opacity = '0.5';
+        flash.style.background = '#4400aa';
+        requestAnimationFrame(() => {
+            flash.style.transition = 'opacity 1.2s ease-out';
+            flash.style.opacity = '0';
+        });
+    }, 600);
+
+    // 9. Glitch de posición de la runa (temblor)
+    let shakeCount = 0;
+    const shakeInterval = setInterval(() => {
+        if (shakeCount++ > 25 || terminada) { clearInterval(shakeInterval); return; }
+        const ox = (Math.random()-.5)*20, oy = (Math.random()-.5)*20;
+        runa.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px)) rotate(${angulo}deg)`;
+    }, 60);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   LOOP DE ANIMACIÓN PRINCIPAL
+────────────────────────────────────────────────────────────── */
+function animacion(ts) {
+    if (terminada) return;
+    if (!startTime) startTime = ts;
+    const ms = ts - startTime;
+
+    // ── Fase 1: aparición pequeña (0–400ms) ────────────────
+    if (ms < 400) {
+        const p = ms / 400;
+        posRuna(CX, CY, lerp(TAM_INICIAL*0.2, TAM_INICIAL, easeOut(p)), p);
+        velAngular = 0; angulo = 0;
+
+    // ── Fase 2: crece girando — NORMAL (400–2600ms) ─────────
+    } else if (ms < 2600) {
+        const p    = (ms - 400) / 2200;
+        const size = lerp(TAM_INICIAL, TAM_MAXIMO * 0.85, easeIn(p));
+        velAngular = lerp(0.2, 22, easeIn(p));
+        angulo    += velAngular;
+        const glow = lerp(18, 80, p);
+        runa.style.filter = `drop-shadow(0 0 ${glow}px rgba(255,215,0,0.95)) drop-shadow(0 0 ${glow*2}px rgba(255,200,0,0.5))`;
+        posRuna(CX, CY, size, 1);
+
+        // Neón normal arranca en 400ms
+        if (ms < 500) {
+            neon.style.transition = 'none';
+            neon.style.opacity    = '1';
+            neon.style.animation  = 'neonPulse 0.5s ease-in-out infinite alternate';
+            lanzarParticulasNormales(30);
+        }
+
+    // ── Fase 3: GLITCH BREAK — empieza la corrupción (2600–2900ms) ──
+    } else if (ms < 2900) {
+        const p = (ms - 2600) / 300;
+        // La runa sigue girando pero empieza a "fallar"
+        angulo += velAngular * (1 - p * 0.3);
+        const size = lerp(TAM_MAXIMO * 0.85, TAM_MAXIMO * 0.75, p);
+        posRuna(CX, CY, size, 1 - p * 0.15);
+
+        if (!corrupcionActiva && ms > 2650) {
+            activarCorrupcion();
+        }
+
+        // Glitch visual en la runa misma
+        if (Math.random() > 0.5) {
+            runa.style.transform = `translate(calc(-50% + ${(Math.random()-.5)*30}px), calc(-50% + ${(Math.random()-.5)*30}px)) rotate(${angulo}deg)`;
+        }
+
+    // ── Fase 4: Expansión corrupta (2900–3300ms) ────────────
+    } else if (ms < 3300) {
+        const p = (ms - 2900) / 400;
+        posRuna(CX, CY, TAM_MAXIMO * (0.75 + p * 0.35), 1 - p);
+        angulo += velAngular * (1 - p);
+
+    // ── Fase 5: Todo se desvanece ───────────────────────────
+    } else if (ms < 3310) {
+        const p = (ms - 3300) / 400;
+        runa.style.opacity = Math.max(0, 1 - p * 3).toString();
+        neon.style.opacity = Math.max(0, 1 - p * 1.5).toString();
+        corruptCanvas.style.opacity = (1 - p).toString();
+        scanlines.style.opacity     = (1 - p).toString();
+        chromaR.style.opacity       = (1 - p * 2).toString();
+        chromaB.style.opacity       = (1 - p * 2).toString();
+        return;
+    } else {
+        terminada = true;
+        cancelAnimationFrame(raf);
+        cancelAnimationFrame(corruptRaf);
+        runa.style.opacity         = "0";
+        neon.style.animation       = "";
+        neon.style.transition      = "opacity 1.5s ease-out";
+        neon.style.opacity         = "0";
+        corruptCanvas.style.opacity = "0";
+        scanlines.style.opacity    = "0";
+        chromaR.style.opacity      = "0";
+        chromaB.style.opacity      = "0";
+        // Redirige al preview corrupto
+        setTimeout(() => { window.location.href = "../RUNAS/legendaria_corrupta.html"; }, 2000);
+        return;
+    }
+
+    raf = requestAnimationFrame(animacion);
+}
+
+raf = requestAnimationFrame(animacion);
+</script>
+</body>
+</html>

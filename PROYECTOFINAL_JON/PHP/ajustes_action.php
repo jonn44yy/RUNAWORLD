@@ -7,6 +7,7 @@ if (!isset($_SESSION["idUsuario"])) {
 }
 
 require_once "conexion.php";
+require_once "calcular_stats.php";
 
 $datos      = json_decode(file_get_contents("php://input"), true);
 $accion     = $datos["accion"] ?? "";
@@ -78,48 +79,135 @@ switch ($accion) {
 
     // ---- CONFIGURAR PRODUCCIÓN COINS ----
     case "produccion_coins":
+        echo json_encode(["ok" => false, "error" => "Configuracion manual de produccion desactivada temporalmente."]);
+        break;
+
+    case "produccion_coins_old_disabled":
         $nuevo_val = floatval($valor);
-        if ($nuevo_val < 0) $nuevo_val = 1;
 
-        // Obtener máximo del jugador
-        $stmt = $conexion->prepare("SELECT coins_ps_max FROM jugadores WHERE usuario_id = ?");
-        $stmt->bind_param("i", $id_usuario);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $maximo = floatval($row["coins_ps_max"] ?? 1);
+        $conexion->begin_transaction();
+        try {
+            $stmt = $conexion->prepare("SELECT id FROM jugadores WHERE usuario_id = ? FOR UPDATE");
+            $stmt->bind_param("i", $id_usuario);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
 
-        // Si supera el máximo, poner en 1
-        if ($nuevo_val > $maximo) $nuevo_val = 1;
-        if ($nuevo_val < 1 && $maximo > 0) $nuevo_val = 1;
+            if (!$row) {
+                $conexion->rollback();
+                echo json_encode(["ok" => false, "error" => "Jugador no encontrado."]);
+                exit;
+            }
 
-        $stmt = $conexion->prepare("UPDATE jugadores SET coins_por_seg = ? WHERE usuario_id = ?");
-        $stmt->bind_param("di", $nuevo_val, $id_usuario);
-        $stmt->execute();
-        $stmt->close();
-        echo json_encode(["ok" => true, "valor" => $nuevo_val]);
+            $jugador_id = (int)$row["id"];
+            list($coins_ps_max_real, $points_ps_max_real) = calcularStatsJugador($conexion, $jugador_id);
+            $coins_ps_max_real = max(1.0, floatval($coins_ps_max_real));
+
+            // 0 = reset al maximo real actual.
+            if ($nuevo_val <= 0) {
+                $config_sql = null;
+                $valor_actual = $coins_ps_max_real;
+                $stmt = $conexion->prepare("
+                    UPDATE jugadores
+                    SET coins_por_seg = ?, coins_ps_config = NULL,
+                        coins_ps_max = GREATEST(coins_ps_max, ?)
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ddi", $valor_actual, $coins_ps_max_real, $jugador_id);
+            } else {
+                if ($nuevo_val > $coins_ps_max_real) $nuevo_val = 1.0;
+                if ($nuevo_val < 1.0) $nuevo_val = 1.0;
+                $valor_actual = min($coins_ps_max_real, $nuevo_val);
+                $stmt = $conexion->prepare("
+                    UPDATE jugadores
+                    SET coins_por_seg = ?, coins_ps_config = ?,
+                        coins_ps_max = GREATEST(coins_ps_max, ?)
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("dddi", $valor_actual, $valor_actual, $coins_ps_max_real, $jugador_id);
+            }
+
+            $stmt->execute();
+            $stmt->close();
+            $conexion->commit();
+
+            echo json_encode([
+                "ok" => true,
+                "valor" => $valor_actual,
+                "maximo" => $coins_ps_max_real,
+                "configurado" => $nuevo_val > 0
+            ]);
+        } catch (Exception $e) {
+            @$conexion->rollback();
+            error_log("ajustes produccion_coins: " . $e->getMessage());
+            echo json_encode(["ok" => false, "error" => "Error interno."]);
+        }
         break;
 
     // ---- CONFIGURAR PRODUCCIÓN POINTS ----
     case "produccion_points":
+        echo json_encode(["ok" => false, "error" => "Configuracion manual de produccion desactivada temporalmente."]);
+        break;
+
+    case "produccion_points_old_disabled":
         $nuevo_val = floatval($valor);
-        if ($nuevo_val < 0) $nuevo_val = 0;
 
-        $stmt = $conexion->prepare("SELECT points_ps_max FROM jugadores WHERE usuario_id = ?");
-        $stmt->bind_param("i", $id_usuario);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $maximo = floatval($row["points_ps_max"] ?? 0);
+        $conexion->begin_transaction();
+        try {
+            $stmt = $conexion->prepare("SELECT id FROM jugadores WHERE usuario_id = ? FOR UPDATE");
+            $stmt->bind_param("i", $id_usuario);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
 
-        if ($nuevo_val > $maximo) $nuevo_val = 1;
-        if ($nuevo_val < 0) $nuevo_val = 0;
+            if (!$row) {
+                $conexion->rollback();
+                echo json_encode(["ok" => false, "error" => "Jugador no encontrado."]);
+                exit;
+            }
 
-        $stmt = $conexion->prepare("UPDATE jugadores SET points_por_seg = ? WHERE usuario_id = ?");
-        $stmt->bind_param("di", $nuevo_val, $id_usuario);
-        $stmt->execute();
-        $stmt->close();
-        echo json_encode(["ok" => true, "valor" => $nuevo_val]);
+            $jugador_id = (int)$row["id"];
+            list($coins_ps_max_real, $points_ps_max_real) = calcularStatsJugador($conexion, $jugador_id);
+            $points_ps_max_real = max(0.0, floatval($points_ps_max_real));
+
+            // 0 = reset al maximo real actual.
+            if ($nuevo_val <= 0) {
+                $valor_actual = $points_ps_max_real;
+                $stmt = $conexion->prepare("
+                    UPDATE jugadores
+                    SET points_por_seg = ?, points_ps_config = NULL,
+                        points_ps_max = GREATEST(points_ps_max, ?)
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ddi", $valor_actual, $points_ps_max_real, $jugador_id);
+            } else {
+                if ($nuevo_val > $points_ps_max_real) $nuevo_val = 1.0;
+                if ($nuevo_val < 0.0) $nuevo_val = 0.0;
+                $valor_actual = min($points_ps_max_real, $nuevo_val);
+                $stmt = $conexion->prepare("
+                    UPDATE jugadores
+                    SET points_por_seg = ?, points_ps_config = ?,
+                        points_ps_max = GREATEST(points_ps_max, ?)
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("dddi", $valor_actual, $valor_actual, $points_ps_max_real, $jugador_id);
+            }
+
+            $stmt->execute();
+            $stmt->close();
+            $conexion->commit();
+
+            echo json_encode([
+                "ok" => true,
+                "valor" => $valor_actual,
+                "maximo" => $points_ps_max_real,
+                "configurado" => $nuevo_val > 0
+            ]);
+        } catch (Exception $e) {
+            @$conexion->rollback();
+            error_log("ajustes produccion_points: " . $e->getMessage());
+            echo json_encode(["ok" => false, "error" => "Error interno."]);
+        }
         break;
 
     // ---- DISPLAY MODE (porcentaje / peso) ----

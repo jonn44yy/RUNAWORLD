@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+    width:100%;height:100%;overflow:hidden;background:transparent;
+    display:flex;align-items:center;justify-content:center;
+}
+canvas{
+    display:block;
+    filter:
+        drop-shadow(0 0 14px rgba(255,34,68,.42))
+        drop-shadow(0 0 26px rgba(170,0,255,.25));
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function(){
+    'use strict';
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d', { alpha:true });
+    const TAU = Math.PI * 2;
+
+    let W = 0, H = 0, DPR = 1;
+    let t = 0;
+    let last = 0;
+    let glitchUntil = 0;
+
+    const isMobile = Math.min(innerWidth, innerHeight) <= 520;
+
+    function resize(){
+        DPR = Math.min(window.devicePixelRatio || 1, isMobile ? 1.15 : 1.5);
+        W = Math.max(1, Math.floor(innerWidth));
+        H = Math.max(1, Math.floor(innerHeight));
+        canvas.width = Math.floor(W * DPR);
+        canvas.height = Math.floor(H * DPR);
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+
+    resize();
+    addEventListener('resize', resize, { passive:true });
+
+    function corruptGradient(cx, cy, r){
+        const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+        g.addColorStop(0, 'rgba(255,34,95,.88)');
+        g.addColorStop(.35, 'rgba(120,0,160,.34)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        return g;
+    }
+
+    function drawOuterPlate(cx, cy, s, pulse){
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.sin(t * .7) * .025);
+
+        ctx.fillStyle = 'rgba(16,16,22,.82)';
+        ctx.strokeStyle = 'rgba(205,210,225,.34)';
+        ctx.lineWidth = 2;
+        ctx.fillRect(-s/2, -s/2, s, s);
+        ctx.strokeRect(-s/2, -s/2, s, s);
+
+        ctx.fillStyle = corruptGradient(0,0,s*.86);
+        ctx.fillRect(-s/2, -s/2, s, s);
+
+        ctx.strokeStyle = 'rgba(255,34,80,' + (.46 + pulse*.18) + ')';
+        ctx.shadowColor = '#ff2244';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(-s*.37, -s*.37, s*.74, s*.74);
+
+        ctx.strokeStyle = 'rgba(170,0,255,' + (.38 + pulse*.15) + ')';
+        ctx.shadowColor = '#aa00ff';
+        ctx.shadowBlur = 9;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-s*.24, -s*.24, s*.48, s*.48);
+
+        ctx.restore();
+    }
+
+    function drawGlitchedText(cx, cy, s, glitching){
+        const main = 'COMÚN';
+        const sub = 'CORRUPTA';
+        const fontMain = Math.max(24, Math.floor(s * .205));
+        const fontSub = Math.max(10, Math.floor(s * .065));
+        const jitter = glitching ? 3.5 : .75;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '700 ' + fontMain + 'px Georgia, serif';
+        ctx.letterSpacing = '2px';
+
+        const y = cy - s*.02;
+        const jx = (Math.random() - .5) * jitter;
+        const jy = (Math.random() - .5) * jitter;
+
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = 'rgba(0,220,255,.34)';
+        ctx.fillText(main, cx - 2 + jx, y + jy);
+        ctx.fillStyle = 'rgba(255,0,110,.45)';
+        ctx.fillText(main, cx + 2 - jx, y - jy);
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.shadowColor = '#ff2244';
+        ctx.shadowBlur = 13;
+        ctx.fillStyle = 'rgba(230,235,245,.92)';
+        ctx.fillText(main, cx, y);
+        ctx.shadowBlur = 0;
+
+        ctx.font = '700 ' + fontSub + 'px Georgia, serif';
+        ctx.letterSpacing = '4px';
+        ctx.fillStyle = 'rgba(255,34,80,.78)';
+        ctx.fillText(sub, cx, cy + s*.19);
+        ctx.restore();
+    }
+
+    function drawGlitchBands(cx, cy, s, glitching){
+        if (!glitching) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const bands = isMobile ? 4 : 6;
+        for(let i=0;i<bands;i++){
+            const y = cy - s*.38 + Math.random()*s*.76;
+            const x = cx - s*.42 + Math.random()*s*.22;
+            const w = s*(.18 + Math.random()*.46);
+            const h = 1 + Math.random()*2;
+            ctx.globalAlpha = .16 + Math.random()*.18;
+            ctx.fillStyle = Math.random()>.5 ? '#ff2244' : '#aa00ff';
+            ctx.fillRect(x, y, w, h);
+        }
+        ctx.restore();
+    }
+
+    function drawSmallShards(cx, cy, s){
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const count = isMobile ? 4 : 6;
+        for(let i=0;i<count;i++){
+            const a = i * TAU / count + t * (.22 + i*.01);
+            const r = s * (.61 + (i%3)*.05);
+            const x = cx + Math.cos(a) * r;
+            const y = cy + Math.sin(a) * r * .88;
+            ctx.save();
+            ctx.translate(x,y);
+            ctx.rotate(a + t*.45);
+            ctx.globalAlpha = .22 + .13*Math.sin(t*2+i);
+            ctx.fillStyle = 'rgba(14,0,24,.8)';
+            ctx.strokeStyle = 'rgba(255,34,90,.42)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0,-s*.025);
+            ctx.lineTo(s*.025,0);
+            ctx.lineTo(0,s*.035);
+            ctx.lineTo(-s*.02,0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    function frame(now){
+        if (!last) last = now;
+        const dt = Math.min(32, now - last);
+        last = now;
+        t += dt * .001;
+
+        if (now > glitchUntil && Math.random() < .035) {
+            glitchUntil = now + 90 + Math.random()*90;
+        }
+        const glitching = now < glitchUntil;
+
+        ctx.clearRect(0,0,W,H);
+
+        const cx = W/2;
+        const cy = H/2;
+        const base = Math.min(W,H);
+        const s = base * .28;
+        const pulse = .5 + .5*Math.sin(t*2.1);
+
+        drawOuterPlate(cx,cy,s,pulse);
+        drawSmallShards(cx,cy,s);
+        drawGlitchedText(cx,cy,s,glitching);
+        drawGlitchBands(cx,cy,s,glitching);
+
+        requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

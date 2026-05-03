@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mítica Corrupta — Glitch Optimizado</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+    width:100%; height:100%;
+    overflow:hidden;
+    background:#08090d;
+}
+body {
+    background:
+        radial-gradient(circle at center, #160009 0%, #08090d 48%, #020003 100%);
+}
+#fx {
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    z-index:2;
+    pointer-events:none;
+}
+#flash {
+    position:fixed;
+    inset:0;
+    z-index:4;
+    opacity:0;
+    pointer-events:none;
+    background:#ff2244;
+}
+#neon {
+    position:fixed;
+    inset:0;
+    z-index:5;
+    opacity:0;
+    pointer-events:none;
+}
+.line {
+    position:absolute;
+    border-radius:3px;
+    background:#ff2244;
+    box-shadow:0 0 18px #ff2244, 0 0 34px rgba(170,0,255,.45);
+}
+.top { top:0; left:0; right:0; height:5px; }
+.bottom { bottom:0; left:0; right:0; height:5px; }
+.left { left:0; top:0; bottom:0; width:5px; }
+.right { right:0; top:0; bottom:0; width:5px; }
+@keyframes neonPulse { from { opacity:.45; } to { opacity:1; } }
+#mitica-runa {
+    position:fixed;
+    z-index:6;
+    pointer-events:none;
+    opacity:0;
+    transform-origin:center center;
+    will-change:transform,opacity;
+    filter:
+        drop-shadow(0 0 18px rgba(255,34,68,.78))
+        drop-shadow(0 0 34px rgba(170,0,255,.38));
+}
+#label {
+    position:fixed;
+    left:50%;
+    bottom:26px;
+    transform:translateX(-50%);
+    z-index:7;
+    font:700 11px monospace;
+    letter-spacing:5px;
+    color:rgba(255,34,68,.55);
+    opacity:0;
+    text-shadow:2px 0 #aa00ff, -2px 0 #00ffff;
+    pointer-events:none;
+}
+@media (max-width:768px) {
+    .line { box-shadow:0 0 12px #ff2244, 0 0 24px rgba(170,0,255,.35); }
+    #label { font-size:9px; letter-spacing:3px; bottom:18px; }
+    #mitica-runa {
+        filter:
+            drop-shadow(0 0 12px rgba(255,34,68,.72))
+            drop-shadow(0 0 22px rgba(170,0,255,.32));
+    }
+}
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div id="flash"></div>
+<div id="neon">
+    <div class="line top"></div>
+    <div class="line bottom"></div>
+    <div class="line left"></div>
+    <div class="line right"></div>
+</div>
+<div id="label">MITICA_CORRUPTA / GLITCH_CROMATICO</div>
+
+<svg id="mitica-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <radialGradient id="coreGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#ff2244" stop-opacity="1"/>
+            <stop offset="45%" stop-color="#520018" stop-opacity=".75"/>
+            <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.2" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <!-- Silueta principal: respeta la mítica original -->
+    <circle cx="200" cy="200" r="185" fill="none" stroke="#ff2244" stroke-width="1.5" opacity=".9"/>
+    <circle cx="200" cy="200" r="145" fill="none" stroke="#ff2244" stroke-width=".85" opacity=".7"/>
+    <circle cx="200" cy="200" r="80"  fill="none" stroke="#ff2244" stroke-width="1.2" opacity=".82"/>
+
+    <!-- Detalle añadido sin coste alto: líneas SVG estáticas, no partículas -->
+    <g stroke="#7a00ff" stroke-width=".75" opacity=".5" stroke-linecap="round">
+        <circle cx="200" cy="200" r="166" fill="none" stroke-dasharray="18 12 4 10"/>
+        <circle cx="200" cy="200" r="112" fill="none" stroke-dasharray="6 10"/>
+        <path d="M200 34 L211 68 L200 102 L189 68 Z" fill="none"/>
+        <path d="M200 366 L211 332 L200 298 L189 332 Z" fill="none"/>
+        <path d="M34 200 L68 189 L102 200 L68 211 Z" fill="none"/>
+        <path d="M366 200 L332 189 L298 200 L332 211 Z" fill="none"/>
+    </g>
+
+    <!-- Flechas cardinales originales -->
+    <g stroke="#ff2244" stroke-width="2.5" opacity="1" stroke-linecap="round">
+        <line x1="200" y1="125" x2="200" y2="95"/><line x1="193" y1="110" x2="200" y2="95"/><line x1="207" y1="110" x2="200" y2="95"/>
+        <line x1="200" y1="275" x2="200" y2="305"/><line x1="193" y1="290" x2="207" y2="290"/>
+        <line x1="275" y1="200" x2="305" y2="200"/><line x1="290" y1="193" x2="305" y2="200"/><line x1="290" y1="207" x2="305" y2="200"/>
+        <line x1="125" y1="200" x2="95"  y2="200"/><line x1="110" y1="193" x2="95"  y2="200"/><line x1="110" y1="207" x2="95"  y2="200"/>
+        <line x1="254" y1="146" x2="275" y2="125"/><line x1="146" y1="146" x2="125" y2="125"/>
+        <line x1="254" y1="254" x2="275" y2="275"/><line x1="146" y1="254" x2="125" y2="275"/>
+    </g>
+
+    <!-- Núcleo con más geometría, pero sigue siendo SVG estático -->
+    <g stroke="#ff2244" stroke-width="2" opacity=".92" filter="url(#softGlow)">
+        <line x1="200" y1="140" x2="200" y2="260"/>
+        <line x1="140" y1="200" x2="260" y2="200"/>
+        <line x1="158" y1="158" x2="242" y2="242" opacity=".55"/>
+        <line x1="242" y1="158" x2="158" y2="242" opacity=".55"/>
+        <circle cx="200" cy="200" r="38" fill="none" opacity=".55"/>
+        <circle cx="200" cy="200" r="25" fill="none"/>
+        <circle cx="200" cy="200" r="9" fill="url(#coreGrad)"/>
+    </g>
+
+    <!-- Runas exteriores originales -->
+    <g font-size="13" fill="#ff2244" opacity=".9" font-family="serif" text-anchor="middle">
+        <text transform="rotate(0,200,200)   translate(200,22)">ᚠ</text>
+        <text transform="rotate(22,200,200)  translate(200,22)">ᚢ</text>
+        <text transform="rotate(44,200,200)  translate(200,22)">ᚦ</text>
+        <text transform="rotate(66,200,200)  translate(200,22)">ᚨ</text>
+        <text transform="rotate(88,200,200)  translate(200,22)">ᚱ</text>
+        <text transform="rotate(110,200,200) translate(200,22)">ᚲ</text>
+        <text transform="rotate(132,200,200) translate(200,22)">ᚷ</text>
+        <text transform="rotate(154,200,200) translate(200,22)">ᚹ</text>
+        <text transform="rotate(176,200,200) translate(200,22)">ᚺ</text>
+        <text transform="rotate(198,200,200) translate(200,22)">ᚾ</text>
+        <text transform="rotate(220,200,200) translate(200,22)">ᛁ</text>
+        <text transform="rotate(242,200,200) translate(200,22)">ᛃ</text>
+        <text transform="rotate(264,200,200) translate(200,22)">ᛇ</text>
+        <text transform="rotate(286,200,200) translate(200,22)">ᛈ</text>
+        <text transform="rotate(308,200,200) translate(200,22)">ᛉ</text>
+        <text transform="rotate(330,200,200) translate(200,22)">ᛊ</text>
+    </g>
+</svg>
+
+<script>
+'use strict';
+
+const TAU = Math.PI * 2;
+const runa = document.getElementById('mitica-runa');
+const flash = document.getElementById('flash');
+const neon = document.getElementById('neon');
+const label = document.getElementById('label');
+const canvas = document.getElementById('fx');
+const ctx = canvas.getContext('2d', { alpha:true });
+
+let vw = 0;
+let vh = 0;
+let cx = 0;
+let cy = 0;
+let dpr = 1;
+let maxSize = 0;
+let angle = 0;
+let angularVelocity = 0;
+let startTime = 0;
+let rafId = 0;
+let corruptionStarted = false;
+let boomStarted = false;
+let lightningStarted = false;
+
+let particles = [];
+let cracks = [];
+let bolts = [];
+let lastBoltAt = 0;
+
+function isMobile() {
+    return Math.min(window.innerWidth, window.innerHeight) < 760;
+}
+
+function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+function easeIn(t) {
+    return t * t * t;
+}
+
+function easeOut(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+function easeInOut(t) {
+    return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function resize() {
+    vw = window.innerWidth;
+    vh = window.innerHeight;
+    cx = vw / 2;
+    cy = vh / 2;
+
+    dpr = Math.min(window.devicePixelRatio || 1, isMobile() ? 1.1 : 1.35);
+    canvas.width = Math.floor(vw * dpr);
+    canvas.height = Math.floor(vh * dpr);
+    canvas.style.width = vw + 'px';
+    canvas.style.height = vh + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    maxSize = Math.min(vw, vh) * (isMobile() ? .72 : .78);
+}
+
+window.addEventListener('resize', resize, { passive:true });
+resize();
+
+function positionRune(x, y, size, opacity, extraRotation = 0, jitter = 0) {
+    const jx = jitter ? (Math.random() - .5) * jitter : 0;
+    const jy = jitter ? (Math.random() - .5) * jitter : 0;
+
+    runa.style.width = size + 'px';
+    runa.style.height = size + 'px';
+    runa.style.left = x + 'px';
+    runa.style.top = y + 'px';
+    runa.style.opacity = opacity;
+    runa.style.transform = `translate(calc(-50% + ${jx}px), calc(-50% + ${jy}px)) rotate(${angle + extraRotation}deg)`;
+}
+
+function setRuneFilter(mode) {
+    if (mode === 'normal') {
+        runa.style.filter = 'drop-shadow(0 0 18px rgba(255,34,68,.78)) drop-shadow(0 0 34px rgba(255,34,68,.35))';
+        return;
+    }
+
+    if (mode === 'corrupt') {
+        runa.style.filter = 'drop-shadow(0 0 14px rgba(255,34,68,.78)) drop-shadow(0 0 30px rgba(170,0,255,.5))';
+        return;
+    }
+
+    runa.style.filter = 'drop-shadow(0 0 8px rgba(255,34,68,.5))';
+}
+
+function neonOn() {
+    neon.style.transition = 'none';
+    neon.style.opacity = '1';
+    neon.style.animation = 'neonPulse .42s ease-in-out infinite alternate';
+}
+
+function neonOff() {
+    neon.style.animation = '';
+    neon.style.transition = 'opacity 1.4s ease-out';
+    neon.style.opacity = '0';
+}
+
+function flashHit(color, opacity) {
+    flash.style.background = color;
+    flash.style.transition = 'none';
+    flash.style.opacity = opacity;
+
+    requestAnimationFrame(() => {
+        flash.style.transition = 'opacity 850ms ease-out';
+        flash.style.opacity = '0';
+    });
+}
+
+function startCorruption() {
+    if (corruptionStarted) return;
+    corruptionStarted = true;
+    label.style.opacity = '.9';
+    setRuneFilter('corrupt');
+    flashHit('rgba(10,0,18,1)', .48);
+}
+
+function startBoom() {
+    if (boomStarted) return;
+    boomStarted = true;
+    neonOn();
+    flashHit('rgba(255,34,68,1)', .62);
+    createParticles();
+    createCracks();
+    setTimeout(neonOff, 2400);
+}
+
+function startLightning() {
+    if (lightningStarted) return;
+    lightningStarted = true;
+    neonOff();
+    bolts = [];
+    lastBoltAt = 0;
+}
+
+function createParticles() {
+    particles = [];
+    const count = isMobile() ? 28 : 48;
+
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * TAU;
+        const speed = 40 + Math.random() * (isMobile() ? 120 : 190);
+        particles.push({
+            x: cx + Math.cos(a) * maxSize * .12,
+            y: cy + Math.sin(a) * maxSize * .12,
+            vx: Math.cos(a) * speed,
+            vy: Math.sin(a) * speed + Math.random() * 28,
+            r: 1.2 + Math.random() * 3.2,
+            life: .72 + Math.random() * .8,
+            kind: i % 4
+        });
+    }
+}
+
+function createCracks() {
+    cracks = [];
+    const count = isMobile() ? 6 : 10;
+
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * TAU;
+        const len = maxSize * (.12 + Math.random() * .22);
+        const steps = 3 + Math.floor(Math.random() * 3);
+        const pts = [];
+        let x = cx + Math.cos(a) * maxSize * (.18 + Math.random() * .32);
+        let y = cy + Math.sin(a) * maxSize * (.18 + Math.random() * .32);
+
+        pts.push([x, y]);
+        for (let s = 0; s < steps; s++) {
+            x += Math.cos(a + (Math.random() - .5) * 1.05) * len / steps;
+            y += Math.sin(a + (Math.random() - .5) * 1.05) * len / steps;
+            pts.push([x, y]);
+        }
+
+        cracks.push({ pts, alpha:.45 + Math.random() * .42 });
+    }
+}
+
+function clearFx(alpha = .20) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,6,${alpha})`;
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.globalCompositeOperation = 'lighter';
+}
+
+function drawGlitch(amount) {
+    const count = Math.floor((isMobile() ? 5 : 8) * amount);
+    ctx.save();
+
+    for (let i = 0; i < count; i++) {
+        const y = cy + (Math.random() - .5) * maxSize * 1.12;
+        const width = maxSize * (.16 + Math.random() * .34);
+        const x = cx - width / 2 + (Math.random() - .5) * maxSize * .24;
+        ctx.globalAlpha = .08 + Math.random() * .18;
+        ctx.fillStyle = Math.random() > .5 ? '#ff2244' : '#aa00ff';
+        ctx.fillRect(x, y, width, 1 + Math.random() * 2);
+    }
+
+    ctx.restore();
+}
+
+function drawRitualDetail(ms, amount) {
+    const r = maxSize * .32;
+    const time = ms * .001;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(time * .35);
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < 4; i++) {
+        const rr = r * (.48 + i * .16);
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, -1.1 + i * .12, 1.1 + i * .12);
+        ctx.strokeStyle = `rgba(${i % 2 ? '170,0,255' : '255,34,68'},${(.12 + i * .035) * amount})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    ctx.rotate(-time * .9);
+    for (let i = 0; i < 8; i++) {
+        const a = i * TAU / 8;
+        const x1 = Math.cos(a) * r * .42;
+        const y1 = Math.sin(a) * r * .42;
+        const x2 = Math.cos(a) * r * .7;
+        const y2 = Math.sin(a) * r * .7;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = `rgba(255,34,90,${.16 * amount})`;
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+function drawVoid(ms, amount) {
+    const ring = maxSize * (.18 + .10 * Math.sin(ms * .006));
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxSize * .56);
+    grad.addColorStop(0, `rgba(0,0,0,${.76 * amount})`);
+    grad.addColorStop(.28, `rgba(70,0,95,${.30 * amount})`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxSize * .56, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(170,0,255,${.38 * amount})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ring, 0, TAU);
+    ctx.stroke();
+}
+
+function drawCracks(progress) {
+    ctx.save();
+    ctx.lineCap = 'round';
+
+    cracks.forEach(c => {
+        ctx.beginPath();
+        c.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.strokeStyle = `rgba(255,34,90,${c.alpha * (1 - progress * .55)})`;
+        ctx.lineWidth = 1.15;
+        ctx.stroke();
+    });
+
+    ctx.restore();
+}
+
+function drawParticles(progress) {
+    ctx.save();
+
+    particles.forEach(p => {
+        const k = clamp(progress / p.life, 0, 1);
+        const x = p.x + p.vx * k;
+        const y = p.y + p.vy * k + 75 * k * k;
+        const alpha = 1 - k;
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.kind % 3 === 0 ? '#aa00ff' : '#ff2244';
+        ctx.beginPath();
+        ctx.arc(x, y, p.r * (1 - k * .6), 0, TAU);
+        ctx.fill();
+    });
+
+    ctx.restore();
+}
+
+function generateLightningBolt() {
+    const startSide = Math.floor(Math.random() * 4);
+    let x = 0;
+    let y = 0;
+
+    if (startSide === 0) { x = Math.random() * vw; y = -10; }
+    if (startSide === 1) { x = vw + 10; y = Math.random() * vh; }
+    if (startSide === 2) { x = Math.random() * vw; y = vh + 10; }
+    if (startSide === 3) { x = -10; y = Math.random() * vh; }
+
+    const targetX = cx + (Math.random() - .5) * maxSize * .8;
+    const targetY = cy + (Math.random() - .5) * maxSize * .55;
+    const segments = isMobile() ? 7 : 10;
+    const points = [];
+
+    for (let i = 0; i <= segments; i++) {
+        const p = i / segments;
+        const nx = lerp(x, targetX, p) + (Math.random() - .5) * maxSize * .09;
+        const ny = lerp(y, targetY, p) + (Math.random() - .5) * maxSize * .09;
+        points.push([nx, ny]);
+    }
+
+    return {
+        points,
+        life: 90 + Math.random() * 110,
+        born: performance.now(),
+        width: isMobile() ? 1.25 : 1.6,
+        alpha: .55 + Math.random() * .32
+    };
+}
+
+function drawLightning(now, progress) {
+    if (now - lastBoltAt > (isMobile() ? 160 : 105)) {
+        lastBoltAt = now;
+        bolts.push(generateLightningBolt());
+        if (bolts.length > (isMobile() ? 5 : 8)) bolts.shift();
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+
+    bolts = bolts.filter(bolt => {
+        const age = now - bolt.born;
+        const alive = age < bolt.life;
+        if (!alive) return false;
+
+        const fade = 1 - age / bolt.life;
+        ctx.beginPath();
+        bolt.points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.strokeStyle = `rgba(255,34,68,${bolt.alpha * fade})`;
+        ctx.lineWidth = bolt.width;
+        ctx.stroke();
+
+        ctx.beginPath();
+        bolt.points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.strokeStyle = `rgba(170,0,255,${.22 * fade})`;
+        ctx.lineWidth = bolt.width * 2.2;
+        ctx.stroke();
+
+        return true;
+    });
+
+    ctx.restore();
+}
+
+function clearLightningBackdrop(progress) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(3,0,7,)`;
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.globalCompositeOperation = 'lighter';
+}
+
+function animate(ts) {
+    if (!startTime) startTime = ts;
+    const ms = ts - startTime;
+
+    ctx.clearRect(0, 0, vw, vh);
+
+    // Fase 1: inicio idéntico en lectura visual a la mítica normal.
+    if (ms < 400) {
+        const p = ms / 400;
+        angle = 0;
+        angularVelocity = 0;
+        setRuneFilter('normal');
+        positionRune(cx, cy, lerp(16, 80, easeOut(p)), p);
+
+    // Fase 2: crecimiento y giro carmesí.
+    } else if (ms < 2800) {
+        const p = (ms - 400) / 2400;
+        const size = lerp(80, maxSize, easeIn(p));
+        angularVelocity = lerp(.2, 20, easeIn(p));
+        angle += angularVelocity;
+        setRuneFilter('normal');
+        positionRune(cx, cy, size, 1);
+
+    // Fase 3: congelación + corrupción cromática.
+    } else if (ms < 3350) {
+        startCorruption();
+        const p = (ms - 2800) / 550;
+        clearFx(.24);
+        drawRitualDetail(ms, easeInOut(p));
+        drawGlitch(1 + p * 1.8);
+        const freeze = p < .35 ? 0 : (Math.random() - .5) * 9;
+        positionRune(cx, cy, maxSize, 1, freeze, p > .4 ? 6 : 0);
+
+    // Fase 4: implosión.
+    } else if (ms < 3850) {
+        const p = (ms - 3350) / 500;
+        clearFx(.19);
+        drawRitualDetail(ms, 1);
+        drawVoid(ms, .7 + p * .5);
+        angle += angularVelocity * (.35 - p * .25);
+        positionRune(cx, cy, lerp(maxSize, maxSize * .22, easeInOut(p)), 1 - p * .12, 0, 4);
+
+    // Fase 5: estallido corrupto.
+    } else if (ms < 5200) {
+        startBoom();
+        const p = (ms - 3850) / 1350;
+        clearFx(.16);
+        drawRitualDetail(ms, 1 - p * .35);
+        drawCracks(p);
+        drawParticles(p);
+        angle += 4 + (1 - p) * 10;
+        positionRune(cx, cy, lerp(maxSize * .22, maxSize * 1.02, easeOut(p)), 1 - easeOut(p));
+
+    // Fase 6: apagado de grietas/partículas.
+    } else if (ms < 6700) {
+        const p = (ms - 5200) / 1500;
+        clearFx(.18 + p * .08);
+        drawCracks(p);
+        drawParticles(clamp(.85 + p * .2, 0, 1));
+        label.style.opacity = String(1 - p);
+        runa.style.opacity = '0';
+
+    } else {
+        cancelAnimationFrame(rafId);
+        location.href = '../RUNAS/mitica_corrupta.html';
+        return;
+    }
+
+    rafId = requestAnimationFrame(animate);
+}
+
+rafId = requestAnimationFrame(animate);
+</script>
+</body>
+</html>

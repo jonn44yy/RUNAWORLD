@@ -1111,3 +1111,103 @@ function iniciarAnimacionJuego() {
     if (!overlay) return;
     setTimeout(() => overlay.remove(), 3500);
 }
+
+
+// ================================================================
+// FIX V110 — Animaciones corruptas reales + efecto botón mítica corrupta
+// ================================================================
+(function () {
+    'use strict';
+    var RW_CORRUPT_ANIM_MS = { mitica_corrupta: 13500, legendaria_corrupta: 12000 };
+    var _rwBtnMiticaTimer = null;
+    var _rwIframeTimer = null;
+    function _rwText(v) { return String(v || '').toLowerCase(); }
+    function _rwRunaText(runa) {
+        if (!runa) return '';
+        return [runa.nombre, runa.imagen, runa.slug, runa.runa_file, runa.runaFile, runa.animacion_slug, runa.rareza_animacion, runa.variante].map(_rwText).join(' | ');
+    }
+    function _rwAnimKeyCorrupta(runa) {
+        var txt = _rwRunaText(runa);
+        if (txt.indexOf('mitica_corrupta') !== -1 || txt.indexOf('mítica corrupta') !== -1 || txt.indexOf('mitica corrupta') !== -1) return 'mitica_corrupta';
+        if (txt.indexOf('legendaria_corrupta') !== -1 || txt.indexOf('legendaria corrupta') !== -1) return 'legendaria_corrupta';
+        if (runa && runa.variante === 'corrupta') {
+            if (runa.rareza === 'mitica') return 'mitica_corrupta';
+            if (runa.rareza === 'legendaria') return 'legendaria_corrupta';
+        }
+        return '';
+    }
+    window.RW_getAnimKeyCorrupta = _rwAnimKeyCorrupta;
+    window.activarUIRojizaMitica = function activarUIRojizaMitica() {
+        var btn = document.getElementById('btn-tirar');
+        if (!btn) return;
+        btn.classList.add('mitica-corrupta-activa');
+        document.body.classList.add('rw-mitica-corrupta-ui-activa');
+        if (_rwBtnMiticaTimer) clearTimeout(_rwBtnMiticaTimer);
+        _rwBtnMiticaTimer = setTimeout(function () {
+            btn.classList.remove('mitica-corrupta-activa');
+            document.body.classList.remove('rw-mitica-corrupta-ui-activa');
+            _rwBtnMiticaTimer = null;
+        }, 60000);
+    };
+    window.RW_lanzarAnimacionCorruptaEspecial = function RW_lanzarAnimacionCorruptaEspecial(runa, key) {
+        key = key || _rwAnimKeyCorrupta(runa);
+        if (key !== 'mitica_corrupta' && key !== 'legendaria_corrupta') return false;
+        if (typeof getAnimActiva === 'function' && !getAnimActiva(key)) {
+            if (typeof mostrarCardEn === 'function') mostrarCardEn('resultado-tirada', runa);
+            return true;
+        }
+        if (key === 'mitica_corrupta' && typeof window.activarUIRojizaMitica === 'function') window.activarUIRojizaMitica();
+        if (typeof iniciarAnimacion === 'function') iniciarAnimacion();
+        tiradaBloqueada = true;
+        if (resultadoTimeout) clearTimeout(resultadoTimeout);
+        if (neonTimeout) clearTimeout(neonTimeout);
+        if (typeof desactivarNeon === 'function') desactivarNeon();
+        var old = document.getElementById('rw-corrupta-anim-iframe');
+        if (old) old.remove();
+        if (_rwIframeTimer) clearTimeout(_rwIframeTimer);
+        var iframe = document.createElement('iframe');
+        iframe.id = 'rw-corrupta-anim-iframe';
+        iframe.src = 'RUNAS_HTML/RUNAS_ANIMADAS/' + key + '.html?v=' + Date.now();
+        iframe.setAttribute('allow', 'autoplay');
+        iframe.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:none;background:#000;z-index:9700;pointer-events:none';
+        document.body.appendChild(iframe);
+        var dur = RW_CORRUPT_ANIM_MS[key] || 12000;
+        _rwIframeTimer = setTimeout(function () {
+            try { iframe.remove(); } catch (e) {}
+            tiradaBloqueada = false;
+            if (typeof terminarAnimacion === 'function') terminarAnimacion();
+            var el = document.getElementById('resultado-tirada');
+            if (el) el.innerHTML = '';
+            if (typeof mostrarCardEn === 'function') mostrarCardEn('resultado-tirada', runa);
+            if (resultadoTimeout) clearTimeout(resultadoTimeout);
+            resultadoTimeout = setTimeout(function () {
+                var res = document.getElementById('resultado-tirada');
+                if (res) res.innerHTML = '';
+            }, 5000);
+        }, dur);
+        setTimeout(function () {
+            if (document.getElementById('rw-corrupta-anim-iframe') === iframe) {
+                try { iframe.remove(); } catch (e) {}
+                tiradaBloqueada = false;
+                if (typeof terminarAnimacion === 'function') terminarAnimacion();
+            }
+        }, dur + 6000);
+        return true;
+    };
+    var _rwMostrarResultadoBase = window.mostrarResultado || mostrarResultado;
+    window.mostrarResultado = mostrarResultado = function (runa) {
+        var key = _rwAnimKeyCorrupta(runa);
+        if (key === 'mitica_corrupta' || key === 'legendaria_corrupta') {
+            if (window.RW_lanzarAnimacionCorruptaEspecial(runa, key)) return;
+        }
+        return _rwMostrarResultadoBase(runa);
+    };
+    var _rwLanzarMiticaBase = window.lanzarMitica || lanzarMitica;
+    window.lanzarMitica = lanzarMitica = function (runa) {
+        var key = _rwAnimKeyCorrupta(runa);
+        if (key === 'mitica_corrupta') {
+            if (window.RW_lanzarAnimacionCorruptaEspecial(runa, key)) return;
+        }
+        return _rwLanzarMiticaBase(runa);
+    };
+})();

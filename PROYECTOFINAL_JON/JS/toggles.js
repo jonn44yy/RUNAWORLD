@@ -145,3 +145,93 @@ mostrarResultado = function(runa) {
 //     conseguido) para los jugadores de "modo turbo"
 //   - opcion "saltar animacion con click" para los que quieren verla pero
 //     solo la primera vez por sesion
+
+// ================================================================
+// FIX V106 — toggles independientes para corruptas especiales
+// ================================================================
+(function () {
+    'use strict';
+
+    var RW_ANIM_KEYS = ['eterna', 'divina', 'mitica', 'legendaria', 'mitica_corrupta', 'legendaria_corrupta'];
+
+    function rwToggleKey(raw) {
+        var r = String(raw || '').toLowerCase();
+        return RW_ANIM_KEYS.indexOf(r) !== -1 ? r : null;
+    }
+
+    function rwSyncMemoria(r, activa) {
+        if (r === 'eterna') animEternaActiva = activa;
+        if (r === 'mitica') animMiticaActiva = activa;
+        if (r === 'legendaria') animLegendariaActiva = activa;
+        if (r === 'divina') animDivinaActiva = activa;
+    }
+
+    window.toggleAnimaciones = toggleAnimaciones = function () {
+        var r = rwToggleKey(window.colRunaActual || colRunaActual);
+        if (!r) return;
+        var nuevoEstado = !getAnimActiva(r);
+        setAnimActiva(r, nuevoEstado);
+        rwSyncMemoria(r, nuevoEstado);
+        _renderToggle(r, nuevoEstado);
+    };
+
+    window.actualizarEstadoToggle = actualizarEstadoToggle = function (rareza) {
+        var r = rwToggleKey(rareza || window.colRunaActual || colRunaActual);
+        if (!r) return;
+        var activa = getAnimActiva(r);
+        rwSyncMemoria(r, activa);
+        _renderToggle(r, activa);
+    };
+})();
+
+// ================================================================
+// FIX V107 — toggle visible y funcional para corruptas especiales
+// ================================================================
+(function () {
+    'use strict';
+
+    var ANIM_KEYS_V107 = ['eterna', 'divina', 'mitica', 'legendaria', 'mitica_corrupta', 'legendaria_corrupta'];
+
+    function normalizarAnimKey(raw) {
+        var r = String(raw || '').toLowerCase();
+        if (ANIM_KEYS_V107.indexOf(r) !== -1) return r;
+        return null;
+    }
+
+    function syncMemoria(key, activa) {
+        if (key === 'eterna') animEternaActiva = activa;
+        if (key === 'divina') animDivinaActiva = activa;
+        if (key === 'mitica') animMiticaActiva = activa;
+        if (key === 'legendaria') animLegendariaActiva = activa;
+    }
+
+    window.RW_esAnimacionEspecialKey = function (key) {
+        return ANIM_KEYS_V107.indexOf(String(key || '').toLowerCase()) !== -1;
+    };
+
+    window.toggleAnimaciones = toggleAnimaciones = function () {
+        var key = normalizarAnimKey((typeof colRunaActual !== 'undefined' && colRunaActual) ? colRunaActual : window.colRunaActual);
+        if (!key) return;
+        var nuevo = !getAnimActiva(key);
+        setAnimActiva(key, nuevo);
+        syncMemoria(key, nuevo);
+        _renderToggle(key, nuevo);
+    };
+
+    window.actualizarEstadoToggle = actualizarEstadoToggle = function (rareza) {
+        var key = normalizarAnimKey(rareza || ((typeof colRunaActual !== 'undefined' && colRunaActual) ? colRunaActual : window.colRunaActual));
+        if (!key) return;
+        var activa = getAnimActiva(key);
+        syncMemoria(key, activa);
+        _renderToggle(key, activa);
+    };
+
+    var oldRender = _renderToggle;
+    window._renderToggle = _renderToggle = function (rareza, activa) {
+        oldRender(rareza, activa);
+        var btn = document.getElementById('btn-toggle-anim');
+        if (!btn) return;
+        if (rareza === 'mitica_corrupta') btn.classList.add('btn-toggle-anim-mitica');
+        if (rareza === 'legendaria_corrupta') btn.classList.add('btn-toggle-anim-legendaria');
+    };
+})();

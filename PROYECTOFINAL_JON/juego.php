@@ -51,7 +51,7 @@ $id_usuario = $_SESSION["idUsuario"];
 // cargar datos basicos del jugador
 // 27/04 v3: sistema de suerte eliminado, ya no leemos columna suerte ni display_mode
 $stmt = $conexion->prepare("
-    SELECT coins, points, coins_por_seg, points_por_seg, coins_ps_max, points_ps_max
+    SELECT id, coins, points, coins_por_seg, points_por_seg, coins_ps_max, points_ps_max
     FROM jugadores WHERE usuario_id = ?
 ");
 $stmt->bind_param("i", $id_usuario);
@@ -65,6 +65,51 @@ $coins_ps     = $jugador["coins_por_seg"]  ?? 1;
 $points_ps    = $jugador["points_por_seg"] ?? 0;
 $coins_ps_max = $jugador["coins_ps_max"]   ?? $coins_ps;
 $points_ps_max= $jugador["points_ps_max"]  ?? $points_ps;
+$jugador_id_actual = (int)($jugador["id"] ?? 0);
+// Suerte nueva:
+// suerte_total = suerte_tienda * suerte_colecciones
+// suerte_tienda = 1 + niveles de Amuleto, capada a x1.50
+// suerte_colecciones = 1.5 ^ colecciones completadas
+function rw_calcular_suerte_detalle(mysqli $conexion, int $jugador_id): array {
+    $stmt = $conexion->prepare("\n        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS suerte_bonus\n        FROM jugador_mejoras jm\n        INNER JOIN mejoras m ON m.id = jm.mejora_id\n        WHERE jm.jugador_id = ?\n          AND m.activa = 1\n          AND m.tipo IN ('suerte', 'luck', 'luck_add')\n    ");
+    $suerte_bonus = 0.0;
+    if ($stmt) {
+        $stmt->bind_param("i", $jugador_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $suerte_bonus = floatval($row["suerte_bonus"] ?? 0);
+    }
+    $suerte_tienda = max(1.0, min(1.5, 1.0 + $suerte_bonus));
+
+    $stmt = $conexion->prepare("\n        SELECT COUNT(*) AS completadas\n        FROM (\n            SELECT\n                COALESCE(r.grupo_id, 0) AS grupo_id_norm,\n                COUNT(*) AS total_runas,\n                COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas\n            FROM runas r\n            LEFT JOIN jugador_runas jr\n                ON jr.runa_id = r.id AND jr.jugador_id = ?\n            WHERE r.activa = 1\n            GROUP BY COALESCE(r.grupo_id, 0)\n            HAVING total_runas > 0 AND poseidas >= total_runas\n        ) completas\n    ");
+    $completadas = 0;
+    if ($stmt) {
+        $stmt->bind_param("i", $jugador_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $completadas = (int)($row["completadas"] ?? 0);
+    }
+
+    $suerte_colecciones = pow(1.5, max(0, $completadas));
+    $suerte_total = $suerte_tienda * $suerte_colecciones;
+    return [
+        "total" => max(1.0, $suerte_total),
+        "tienda" => $suerte_tienda,
+        "colecciones" => $suerte_colecciones,
+        "colecciones_completadas" => $completadas,
+        "bonus_por_coleccion" => 1.5,
+    ];
+}
+
+$suerte_detalle = $jugador_id_actual > 0 ? rw_calcular_suerte_detalle($conexion, $jugador_id_actual) : ["total"=>1.0,"tienda"=>1.0,"colecciones"=>1.0,"colecciones_completadas"=>0,"bonus_por_coleccion"=>1.5];
+$luck_multiplier = $suerte_detalle["total"];
+$luck_shop_multiplier = $suerte_detalle["tienda"];
+$luck_collection_multiplier = $suerte_detalle["colecciones"];
+$completed_collections = (int)$suerte_detalle["colecciones_completadas"];
+$collection_bonus_per_complete = 1.5;
+
 
 // bulk total del jugador. bulk = masa = cuantas runas lanza por cada coin
 // gastada. la mejora "tiradas multiples" suma +1 bulk por nivel. arranca en 1
@@ -73,7 +118,7 @@ $stmt = $conexion->prepare("
     FROM jugador_mejoras jm
     INNER JOIN mejoras m ON jm.mejora_id = m.id
     WHERE jm.jugador_id = (SELECT id FROM jugadores WHERE usuario_id = ?)
-      AND m.tipo = 'bulk' AND m.activa = 1
+      AND m.tipo IN ('bulk','bulk_normal','bulk_extra') AND m.activa = 1
 ");
 $stmt->bind_param("i", $id_usuario);
 $stmt->execute();
@@ -113,21 +158,33 @@ foreach ($rarezas_db as $r) {
 }
 
 // lista completa de runas activas (para el panel de probabilidades)
+// v8.4: ahora incluye también corruptas. Antes se excluían aquí y por eso en
+// colección salían como "—" en Rareza base / Con suerte. Las corruptas se
+// calculan como variante: 1% de la probabilidad real de su runa base/rareza.
 $stmt = $conexion->prepare("
     SELECT r.id, r.nombre, r.rareza,
            COALESCE(g.nombre, 'Sin grupo') as grupo_nombre
     FROM runas r
     LEFT JOIN grupos_runas g ON r.grupo_id = g.id
     WHERE r.activa = 1
+      AND LOWER(r.nombre) NOT LIKE '%caos%'
+      AND LOWER(COALESCE(g.nombre, '')) NOT LIKE '%caos%'
     ORDER BY g.id ASC, FIELD(r.rareza,'eterna','divina','mitica','legendaria','epica','rara','poco_comun','comun')
 ");
 $stmt->execute();
 $todas_runas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// contar cuantas runas hay por rareza para repartir la prob entre ellas
+function rw_es_corrupta_nombre($nombre) {
+    return strpos(mb_strtolower((string)$nombre, 'UTF-8'), 'corrupt') !== false;
+}
+
+// contar cuantas runas NORMALES hay por rareza para repartir la prob base.
+// Las corruptas no reducen la probabilidad visible de las normales: cuelgan
+// como variante extra de la runa base y se muestran al 1% de esa posibilidad.
 $counts_rareza = [];
 foreach ($todas_runas as $r) {
+    if (rw_es_corrupta_nombre($r["nombre"] ?? '')) continue;
     $counts_rareza[$r["rareza"]] = ($counts_rareza[$r["rareza"]] ?? 0) + 1;
 }
 
@@ -200,17 +257,9 @@ $total_miticas      = (int)($jugador_stats_row["total_miticas"]      ?? 0);
 $total_legendarias  = (int)($jugador_stats_row["total_legendarias"]  ?? 0);
 $boosts_clickados   = (int)($jugador_stats_row["boosts_clickados"]   ?? 0);  // 28/04 v3.1
 
-// coleccion basica completa? cuento runas no especiales que tiene el jugador
-$stmt = $conexion->prepare("
-    SELECT
-      (SELECT COUNT(*) FROM runas WHERE activa = 1
-       AND rareza NOT IN ('eterna','divina','mitica','legendaria')) AS total_basicas,
-      (SELECT COUNT(DISTINCT jr.runa_id) FROM jugador_runas jr
-       INNER JOIN runas r ON r.id = jr.runa_id
-       WHERE jr.jugador_id = ? AND jr.cantidad > 0
-         AND r.rareza NOT IN ('eterna','divina','mitica','legendaria')
-         AND r.activa = 1) AS poseidas
-");
+// coleccion basica completa? cuenta TODAS las runas de la colección Básica normal.
+// Antes saltaba con 6/8 porque ignoraba legendaria/mítica/divina/eterna.
+$stmt = $conexion->prepare("\n    SELECT\n      COUNT(*) AS total_basicas,\n      COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas\n    FROM runas r\n    LEFT JOIN grupos_runas g ON r.grupo_id = g.id\n    LEFT JOIN jugador_runas jr ON r.id = jr.runa_id AND jr.jugador_id = ?\n    WHERE r.activa = 1\n      AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%inter%'\n      AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%avanz%'\n      AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%corrupt%'\n      AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%caos%'\n      AND LOWER(r.nombre) NOT LIKE '%corrupt%'\n      AND LOWER(r.nombre) NOT LIKE '%caos%'\n");
 $stmt->bind_param("i", $jugador_id);
 $stmt->execute();
 $col_row = $stmt->get_result()->fetch_assoc();
@@ -303,7 +352,7 @@ foreach ($mejoras as $mejora) {
             break;
         case "coins_seg_multi":
         case "coins_seg_multi_eterno":
-            $multi_coins *= pow(2, $nivel);
+            $multi_coins *= pow(max(1.0, $valor), $nivel);
             break;
         case "points_seg":
             // 28/04 v3.1: lineal (valor * nivel) en vez de geometrica
@@ -313,18 +362,18 @@ foreach ($mejoras as $mejora) {
             break;
         case "points_seg_multi":
         case "points_seg_multi_eterno":
-            $multi_points *= pow(2, $nivel);
+            $multi_points *= pow(max(1.0, $valor), $nivel);
             break;
         case "bulk":
         case "bulk_normal":
-            // este lo lee tirar_runa.php directamente de la BD,
-            // pero lo dejamos aqui por si algun panel quiere mostrar el bulk total
+            $bulk_extra += (int)round($valor * $nivel);
             break;
         case "bulk_extra":
             if ($nivel >= 1) $bulk_extra += (int)$valor;
             break;
     }
 }
+$bulk_total = max(1, 1 + (int)$bulk_extra);
 $coins_ps = (1.0 + $coins_add) * $multi_coins;
 
 // points/seg tiene un extra: las runas que tiene el jugador dan points pasivos
@@ -350,6 +399,14 @@ foreach ($todas_runas as $runa) {
     $rareza = $runa["rareza"];
     $count  = max(1, (int)($counts_rareza[$rareza] ?? 1));
     $pct    = ($prob_rareza_pct[$rareza] ?? 0) / $count;
+
+    // Corrupta = variante del 1% de la runa base. Ejemplo:
+    // base 1/100 -> corrupta 1/10.000. Luego el cliente aplica suerte encima
+    // para mostrar "Con suerte" igual que con las normales.
+    if (rw_es_corrupta_nombre($runa["nombre"] ?? '')) {
+        $pct *= 0.01;
+    }
+
     $prob_map[$runa["id"]] = [
         "prob" => $pct
     ];
@@ -359,8 +416,11 @@ foreach ($todas_runas as $runa) {
 // el jugador (0 si no la ha desbloqueado). LEFT JOIN es mi mejor amigo
 $stmt = $conexion->prepare("
     SELECT r.id, r.nombre, r.rareza, r.multiplicador, r.imagen,
+           r.grupo_id,
+           COALESCE(g.nombre, 'Runas Básicas') as grupo_nombre,
            COALESCE(jr.cantidad, 0) as cantidad
     FROM runas r
+    LEFT JOIN grupos_runas g ON r.grupo_id = g.id
     LEFT JOIN jugador_runas jr ON r.id = jr.runa_id
         AND jr.jugador_id = (SELECT id FROM jugadores WHERE usuario_id = ?)
     WHERE r.activa = 1
@@ -371,14 +431,48 @@ $stmt->execute();
 $runas_coleccion = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
+function rw_collection_slug($nombre, $runa_nombre = '') {
+    $rn = mb_strtolower((string)$runa_nombre, 'UTF-8');
+    if (strpos($rn, 'corrupt') !== false || strpos($rn, 'caos') !== false) return 'basicas';
+    $n = mb_strtolower((string)$nombre, 'UTF-8');
+    if (strpos($n, 'inter') !== false) return 'intermedias';
+    if (strpos($n, 'avanz') !== false) return 'avanzadas';
+    return 'basicas';
+}
+function rw_variant_slug($runa_nombre) {
+    $n = mb_strtolower((string)$runa_nombre, 'UTF-8');
+    if (strpos($n, 'caos') !== false) return 'caos';
+    if (strpos($n, 'corrupt') !== false) return 'corrupta';
+    return 'normal';
+}
+
+foreach ($runas_coleccion as &$__runa_col_ref) {
+    $__runa_col_ref['collection_slug'] = rw_collection_slug($__runa_col_ref['grupo_nombre'] ?? 'Runas Básicas', $__runa_col_ref['nombre'] ?? '');
+    $__runa_col_ref['variant_slug'] = rw_variant_slug($__runa_col_ref['nombre'] ?? '');
+}
+unset($__runa_col_ref);
+
+$colecciones_ui = [
+    ['slug'=>'basicas', 'nombre'=>'Básicas', 'estado'=>'active'],
+    ['slug'=>'intermedias', 'nombre'=>'Intermedias', 'estado'=>'unlocked'],
+    ['slug'=>'avanzadas', 'nombre'=>'Avanzadas', 'estado'=>'unlocked'],
+];
+for ($__i = 4; $__i <= 25; $__i++) {
+    $colecciones_ui[] = ['slug'=>'lista-'.$__i, 'nombre'=>'???', 'estado'=>'locked'];
+}
+
 // contador estilo "4/20" en la parte de coleccion (no es lo que piensas)
 $total_runas       = count($runas_coleccion);
 $desbloqueadas_num = count(array_filter($runas_coleccion, fn($r) => $r["cantidad"] > 0));
 
-// las especiales van arriba con sus botones fancy, las comunes abajo
-// (legendaria y mitica son "especiales" porque tienen animacion propia)
-$runas_especiales = array_values(array_filter($runas_coleccion, fn($r) => in_array($r["rareza"], ["eterna","divina","legendaria","mitica"])));
-$runas_comunes    = array_values(array_filter($runas_coleccion, fn($r) => !in_array($r["rareza"], ["eterna","divina","legendaria","mitica"])));
+// las especiales van arriba con sus botones fancy, las comunes abajo.
+// Importante v8.3: la variante corrupta NO crea una tercera lista.
+// Una mitica_corrupta vive dentro de Especiales; una comun_corrupta, rara_corrupta,
+// epica_corrupta, etc. viven dentro de Comunes. Esto deja el sistema preparado
+// para sumar mas runas: mientras tengan rareza + nombre, entran solas aqui.
+$rarezas_especiales_coleccion = ["eterna", "divina", "mitica", "legendaria"];
+$runas_especiales = array_values(array_filter($runas_coleccion, fn($r) => in_array($r["rareza"], $rarezas_especiales_coleccion, true)));
+$runas_comunes    = array_values(array_filter($runas_coleccion, fn($r) => !in_array($r["rareza"], $rarezas_especiales_coleccion, true)));
 
 // 27/04 v3: bloque de bonus_grupo eliminado, tabla dropeada en Fase 1
 
@@ -676,6 +770,17 @@ $conexion->close();
             </div>
         </div>
 
+        <div class="stat-block stat-block-suerte">
+            <svg class="stat-icon" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="15" stroke="#ffd700" stroke-width="1.3" opacity="0.75"/>
+                <path d="M20 7 L23 17 L34 17 L25 23 L28 34 L20 28 L12 34 L15 23 L6 17 L17 17 Z" stroke="#ffd700" stroke-width="1.1" fill="rgba(255,215,0,0.08)"/>
+            </svg>
+            <div class="stat-info">
+                <span class="stat-value gold" id="luck-display">x<?= number_format($luck_multiplier, 2) ?></span>
+                <span class="stat-rate">suerte total</span>
+            </div>
+        </div>
+
         <div class="sidebar-divider"></div>
 
         <nav class="nav-menu">
@@ -797,9 +902,6 @@ $conexion->close();
 
                 <div id="resultado-especial"></div>
                 <div id="resultado-tirada"></div>
-                <button id="btn-desbloquear" disabled title="Proximamente">
-                    ⬡ Desbloquear nueva lista de runas — 1M pts
-                </button>
             </div>
         </div>
 
@@ -820,6 +922,52 @@ $conexion->close();
              y comunes (solo card). al seleccionar una runa desbloqueada carga un
              iframe central con la animacion en bucle y sus stats -->
         <div id="seccion-coleccion" class="seccion seccion-coleccion-full">
+            <div class="coleccion-topbar-v71" aria-label="Listas de runas">
+                <div class="coleccion-listas-scroll" id="coleccion-listas-scroll">
+                    <?php foreach ($colecciones_ui as $col_ui): ?>
+                        <button type="button"
+                                class="coleccion-lista-pill <?= $col_ui['estado'] === 'active' ? 'active' : '' ?> <?= $col_ui['estado'] === 'locked' ? 'locked' : '' ?>"
+                                data-collection="<?= htmlspecialchars($col_ui['slug']) ?>"
+                                <?= $col_ui['estado'] === 'locked' ? 'disabled title="Lista bloqueada"' : '' ?>>
+                            <?php if ($col_ui['estado'] === 'locked'): ?>
+                                <span class="coleccion-lock-only">🔒</span>
+                            <?php else: ?>
+                                <span><?= htmlspecialchars($col_ui['nombre']) ?></span>
+                            <?php endif; ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+                <div class="coleccion-variantes-v71" aria-label="Variantes de runas">
+                    <button type="button" class="coleccion-variante-pill active" data-variant="normal">Normal</button>
+                    <?php if ($coleccion_basica_completa): ?>
+                        <button type="button" class="coleccion-variante-pill corrupta-unlocked" data-variant="corrupta" title="Variante corrupta desbloqueada: 1% de la runa base">Corrupta · 1%</button>
+                    <?php else: ?>
+                        <button type="button" class="coleccion-variante-pill locked" data-variant="corrupta" disabled aria-label="Corrupta bloqueada">🔒</button>
+                    <?php endif; ?>
+                    <button type="button" class="coleccion-variante-pill locked" data-variant="caos" disabled aria-label="Caos bloqueada">🔒</button>
+                </div>
+                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= $completed_collections > 0 ? 'activo' : '' ?>" title="Cada colección completada multiplica la suerte por x1.5">
+                    <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
+                    <strong>x1.5 suerte</strong>
+                    <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Completa una colección' ?></span>
+                </div>
+            </div>
+
+            <div id="coleccion-completa-modal" class="coleccion-completa-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="coleccion-completa-title">
+                <div class="coleccion-completa-box">
+                    <button type="button" class="coleccion-completa-close" aria-label="Cerrar" onclick="window.RW_cerrarPopupColeccion && window.RW_cerrarPopupColeccion()">×</button>
+                    <span class="coleccion-completa-eyebrow">Colección completada</span>
+                    <h3 id="coleccion-completa-title">Runas Básicas dominadas</h3>
+                    <p>Enhorabuena. Has reunido todas las Runas Básicas y el equilibrio empieza a romperse.</p>
+                    <div class="coleccion-completa-rewards">
+                        <div><strong>x1.5 suerte</strong><span>Bonus permanente de colección.</span></div>
+                        <div><strong>Corrupta · 1%</strong><span>La variante corrupta puede aparecer sobre su runa base.</span></div>
+                    </div>
+                    <p class="coleccion-completa-note">Ejemplo: si una runa es 1/100, su corrupta aparece a 1/10.000.</p>
+                    <button type="button" class="coleccion-completa-ok" onclick="window.RW_cerrarPopupColeccion && window.RW_cerrarPopupColeccion()">Entendido</button>
+                </div>
+            </div>
+
             <div class="coleccion-layout">
 
                 <!-- columna izquierda: lista de runas separadas en especiales y comunes -->
@@ -834,13 +982,31 @@ $conexion->close();
                         </span>
                     </div>
 
+
+                    <div class="coleccion-empty-state col-hidden-collection" data-empty-collection="corrupta" aria-live="polite">
+                        <div class="coleccion-empty-lock">🔒</div>
+                        <div class="coleccion-empty-title">No has conseguido ninguna runa corrupta</div>
+                        <div class="coleccion-empty-desc">Las corruptas aparecen como variante rara de su runa base cuando la colección Básica está completa.</div>
+                    </div>
+                    <div class="coleccion-empty-state col-hidden-collection" data-empty-collection="intermedias" aria-live="polite">
+                        <div class="coleccion-empty-lock">🔒</div>
+                    </div>
+                    <div class="coleccion-empty-state col-hidden-collection" data-empty-collection="avanzadas" aria-live="polite">
+                        <div class="coleccion-empty-lock">🔒</div>
+                    </div>
+                    <div class="coleccion-empty-state col-hidden-collection" data-empty-collection="caos" aria-live="polite">
+                        <div class="coleccion-empty-lock">🔒</div>
+                    </div>
+
                     <!-- runas especiales (legendaria/mitica/divina/eterna) -->
                     <!-- estas son las que tienen animaciones propias y neon -->
                     <div class="col-seccion-header">Especiales</div>
                     <?php foreach ($runas_especiales as $runa_col):
                         $desbloqueada = $runa_col["cantidad"] > 0;
                         $cls_rareza   = htmlspecialchars($runa_col["rareza"]);
-                        $cls_extra    = $desbloqueada ? "desbloqueada " . $cls_rareza : "bloqueada";
+                        $variant_slug = $runa_col["variant_slug"] ?? "normal";
+                        $cls_corrupta = ($variant_slug === "corrupta") ? " col-corrupta-item" : "";
+                        $cls_extra    = ($desbloqueada ? "desbloqueada " . $cls_rareza : "bloqueada") . $cls_corrupta;
                     ?>
                     <div class="col-runa-btn col-especial <?= $cls_extra ?>"
                          data-id="<?= $runa_col["id"] ?>"
@@ -849,11 +1015,17 @@ $conexion->close();
                          data-multiplicador="<?= $runa_col["multiplicador"] ?>"
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
                          data-imagen="<?= htmlspecialchars($runa_col["imagen"] ?? "") ?>"
+                         data-collection="<?= htmlspecialchars($runa_col["collection_slug"] ?? "basicas") ?>"
+                         data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"
+                         data-runa-file="<?= htmlspecialchars(($runa_col["variant_slug"] ?? "normal") === "corrupta" ? ($runa_col["rareza"] . "_corrupta") : $runa_col["rareza"]) ?>"
+                         data-grupo="<?= htmlspecialchars($runa_col["grupo_nombre"] ?? "Runas Básicas") ?>"
+                         data-puntos="<?= $runa_col["multiplicador"] ?>"
                          <?= $desbloqueada ? 'onclick="seleccionarRunaCol(this)"' : '' ?>>
                         <?php if ($desbloqueada): ?>
                             <canvas class="col-btn-neon" data-rareza="<?= $cls_rareza ?>"></canvas>
                         <?php endif; ?>
                         <span class="col-runa-nombre"><?= htmlspecialchars($runa_col["nombre"]) ?></span>
+                        <span class="col-runa-meta" aria-hidden="true"><?= (($runa_col["variant_slug"] ?? "normal") === "corrupta") ? "Corrupta" : "" ?></span>
                         <span class="col-runa-right">
                             <?php if ($desbloqueada): ?>
                                 <span class="col-runa-cantidad">x<?= number_format($runa_col["cantidad"]) ?></span>
@@ -870,7 +1042,9 @@ $conexion->close();
                     <?php foreach ($runas_comunes as $runa_col):
                         $desbloqueada = $runa_col["cantidad"] > 0;
                         $cls_rareza   = htmlspecialchars($runa_col["rareza"]);
-                        $cls_extra    = $desbloqueada ? "desbloqueada " . $cls_rareza : "bloqueada";
+                        $variant_slug = $runa_col["variant_slug"] ?? "normal";
+                        $cls_corrupta = ($variant_slug === "corrupta") ? " col-corrupta-item" : "";
+                        $cls_extra    = ($desbloqueada ? "desbloqueada " . $cls_rareza : "bloqueada") . $cls_corrupta;
                     ?>
                     <div class="col-runa-comun <?= $cls_extra ?>"
                          data-id="<?= $runa_col["id"] ?>"
@@ -878,11 +1052,17 @@ $conexion->close();
                          data-nombre="<?= htmlspecialchars($runa_col["nombre"]) ?>"
                          data-multiplicador="<?= $runa_col["multiplicador"] ?>"
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
+                         data-collection="<?= htmlspecialchars($runa_col["collection_slug"] ?? "basicas") ?>"
+                         data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"
+                         data-runa-file="<?= htmlspecialchars(($runa_col["variant_slug"] ?? "normal") === "corrupta" ? ($runa_col["rareza"] . "_corrupta") : $runa_col["rareza"]) ?>"
+                         data-grupo="<?= htmlspecialchars($runa_col["grupo_nombre"] ?? "Runas Básicas") ?>"
+                         data-puntos="<?= $runa_col["multiplicador"] ?>"
                          <?= $desbloqueada ? 'onclick="seleccionarRunaCol(this)"' : '' ?>>
-                        <canvas class="col-comun-canvas" width="32" height="32" data-rareza="<?= $cls_rareza ?>" data-activa="<?= $desbloqueada ? '1' : '0' ?>"></canvas>
+                        <canvas class="col-comun-canvas" width="32" height="32" data-rareza="<?= $cls_rareza ?>" data-activa="<?= $desbloqueada ? '1' : '0' ?>" data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"></canvas>
                         <div class="col-comun-info">
                             <span class="col-comun-nombre"><?= htmlspecialchars($runa_col["nombre"]) ?></span>
-                            <span class="col-comun-rareza"><?= ucfirst(str_replace("_"," ",$runa_col["rareza"])) ?></span>
+                            <span class="col-comun-rareza"><?= ucfirst(str_replace("_"," ",$runa_col["rareza"])) ?><?= (($runa_col["variant_slug"] ?? "normal") === "corrupta") ? " · Corrupta" : "" ?></span>
+                            <span class="col-comun-puntos" aria-hidden="true"></span>
                         </div>
                         <span class="col-runa-right">
                             <?php if ($desbloqueada): ?>
@@ -893,6 +1073,12 @@ $conexion->close();
                         </span>
                     </div>
                     <?php endforeach; ?>
+
+                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= $completed_collections > 0 ? 'activo' : '' ?>" title="Cada colección completada multiplica la suerte por x1.5">
+                        <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
+                        <strong>x1.5 suerte</strong>
+                        <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Completa una colección' ?></span>
+                    </div>
 
                 </div>
 
@@ -1181,12 +1367,20 @@ $conexion->close();
             <div class="panel-titulo">Mis Runas <span class="panel-titulo-sub" id="panel-runas-count"><?= $desbloqueadas_num ?>/<?= $total_runas ?></span></div>
             <div id="panel-runas-contenido">
                 <?php
-                // agrupar todas las runas por su grupo (basicas, evento, etc)
-                // para pintarlas con su separador en el sidebar derecho
-                $todas_runas_agrupadas = [];
+                // panel lateral: dos bloques claros, sin mezclar nombres largos.
+                // - Runas Básicas: todas las runas normales, incluidas especiales.
+                // - Runas Corruptas: todas las variantes corruptas.
+                // El drawer móvil clona este mismo panel, así PC y móvil quedan iguales.
+                $todas_runas_agrupadas = [
+                    'Runas Básicas'   => [],
+                    'Runas Corruptas' => []
+                ];
                 foreach ($todas_runas as $runa) {
-                    $todas_runas_agrupadas[$runa["grupo_nombre"]][] = $runa;
+                    $variant = rw_variant_slug($runa["nombre"] ?? '');
+                    $grupoPanel = ($variant === 'corrupta') ? 'Runas Corruptas' : 'Runas Básicas';
+                    $todas_runas_agrupadas[$grupoPanel][] = $runa;
                 }
+                $todas_runas_agrupadas = array_filter($todas_runas_agrupadas, fn($items) => count($items) > 0);
                 // mapa id_runa -> cantidad que tiene el jugador, para saber si
                 // dibujo la runa como desbloqueada o con el candado de bloqueo
                 $mis_cantidades = [];
@@ -1258,8 +1452,18 @@ window.RW_INIT = {
     coins_ps_max:   <?= $coins_ps_max  ?>,
     points_ps_max:  <?= $coins_ps_max  ?>,
 
-    // 27/04 v3: campos suerte_*, curvas_data y display_mode eliminados.
-    // las probabilidades son fijas, no dependen de suerte ni de boosts.
+    // Suerte total usada por el RNG:
+    // total = suerte_tienda * suerte_colecciones.
+    // cada colección completada añade un multiplicador x1.5.
+    luck_multiplier: <?= number_format($luck_multiplier, 6, '.', '') ?>,
+    luck_shop_multiplier: <?= number_format($luck_shop_multiplier, 6, '.', '') ?>,
+    luck_collection_multiplier: <?= number_format($luck_collection_multiplier, 6, '.', '') ?>,
+    completed_collections: <?= (int)$completed_collections ?>,
+    collection_bonus_per_complete: <?= number_format($collection_bonus_per_complete, 2, '.', '') ?>,
+    basic_collection_complete: <?= $coleccion_basica_completa ? 'true' : 'false' ?>,
+    basic_collection_total: <?= (int)($col_row['total_basicas'] ?? 0) ?>,
+    basic_collection_owned: <?= (int)($col_row['poseidas'] ?? 0) ?>,
+    corrupt_variant_chance: 0.01,
 
     // multiplicadores de mejoras que persisten entre tiradas, js los
     // guarda en variables globales para no tener que recalcular siempre
@@ -1279,6 +1483,7 @@ window.RW_INIT = {
     // si el jugador tiene comprada la mejora de desbloqueo correspondiente
     mejoras_desbloqueadas: <?= json_encode($mejoras_desbloqueadas) ?>,
     prob_rareza:    <?= json_encode($prob_rareza_pct) ?>,
+    colecciones_ui: <?= json_encode($colecciones_ui) ?>,
 
     // datos de TODAS las mejoras de la tabla `mejoras` con el nivel actual
     // del jugador. tienda.js los lee al cargar y construye las filas
