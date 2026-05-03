@@ -287,7 +287,12 @@ window.RW_TIENDA_VERSION = '8.0';
                 method:      'POST',
                 credentials: 'same-origin',
                 headers:     { 'Content-Type': 'application/json' },
-                body:        JSON.stringify({ mejora_id: id })
+                body: JSON.stringify({
+                    mejora_id: id,
+                    points_cliente: (typeof window.getPointsActual === "function")
+                        ? window.getPointsActual()
+                        : 0
+                })
             });
         })
         .then(function (r) { return r.json(); })
@@ -322,8 +327,21 @@ window.RW_TIENDA_VERSION = '8.0';
             if (data.coins !== undefined && typeof window.setCoins === "function") {
                 window.setCoins(data.coins);
             }
+            window.RW_COMPRA_RECIENTE_HASTA = Date.now() + 10000;
+            
             if (data.points !== undefined && typeof window.setPoints === "function") {
                 window.setPoints(data.points);
+            }
+            
+            if (typeof window.setLuckDetalle === "function") {
+                window.setLuckDetalle({
+                    total: data.luck_multiplier,
+                    tienda: data.luck_shop_multiplier,
+                    colecciones: data.luck_collection_multiplier,
+                    colecciones_completadas: data.completed_collections
+                });
+            } else if (data.luck_multiplier !== undefined && typeof window.setLuck === "function") {
+                window.setLuck(data.luck_multiplier);
             }
 
             // sincronizar niveles de TODAS las mejoras desde mejoras_jugador.

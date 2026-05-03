@@ -134,13 +134,6 @@ function tirarRuna() {
 
     resetIdleTimer();
     lanzarParticulasBoton();
-
-    // descuento visual inmediato. el server confirmara con el valor real
-    // cuando llegue la sync. si el jugador tiene 3 coins y clica 5 veces
-    // rapido, las 2 ultimas no entran por el if de arriba. limpio
-    coins -= 1;
-    actualizarPantalla();
-
     // esto es TODO el cambio gordo. antes aqui habia un fetch de 50 lineas.
     // ahora solo cuento. runa-sync.js manda el lote cuando toca
     window.runaSync.registrarClic(1);
@@ -157,8 +150,20 @@ function procesarRespuestaSync(data) {
     // ── coins: fuente de verdad = servidor ────────────────────
     // coins SI se gastan en cada tirada, asi que el server manda el valor
     // correcto despues de descontar. el cliente lo adopta
-    if (data.coins !== undefined) {
-        coins = parseFloat(data.coins) || 0;
+    if (!data.local_visual && data.coins !== undefined) {
+        var serverCoins = parseFloat(data.coins) || 0;
+    
+        var hayPendienteCoins = false;
+        if (
+            window.runaSync &&
+            typeof window.runaSync.getVisualState === "function"
+        ) {
+            hayPendienteCoins = !!window.runaSync.getVisualState().hasPendingVisual;
+        }
+    
+        if (!hayPendienteCoins) {
+            coins = Math.max(coins, serverCoins);
+        }
     }
 
     // ── points: el MAYOR entre cliente y servidor ─────────────
@@ -180,11 +185,34 @@ function procesarRespuestaSync(data) {
     // mejoras additive/multi las aplica recalcularStatsDesdeMejoras en
     // ui.js, asi que aqui reaplico la formula con la nueva base
     if (data.points_por_seg !== undefined && !isNaN(parseFloat(data.points_por_seg))) {
-        _runas_points_ps = parseFloat(data.points_por_seg);
+        var serverRunasPps = parseFloat(data.points_por_seg) || 0;
+    
+        _runas_points_ps = Math.max(parseFloat(_runas_points_ps) || 0, serverRunasPps);
+    
         var nuevoPps = (_runas_points_ps + _mejora_points_add) * _mejora_multi_pts;
-        points_ps_base = nuevoPps;
-        points_ps      = nuevoPps;
+    
+        points_ps_base = Math.max(points_ps_base || 0, nuevoPps);
+        points_ps = Math.max(points_ps || 0, nuevoPps);
+    
         if (typeof aplicarBoosts === "function") aplicarBoosts();
+    }
+    
+    // Estoy hasta los huevos de hacer copias de seguridad y probando se me olviden lineas de codigo pensando que eran inutiles
+    // Si lees esto eres una persona exitosa
+    if (data.local_visual && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
+    var deltaPpsRunas = data.runas_ganadas.reduce(function (s, r) {
+        return s + (parseFloat(r.multiplicador) || 0);
+    }, 0);
+
+    if (deltaPpsRunas > 0) {
+        _runas_points_ps = (parseFloat(_runas_points_ps) || 0) + deltaPpsRunas;
+
+        var nuevoPpsVisual = (_runas_points_ps + _mejora_points_add) * _mejora_multi_pts;
+        points_ps_base = Math.max(points_ps_base || 0, nuevoPpsVisual);
+        points_ps = Math.max(points_ps || 0, nuevoPpsVisual);
+
+        if (typeof aplicarBoosts === "function") aplicarBoosts();
+        }
     }
 
     // 27/04 v3: bloque de actualizacion de suerte_grupo eliminado.
@@ -476,7 +504,6 @@ function actualizarPanelRunas(runas) {
 function guardarProgreso() {
     fetch("PHP/guardar_progreso.php", {
         method: "POST",
-        // sin body: el server ya no acepta valores del cliente
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -485,24 +512,66 @@ function guardarProgreso() {
             msg.textContent = data.ok ? "Partida guardada correctamente." : "Error al guardar.";
             setTimeout(function () { msg.textContent = ""; }, 3000);
         }
-        // sincronizo el display con el estado autoritativo del server.
-        // si el cliente tenia el display "inflado" por un bug viejo, este
-        // call lo corrige: el numero baja al valor real, pero a partir
-        // de aqui sigue creciendo bien con la formula correcta
+
         if (data.ok && typeof window !== "undefined") {
-            if (typeof coins  !== "undefined" && data.coins  !== undefined) coins  = parseFloat(data.coins);
-            if (typeof points !== "undefined" && data.points !== undefined) points = parseFloat(data.points);
-            if (typeof coins_ps  !== "undefined" && data.coins_por_seg  !== undefined) coins_ps  = parseFloat(data.coins_por_seg);
-            if (typeof points_ps !== "undefined" && data.points_por_seg !== undefined) points_ps = parseFloat(data.points_por_seg);
+
+            // coins: servidor manda valor correcto
+            // coins: no pisar coins visuales mientras haya packs/clicks pendientes
+            if (typeof coins !== "undefined" && data.coins !== undefined) {
+                var serverCoins = parseFloat(data.coins) || 0;
+            
+                var hayPendiente = false;
+                if (
+                    window.runaSync &&
+                    typeof window.runaSync.getVisualState === "function"
+                ) {
+                    hayPendiente = !!window.runaSync.getVisualState().hasPendingVisual;
+                }
+            
+                if (!hayPendiente) {
+                    coins = Math.max(coins, serverCoins);
+                }
+            }
+
+            // points: nunca bajar por respuesta vieja
+        if (typeof points !== "undefined" && data.points !== undefined) {
+            var serverPoints = parseFloat(data.points) || 0;
+        
+            if (window.RW_COMPRA_RECIENTE_HASTA && Date.now() < window.RW_COMPRA_RECIENTE_HASTA) {
+                // ignorar points de autosaves viejos justo después de comprar
+            } else {
+                points = Math.max(points, serverPoints);
+            }
+        }
+
+            // coins_ps: evitar bajadas por desync
+            if (typeof coins_ps !== "undefined" && data.coins_por_seg !== undefined) {
+                var serverCps = parseFloat(data.coins_por_seg) || 0;
+                coins_ps = Math.max(coins_ps, serverCps);
+            }
+
+            // points_ps: CLAVE del bug
+            if (typeof points_ps !== "undefined" && data.points_por_seg !== undefined) {
+                var serverPps = parseFloat(data.points_por_seg) || 0;
+
+                // no permitir que baje
+                points_ps = Math.max(points_ps, serverPps);
+
+                // sincronizar bases internas
+                points_ps_base = Math.max(points_ps_base || 0, serverPps);
+                _runas_points_ps = Math.max(_runas_points_ps || 0, serverPps);
+            }
+
+            actualizarPantalla();
         }
     })
     .catch(function () {
-        // red caida, nada que hacer. el proximo tick lo reintenta
+        // red caída, se reintentará en el siguiente ciclo
     });
 }
 
-// auto-save cada 30s para cubrir periodos idle
-setInterval(guardarProgreso, 30000);
+// auto-save cada 60s para cubrir periodos idle
+setInterval(guardarProgreso, 60000);
 
 
 // ideas futuras / TODO:

@@ -12,10 +12,10 @@
     var ENDPOINT_PACK    = 'PHP/crear_pack_tiradas.php';
     var ENDPOINT_CONFIRM = 'PHP/confirmar_pack_tiradas.php';
 
-    var PACK_SIZE        = 25;
-    var PREFETCH_AT      = 5;
-    var CONFIRM_INTERVAL = 15000;
-    var HARD_QUEUE_CAP   = 80;
+    var PACK_SIZE        = 50;
+    var PREFETCH_AT      = 10;
+    var CONFIRM_INTERVAL = 30000;
+    var HARD_QUEUE_CAP   = 120;
 
     var cola = [];
     var solicitandoPack = false;
@@ -54,7 +54,7 @@
     }
 
     function estimarCoinsServidorDisponibles() {
-        return Math.max(0, Math.floor(visualCoinsEnteras() - cola.length + waitingClicks));
+        return Math.max(0, Math.floor(visualCoinsEnteras() - waitingClicks));
     }
 
     function recalcularCoinsVisualDesdeServidor(serverCoins) {
@@ -183,7 +183,13 @@
                 cola.push(u);
             });
 
-            if (data.coins !== undefined) recalcularCoinsVisualDesdeServidor(data.coins);
+            if (data.coins !== undefined) {
+                var calculoServidor = Math.max(0, (parseFloat(data.coins) || 0) + cola.length - waitingClicks);
+            
+                if (calculoServidor > visualCoinsEnteras()) {
+                    recalcularCoinsVisualDesdeServidor(data.coins);
+                }
+            }
 
             var autorizadas = (data.clicks_validos !== undefined) ? (parseInt(data.clicks_validos, 10) || 0) : unidades.length;
             if (autorizadas <= 0 || unidades.length === 0) {
@@ -259,6 +265,7 @@
 
     function emitirUnidad(unidad) {
         var meta = unidad._pack_meta || {};
+    
         var data = {
             ok: true,
             mode: 'pack_unit',
@@ -268,9 +275,19 @@
             clicks_enviados: 1,
             clicks_validos: 1,
             coins_delta: 0,
+    
+            // NO mandamos coins aquí.
+            // meta.coins es el valor del servidor al crear el pack,
+            // no el valor real después de cada unidad consumida.
+    
+            points: meta.points,
+            coins_por_seg: meta.coins_por_seg,
+            points_por_seg: meta.points_por_seg,
+    
             runas_ganadas: unidad.runas_ganadas || [],
             luck_multiplier: meta.luck_multiplier
         };
+    
         document.dispatchEvent(new CustomEvent('runas:sync', { detail: data }));
     }
 

@@ -25,7 +25,7 @@ require_once "calcular_stats.php";
 
 define("COSTE_POR_TIRADA", 1);
 define("PACK_SIZE_MAX", 50);          // maximo de clicks preautorizados por request
-define("PACK_SIZE_DEFAULT", 25);
+define("PACK_SIZE_DEFAULT", 50);
 define("ELAPSED_CAP", 600);
 define("PACK_MIN_INTERVAL_MS", 50);  // rate limit suave por sesion
 define("LUCK_MULTIPLIER_BASE", 1.0);

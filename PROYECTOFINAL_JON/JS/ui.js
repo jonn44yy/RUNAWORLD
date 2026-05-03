@@ -643,3 +643,10 @@ window.setLuckDetalle = setLuckDetalle;
 window.setPointsPs = setPointsPs;
 window.setCoinsPs  = setCoinsPs;
 window.recalcularStatsDesdeMejoras = recalcularStatsDesdeMejoras;
+window.getPointsActual = function () {
+    return points;
+};
+
+window.getCoinsActual = function () {
+    return coins;
+};
