@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Divina Corrupta</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+}
+
+/* CAPAS CONECTADAS */
+.layer{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    border:0;
+    overflow:hidden;
+}
+
+#bg-layer{
+    z-index:1;
+}
+
+#runa-layer{
+    position:fixed;
+    inset:0;
+    z-index:5;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:none;
+}
+
+#marco-layer{
+    z-index:10;
+    pointer-events:none;
+}
+
+/* RUNA CENTRAL */
+.runa-wrap{
+    width:min(620px,88vw);
+    height:min(620px,88vw);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    animation:runaBreath 4.6s ease-in-out infinite;
+}
+
+svg{
+    width:100%;
+    height:100%;
+    overflow:visible;
+    filter:
+        drop-shadow(0 0 16px rgba(255,215,0,.26))
+        drop-shadow(0 0 30px rgba(255,0,70,.34))
+        drop-shadow(0 0 40px rgba(120,0,255,.18));
+}
+
+.rot-slow{animation:rot 70s linear infinite;transform-origin:500px 500px}
+.rot-rev{animation:rot 58s linear infinite reverse;transform-origin:500px 500px}
+.rot-fast{animation:rot 28s linear infinite;transform-origin:500px 500px}
+.rot-hard{animation:rot 18s linear infinite;transform-origin:500px 500px}
+
+.pulse{animation:pulse 3.2s ease-in-out infinite;transform-origin:500px 500px}
+.glitch-inner{animation:glitchInner 2.3s steps(2,end) infinite}
+.flicker{animation:flicker 1.8s steps(3,end) infinite}
+.jitter{animation:jitter 5s linear infinite}
+
+@keyframes rot{
+    from{transform:rotate(0deg)}
+    to{transform:rotate(360deg)}
+}
+
+@keyframes pulse{
+    0%,100%{opacity:.76;transform:scale(1)}
+    50%{opacity:1;transform:scale(1.03)}
+}
+
+@keyframes runaBreath{
+    0%,100%{transform:scale(1);filter:brightness(1)}
+    46%{transform:scale(1.02);filter:brightness(1.12)}
+    50%{transform:scale(1.03) skewX(.15deg);filter:brightness(1.28)}
+    53%{transform:scale(1.018) skewX(-.2deg);filter:brightness(1.4)}
+    56%{transform:scale(1.028) skewX(.1deg);filter:brightness(1.18)}
+}
+
+@keyframes glitchInner{
+    0%,84%,100%{transform:translate(0px,0px)}
+    86%{transform:translate(3px,-1px)}
+    88%{transform:translate(-2px,2px)}
+    90%{transform:translate(1px,0px)}
+    92%{transform:translate(-1px,-1px)}
+}
+
+@keyframes flicker{
+    0%,100%{opacity:1}
+    22%{opacity:.34}
+    27%{opacity:.92}
+    63%{opacity:.18}
+    68%{opacity:1}
+}
+
+@keyframes jitter{
+    0%,100%{transform:translate(0,0)}
+    25%{transform:translate(1px,-1px)}
+    50%{transform:translate(-1px,1px)}
+    75%{transform:translate(1px,1px)}
+}
+</style>
+</head>
+
+<body>
+
+<!-- BACKGROUND CONECTADO -->
+<iframe
+    id="bg-layer"
+    class="layer"
+    src="../BACKGROUND/background_divina_corrupta.html"
+    onerror="this.style.display='none'">
+</iframe>
+
+<!-- RUNA CENTRAL -->
+<div id="runa-layer">
+<div class="runa-wrap">
+
+<svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+
+<defs>
+    <radialGradient id="auraDivina" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+        <stop offset="22%" stop-color="#fff4c4" stop-opacity=".88"/>
+        <stop offset="55%" stop-color="#ffd700" stop-opacity=".24"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="auraCorrupta" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#ff2557" stop-opacity=".72"/>
+        <stop offset="35%" stop-color="#8f001f" stop-opacity=".34"/>
+        <stop offset="68%" stop-color="#5d00b9" stop-opacity=".14"/>
+        <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="divineCorruptStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#ffffff"/>
+        <stop offset="28%" stop-color="#ffe58b"/>
+        <stop offset="54%" stop-color="#ff174d"/>
+        <stop offset="100%" stop-color="#7d00ff"/>
+    </linearGradient>
+
+    <filter id="softGlow">
+        <feGaussianBlur stdDeviation="6" result="b"/>
+        <feMerge>
+            <feMergeNode in="b"/>
+            <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+    </filter>
+
+    <filter id="redGlow">
+        <feGaussianBlur stdDeviation="4.5" result="b"/>
+        <feMerge>
+            <feMergeNode in="b"/>
+            <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+    </filter>
+
+    <filter id="rgbSplit">
+        <feOffset in="SourceGraphic" dx="4" dy="0" result="r"/>
+        <feOffset in="SourceGraphic" dx="-4" dy="0" result="b"/>
+
+        <feColorMatrix in="r" type="matrix"
+            values="1 0 0 0 0
+                    0 0 0 0 0
+                    0 0 0 0 0
+                    0 0 0 .55 0" result="red"/>
+
+        <feColorMatrix in="b" type="matrix"
+            values="0 0 0 0 0
+                    0 0 0 0 0
+                    0 0 1 0 0
+                    0 0 0 .45 0" result="blue"/>
+
+        <feMerge>
+            <feMergeNode in="red"/>
+            <feMergeNode in="blue"/>
+            <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+    </filter>
+
+    <g id="ojoCorrupto">
+        <ellipse cx="0" cy="0" rx="36" ry="14" fill="#090009" stroke="#ff174d" stroke-width="3"/>
+        <circle cx="0" cy="0" r="9" fill="#fff4c4"/>
+        <circle cx="0" cy="0" r="15" fill="none" stroke="#ffd700" stroke-width="1" opacity=".65"/>
+    </g>
+
+    <g id="fragmento">
+        <path d="M0,-22 L10,0 L0,22 L-10,0 Z" fill="#ff174d" opacity=".8"/>
+        <path d="M0,-15 L3,0 L0,15" stroke="#fff4c4" stroke-width="1" opacity=".55"/>
+    </g>
+
+    <g id="miniCross">
+        <rect x="-2" y="-14" width="4" height="28" rx="2" fill="#fff4c4"/>
+        <rect x="-14" y="-2" width="28" height="4" rx="2" fill="#ffd700"/>
+        <circle cx="0" cy="0" r="3.5" fill="#ff174d"/>
+    </g>
+</defs>
+
+<circle cx="500" cy="500" r="392" fill="url(#auraDivina)" opacity=".62" class="pulse"/>
+<circle cx="500" cy="500" r="300" fill="url(#auraCorrupta)" opacity=".34" class="pulse"/>
+
+<g class="rot-slow" filter="url(#softGlow)">
+    <circle cx="500" cy="500" r="438" fill="none" stroke="#ffd700" stroke-width="2" stroke-dasharray="80 30 10 28" opacity=".85"/>
+    <circle cx="500" cy="500" r="409" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="18 16" opacity=".25"/>
+    <circle cx="500" cy="500" r="466" fill="none" stroke="#ff174d" stroke-width="1.6" stroke-dasharray="28 32 6 16" opacity=".54"/>
+
+    <use href="#miniCross" transform="translate(500,62)"/>
+    <use href="#miniCross" transform="translate(500,938) rotate(180)"/>
+    <use href="#miniCross" transform="translate(62,500) rotate(-90)"/>
+    <use href="#miniCross" transform="translate(938,500) rotate(90)"/>
+</g>
+
+<g class="rot-rev" filter="url(#softGlow)">
+    <path d="M500 168 L792 336 L792 664 L500 832 L208 664 L208 336 Z"
+        fill="none"
+        stroke="url(#divineCorruptStroke)"
+        stroke-width="6"
+        opacity=".94"/>
+
+    <path d="M500 225 L735 362 L735 638 L500 775 L265 638 L265 362 Z"
+        fill="none"
+        stroke="#fff4c4"
+        stroke-width="1.1"
+        opacity=".34"/>
+
+    <path d="M500 220 L735 638 L265 638 Z"
+        fill="none"
+        stroke="#ff174d"
+        stroke-width="2.1"
+        opacity=".6"/>
+
+    <path d="M500 780 L265 362 L735 362 Z"
+        fill="none"
+        stroke="#ffd700"
+        stroke-width="1.2"
+        opacity=".34"/>
+</g>
+
+<g class="rot-rev" filter="url(#redGlow)">
+    <use href="#ojoCorrupto" transform="translate(500,168) scale(.82)"/>
+    <use href="#ojoCorrupto" transform="translate(792,336) rotate(60) scale(.64)"/>
+    <use href="#ojoCorrupto" transform="translate(792,664) rotate(120) scale(.64)"/>
+    <use href="#ojoCorrupto" transform="translate(500,832) rotate(180) scale(.82)"/>
+    <use href="#ojoCorrupto" transform="translate(208,664) rotate(240) scale(.64)"/>
+    <use href="#ojoCorrupto" transform="translate(208,336) rotate(300) scale(.64)"/>
+</g>
+
+<g class="rot-fast" filter="url(#rgbSplit)" opacity=".88">
+    <circle cx="500" cy="500" r="286" fill="none" stroke="#ff174d" stroke-width="1.2" stroke-dasharray="8 16" opacity=".75"/>
+    <circle cx="500" cy="500" r="262" fill="none" stroke="#ffd700" stroke-width=".7" opacity=".28"/>
+
+    <text x="500" y="218" text-anchor="middle" font-size="30" fill="#fff4c4">ᚠ</text>
+    <text x="700" y="300" text-anchor="middle" font-size="30" fill="#ff174d">ᚢ</text>
+    <text x="782" y="500" text-anchor="middle" font-size="30" fill="#fff4c4">ᚦ</text>
+    <text x="700" y="700" text-anchor="middle" font-size="30" fill="#ff174d">ᚨ</text>
+    <text x="500" y="782" text-anchor="middle" font-size="30" fill="#fff4c4">ᚱ</text>
+    <text x="300" y="700" text-anchor="middle" font-size="30" fill="#ff174d">ᚲ</text>
+    <text x="218" y="500" text-anchor="middle" font-size="30" fill="#fff4c4">ᚷ</text>
+    <text x="300" y="300" text-anchor="middle" font-size="30" fill="#ff174d">ᚹ</text>
+</g>
+
+<!-- CRUZ INVERTIDA CENTRAL -->
+<g transform="translate(500,500)">
+    <g class="glitch-inner" filter="url(#softGlow)">
+        <g opacity=".24">
+            <rect x="-18" y="-245" width="42" height="490" rx="20" fill="#ff174d" transform="translate(10,0)"/>
+            <rect x="-162" y="74" width="324" height="36" rx="18" fill="#7d00ff" transform="translate(-8,0)"/>
+        </g>
+
+        <rect x="-22" y="-245" width="44" height="490" rx="22" fill="#fff4c4"/>
+        <rect x="-162" y="74" width="324" height="36" rx="18" fill="#fff4c4"/>
+
+        <rect x="-10" y="-228" width="20" height="455" rx="10" fill="#ff174d" opacity=".28"/>
+        <rect x="-148" y="83" width="296" height="18" rx="9" fill="#ff174d" opacity=".28"/>
+
+        <ellipse cx="0" cy="8" rx="86" ry="40" fill="#090009" stroke="#ff174d" stroke-width="5"/>
+        <ellipse cx="0" cy="8" rx="54" ry="20" fill="#fff4c4" opacity=".12"/>
+        <circle cx="0" cy="8" r="20" fill="#ff174d"/>
+        <circle cx="0" cy="8" r="8" fill="#fff4c4"/>
+        <circle cx="0" cy="8" r="54" fill="none" stroke="#ffd700" stroke-width="1.2" opacity=".46"/>
+
+        <path d="M-22,-150 L22,-126 L-12,-102 L18,-80 L-22,-56 Z" fill="#050005"/>
+        <path d="M-162,74 L-112,90 L-154,110 Z" fill="#050005"/>
+        <path d="M162,110 L112,90 L154,74 Z" fill="#050005"/>
+
+        <line x1="0" y1="8" x2="0" y2="-470" stroke="#fff4c4" stroke-width="1" opacity=".22"/>
+        <line x1="0" y1="8" x2="0" y2="470" stroke="#ff174d" stroke-width="1.4" opacity=".34"/>
+        <line x1="0" y1="8" x2="-470" y2="8" stroke="#fff4c4" stroke-width="1" opacity=".2"/>
+        <line x1="0" y1="8" x2="470" y2="8" stroke="#ff174d" stroke-width="1.4" opacity=".3"/>
+    </g>
+</g>
+
+<g class="flicker" filter="url(#redGlow)">
+    <path d="M500 170 L520 282 L490 382 L524 505 L500 820"
+        fill="none"
+        stroke="#ff174d"
+        stroke-width="5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        opacity=".8"/>
+
+    <path d="M228 500 L350 486 L432 514 L500 500 L648 530 L772 508"
+        fill="none"
+        stroke="#fff4c4"
+        stroke-width="1.2"
+        stroke-linecap="round"
+        opacity=".34"/>
+
+    <path d="M355 315 L410 355 L392 365 L455 415"
+        fill="none"
+        stroke="#ff174d"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity=".86"/>
+
+    <path d="M645 320 L610 372 L652 362 L592 434"
+        fill="none"
+        stroke="#ff174d"
+        stroke-width="4"
+        stroke-linecap="round"
+        opacity=".82"/>
+
+    <path d="M360 685 L420 625 L404 700 L455 648"
+        fill="none"
+        stroke="#ffd700"
+        stroke-width="2.1"
+        stroke-linecap="round"
+        opacity=".78"/>
+</g>
+
+<g class="rot-hard" opacity=".84">
+    <circle cx="500" cy="500" r="174" fill="none" stroke="#ff174d" stroke-width="2" stroke-dasharray="20 12" opacity=".78"/>
+    <circle cx="500" cy="500" r="149" fill="none" stroke="#ffd700" stroke-width=".8" opacity=".35"/>
+
+    <use href="#fragmento" transform="translate(500,326) scale(.78)"/>
+    <use href="#fragmento" transform="rotate(60,500,500) translate(500,326) scale(.78)"/>
+    <use href="#fragmento" transform="rotate(120,500,500) translate(500,326) scale(.78)"/>
+    <use href="#fragmento" transform="rotate(180,500,500) translate(500,326) scale(.78)"/>
+    <use href="#fragmento" transform="rotate(240,500,500) translate(500,326) scale(.78)"/>
+    <use href="#fragmento" transform="rotate(300,500,500) translate(500,326) scale(.78)"/>
+</g>
+
+<g class="flicker jitter" filter="url(#rgbSplit)" opacity=".58">
+    <rect x="262" y="328" width="128" height="5" fill="#ff174d"/>
+    <rect x="612" y="370" width="118" height="4" fill="#fff4c4"/>
+    <rect x="320" y="618" width="162" height="4" fill="#7d00ff"/>
+    <rect x="545" y="704" width="126" height="5" fill="#ff174d"/>
+    <rect x="390" y="486" width="230" height="3" fill="#ffffff" opacity=".4"/>
+</g>
+
+</svg>
+
+</div>
+</div>
+
+<!-- MARCO CONECTADO -->
+<iframe
+    id="marco-layer"
+    class="layer"
+    src="../MARCOS/marco_divina_corrupta.html"
+    onerror="this.style.display='none'">
+</iframe>
+
+</body>
+</html>

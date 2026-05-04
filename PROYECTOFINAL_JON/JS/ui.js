@@ -70,6 +70,7 @@ const RW_COLLECTION_LUCK_BONUS = 1.5;
 const _luckInitTotal = parseFloat(_i.luck_multiplier) || 1.0;
 let completed_collections = parseInt(_i.completed_collections) || 0;
 let luck_collection_multiplier = Math.max(1.0, parseFloat(_i.luck_collection_multiplier) || 1.0);
+let rw_basic_collection_complete = (_i.basic_collection_complete === true || _i.basic_collection_complete === 1 || _i.basic_collection_complete === '1');
 
 // compatibilidad: si el PHP todavía no manda luck_collection_multiplier pero
 // sí marca basic_collection_complete, activamos el bonus en cliente al cargar.
@@ -102,6 +103,29 @@ function recalcularLuckTotal() {
 }
 recalcularLuckTotal();
 
+function RW_actualizarBonusColeccionVisual() {
+    var completadas = Math.max(0, parseInt(completed_collections, 10) || 0);
+    var activo = completadas > 0 || rw_basic_collection_complete === true;
+    var totalColeccion = Math.max(1.0, parseFloat(luck_collection_multiplier) || 1.0);
+
+    document.querySelectorAll('.coleccion-bonus-suerte-v74').forEach(function (box) {
+        box.classList.toggle('activo', activo);
+        box.classList.toggle('bloqueado', !activo);
+
+        var label = box.querySelector('.coleccion-bonus-label');
+        var sub = box.querySelector('.coleccion-bonus-sub');
+
+        if (label) label.textContent = activo ? 'Bonus reclamado' : 'Bonus bloqueado';
+        if (sub) {
+            sub.textContent = activo
+                ? ('Completadas: ' + Math.max(1, completadas) + ' · Total colección x' + totalColeccion.toFixed(2))
+                : 'Bloqueado hasta completar una colección';
+        }
+    });
+}
+window.RW_actualizarBonusColeccionVisual = RW_actualizarBonusColeccionVisual;
+RW_actualizarBonusColeccionVisual();
+
 // detecta la colección básica completa usando los botones ya pintados.
 // esto arregla el caso donde la última runa llega por tirada y el PHP/pack
 // todavía no ha devuelto el nuevo multiplicador.
@@ -119,19 +143,28 @@ function RW_recalcularSuerteColecciones(forzarCompleta) {
     }
 
     if (completa) {
+        rw_basic_collection_complete = true;
         completed_collections = Math.max(1, parseInt(completed_collections, 10) || 0);
         luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
     }
 
     recalcularLuckTotal();
+    RW_actualizarBonusColeccionVisual();
     actualizarPantalla();
     refrescarProbsAbiertas();
     if (typeof refrescarEstadisticas === 'function') refrescarEstadisticas();
+    if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') {
+        window.RW_actualizarVisibilidadRunasLaterales();
+    }
     return luck_multiplier;
 }
 window.RW_recalcularSuerteColecciones = RW_recalcularSuerteColecciones;
 window.RW_marcarColeccionBasicaCompleta = function () {
-    return RW_recalcularSuerteColecciones(true);
+    var v = RW_recalcularSuerteColecciones(true);
+    if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') {
+        window.RW_actualizarVisibilidadRunasLaterales();
+    }
+    return v;
 };
 
 // 27/04 v3: variables suerte y display_mode eliminadas (sistema retirado)
@@ -397,6 +430,95 @@ function refrescarProbsAbiertas() {
     });
 }
 
+function RW_esCorruptaLateral(card) {
+    if (!card) return false;
+    return card.dataset.runaVariante === 'corrupta' ||
+        (card.textContent || '').toLowerCase().indexOf('corrupt') !== -1;
+}
+
+function RW_cantidadRunaLateral(card) {
+    if (!card) return 0;
+    var raw = card.dataset.cantidad || '0';
+    var n = parseInt(String(raw).replace(/[^0-9-]/g, ''), 10) || 0;
+    var cantEl = card.querySelector('.runa-card-cantidad');
+    if (cantEl) {
+        var txt = String(cantEl.textContent || '').replace(/[^0-9-]/g, '');
+        n = Math.max(n, parseInt(txt, 10) || 0);
+    }
+    return n;
+}
+
+function RW_basicasCompletasLaterales() {
+    if (rw_basic_collection_complete) {
+        return true;
+    }
+    var basicas = Array.prototype.slice.call(document.querySelectorAll('.runa-card-btn[data-runa-grupo="basicas"]'))
+        .filter(function (card) { return !RW_esCorruptaLateral(card); });
+    return basicas.length > 0 && basicas.every(function (card) {
+        return RW_cantidadRunaLateral(card) > 0;
+    });
+}
+
+function RW_estadoGrupoRunasLaterales(grupo) {
+    var key = 'rw_panel_runas_' + grupo + '_abierto';
+    var guardado = localStorage.getItem(key);
+    return guardado === null ? true : guardado !== '0';
+}
+
+function RW_aplicarDropdownGrupoRunasLaterales(grupoEl, abierto) {
+    var lista = grupoEl.querySelector('.grupo-runas-lista');
+    var flecha = grupoEl.querySelector('.grupo-runas-flecha');
+    if (lista) lista.style.display = abierto ? '' : 'none';
+    if (flecha) flecha.textContent = abierto ? '▼' : '▶';
+}
+
+window.RW_toggleGrupoRunasLaterales = function (grupo) {
+    var key = 'rw_panel_runas_' + grupo + '_abierto';
+    var nuevo = !RW_estadoGrupoRunasLaterales(grupo);
+    localStorage.setItem(key, nuevo ? '1' : '0');
+    window.RW_actualizarVisibilidadRunasLaterales();
+};
+
+window.RW_actualizarVisibilidadRunasLaterales = function () {
+    var corruptasDisponibles = RW_basicasCompletasLaterales();
+    if (corruptasDisponibles) {
+        rw_basic_collection_complete = true;
+        completed_collections = Math.max(1, parseInt(completed_collections, 10) || 0);
+    }
+
+    document.querySelectorAll('.grupo-runas[data-runa-grupo]').forEach(function (grupoEl) {
+        var grupo = grupoEl.dataset.runaGrupo;
+        var abierto = RW_estadoGrupoRunasLaterales(grupo);
+        if (grupo === 'corruptas') {
+            grupoEl.style.display = corruptasDisponibles ? '' : 'none';
+        } else {
+            grupoEl.style.display = '';
+        }
+        RW_aplicarDropdownGrupoRunasLaterales(grupoEl, abierto);
+    });
+
+    var corruptasVisibles = 0;
+    document.querySelectorAll('.runa-card-btn[data-runa-grupo="corruptas"]').forEach(function (card) {
+        var tiene = RW_cantidadRunaLateral(card) > 0;
+        card.style.display = corruptasDisponibles && tiene ? '' : 'none';
+        if (corruptasDisponibles && tiene) corruptasVisibles++;
+    });
+
+    document.querySelectorAll('[data-corruptas-msg]').forEach(function (msg) {
+        msg.style.display = corruptasDisponibles && corruptasVisibles === 0 ? '' : 'none';
+    });
+
+    var visibles = Array.prototype.slice.call(document.querySelectorAll('.runa-card-btn')).filter(function (card) {
+        var grupoEl = card.closest('.grupo-runas[data-runa-grupo]');
+        return (!grupoEl || grupoEl.style.display !== 'none') && card.style.display !== 'none';
+    });
+    var desbloqueadas = visibles.filter(function (card) {
+        return RW_cantidadRunaLateral(card) > 0 || !card.classList.contains('runa-bloqueada');
+    }).length;
+    var countEl = document.getElementById('panel-runas-count');
+    if (countEl) countEl.textContent = desbloqueadas + '/' + visibles.length;
+};
+
 
 // 27/04 v3: cambiarDisplayMode() eliminada. ya no hay modo "porcentaje vs peso",
 // las probabilidades siempre se muestran como fraccion (1/100k, 1/1...).
@@ -520,33 +642,9 @@ window.addEventListener("load", () => {
     }
 
     setTimeout(() => {
-        const todas = document.querySelectorAll('.runa-card-btn');
-
-        let hayCorruptaVisible = false;
-
-        todas.forEach(card => {
-            const cantidad = parseInt(card.dataset.cantidad || "0");
-
-            const esCorrupta =
-                card.textContent.toLowerCase().includes("corrupta");
-
-            if (esCorrupta && cantidad <= 0) {
-                card.style.display = "none";
-            }
-
-            if (esCorrupta && cantidad > 0) {
-                hayCorruptaVisible = true;
-            }
-        });
-
-        const titulos = document.querySelectorAll('.grupo-nombre');
-
-        titulos.forEach(titulo => {
-            if (titulo.textContent.toLowerCase().includes("corruptas")) {
-                titulo.style.display = hayCorruptaVisible ? "" : "none";
-            }
-        });
-
+        if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') {
+            window.RW_actualizarVisibilidadRunasLaterales();
+        }
     }, 100);
 });
 

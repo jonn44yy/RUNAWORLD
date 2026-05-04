@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Background Divina Corrupta</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:
+        radial-gradient(circle at center, rgba(18,0,8,0.22) 0%, rgba(8,0,8,0.42) 26%, rgba(0,0,0,0.92) 78%, #000 100%);
+    font-family:monospace;
+}
+
+#bg{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    display:block;
+}
+
+#overlay-vignette{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background:
+        radial-gradient(circle at center,
+            rgba(0,0,0,0) 0%,
+            rgba(0,0,0,0.02) 18%,
+            rgba(0,0,0,0.18) 34%,
+            rgba(0,0,0,0.46) 60%,
+            rgba(0,0,0,0.72) 100%);
+    mix-blend-mode:normal;
+    z-index:3;
+}
+
+#center-hole{
+    position:fixed;
+    left:50%;
+    top:50%;
+    width:min(44vw, 420px);
+    height:min(44vw, 420px);
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    pointer-events:none;
+    background:
+        radial-gradient(circle,
+            rgba(0,0,0,0.0) 0%,
+            rgba(0,0,0,0.03) 34%,
+            rgba(0,0,0,0.14) 55%,
+            rgba(0,0,0,0.34) 100%);
+    z-index:4;
+}
+
+.corner-glow{
+    position:fixed;
+    width:30vw;
+    height:30vw;
+    max-width:380px;
+    max-height:380px;
+    border-radius:50%;
+    pointer-events:none;
+    filter:blur(42px);
+    opacity:.34;
+    z-index:2;
+}
+.cg-tl{top:-8vw;left:-8vw;background:radial-gradient(circle, rgba(255,215,0,.18), rgba(255,0,90,.12), rgba(125,0,255,0) 72%)}
+.cg-tr{top:-8vw;right:-8vw;background:radial-gradient(circle, rgba(255,240,200,.15), rgba(125,0,255,.14), rgba(255,0,90,0) 72%)}
+.cg-bl{bottom:-8vw;left:-8vw;background:radial-gradient(circle, rgba(255,0,90,.14), rgba(255,215,0,.12), rgba(125,0,255,0) 72%)}
+.cg-br{bottom:-8vw;right:-8vw;background:radial-gradient(circle, rgba(125,0,255,.18), rgba(255,215,0,.10), rgba(255,0,90,0) 72%)}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="corner-glow cg-tl"></div>
+<div class="corner-glow cg-tr"></div>
+<div class="corner-glow cg-bl"></div>
+<div class="corner-glow cg-br"></div>
+<div id="overlay-vignette"></div>
+<div id="center-hole"></div>
+
+<script>
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+
+let W=0,H=0,CX=0,CY=0,diag=0;
+let t = 0;
+
+const runes = ["ᚠ","ᚢ","ᚦ","ᚨ","ᚱ","ᚲ","ᚷ","ᚹ","ᛉ","ᛟ","ᛞ","ᛖ"];
+const shards = [];
+const orbitGlyphs = [];
+const driftingBars = [];
+
+function resize(){
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W * 0.5;
+    CY = H * 0.5;
+    diag = Math.sqrt(W*W + H*H);
+}
+window.addEventListener('resize', resize);
+resize();
+
+function rand(min,max){ return Math.random()*(max-min)+min; }
+
+for(let i=0;i<42;i++){
+    shards.push({
+        a: rand(0,Math.PI*2),
+        r: rand(Math.min(W,H)*0.28, Math.min(W,H)*0.52),
+        vr: rand(-0.08,0.08),
+        va: rand(0.0012,0.0045),
+        size: rand(1.2,3.6),
+        hue: Math.random()<0.5 ? "red" : "violet",
+        phase: rand(0,Math.PI*2)
+    });
+}
+
+for(let i=0;i<24;i++){
+    orbitGlyphs.push({
+        a: (i/24) * Math.PI * 2,
+        ring: i%2===0 ? 1 : 2,
+        char: runes[i % runes.length],
+        speed: i%2===0 ? 0.0018 : -0.00115,
+        phase: rand(0,Math.PI*2)
+    });
+}
+
+for(let i=0;i<18;i++){
+    driftingBars.push({
+        y: rand(0,H),
+        w: rand(W*0.12, W*0.34),
+        h: rand(2,5),
+        speed: rand(0.2,0.9),
+        x: rand(-W*0.4, W),
+        alpha: rand(0.05,0.16),
+        colorMode: Math.floor(rand(0,3)),
+        phase: rand(0,Math.PI*2)
+    });
+}
+
+function drawBackgroundGlow(){
+    const g = ctx.createRadialGradient(CX,CY,0,CX,CY,Math.min(W,H)*0.5);
+    g.addColorStop(0,"rgba(255,240,220,0.055)");
+    g.addColorStop(0.18,"rgba(255,215,0,0.05)");
+    g.addColorStop(0.34,"rgba(255,0,90,0.05)");
+    g.addColorStop(0.52,"rgba(125,0,255,0.05)");
+    g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+}
+
+function drawOuterRings(){
+    ctx.save();
+    ctx.translate(CX,CY);
+
+    const rings = [
+        {r: Math.min(W,H)*0.40, dash:[18,26], col:"rgba(255,215,0,0.18)", lw:1.1, rot:t*0.14},
+        {r: Math.min(W,H)*0.46, dash:[5,14], col:"rgba(255,0,90,0.16)", lw:1.2, rot:-t*0.11},
+        {r: Math.min(W,H)*0.52, dash:[36,14,8,18], col:"rgba(125,0,255,0.16)", lw:1.0, rot:t*0.08}
+    ];
+
+    rings.forEach(r=>{
+        ctx.save();
+        ctx.rotate(r.rot);
+        ctx.beginPath();
+        ctx.setLineDash(r.dash);
+        ctx.strokeStyle = r.col;
+        ctx.lineWidth = r.lw;
+        ctx.arc(0,0,r.r,0,Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    ctx.restore();
+    ctx.setLineDash([]);
+}
+
+function drawOrbitGlyphs(){
+    ctx.save();
+    ctx.translate(CX,CY);
+
+    orbitGlyphs.forEach((g,i)=>{
+        g.a += g.speed;
+        const radius = g.ring===1 ? Math.min(W,H)*0.40 : Math.min(W,H)*0.50;
+        const wobble = Math.sin(t*0.02 + g.phase) * 8;
+        const x = Math.cos(g.a) * (radius + wobble);
+        const y = Math.sin(g.a) * (radius + wobble);
+
+        const alpha = 0.22 + (Math.sin(t*0.03 + g.phase)+1)*0.12;
+        ctx.save();
+        ctx.translate(x,y);
+        ctx.rotate(g.a + Math.PI/2);
+
+        ctx.font = `${g.ring===1 ? 20 : 16}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowBlur = 16;
+
+        if(i % 3 === 0){
+            ctx.fillStyle = `rgba(255,230,180,${alpha})`;
+            ctx.shadowColor = "rgba(255,215,0,0.55)";
+        }else if(i % 3 === 1){
+            ctx.fillStyle = `rgba(255,70,120,${alpha})`;
+            ctx.shadowColor = "rgba(255,0,90,0.5)";
+        }else{
+            ctx.fillStyle = `rgba(165,90,255,${alpha})`;
+            ctx.shadowColor = "rgba(125,0,255,0.5)";
+        }
+
+        ctx.fillText(g.char,0,0);
+        ctx.restore();
+    });
+
+    ctx.restore();
+}
+
+function drawShards(){
+    ctx.save();
+    ctx.translate(CX,CY);
+
+    shards.forEach((s,i)=>{
+        s.a += s.va;
+        s.r += Math.sin(t*0.02 + s.phase) * 0.18 + s.vr*0.05;
+
+        const x = Math.cos(s.a) * s.r;
+        const y = Math.sin(s.a) * s.r;
+        const rot = s.a + Math.sin(t*0.03+s.phase)*0.6;
+        const alpha = 0.16 + (Math.sin(t*0.04+s.phase)+1)*0.16;
+
+        ctx.save();
+        ctx.translate(x,y);
+        ctx.rotate(rot);
+        ctx.shadowBlur = 18;
+
+        if(s.hue === "red"){
+            ctx.fillStyle = `rgba(255,40,100,${alpha})`;
+            ctx.shadowColor = "rgba(255,20,80,0.5)";
+        }else{
+            ctx.fillStyle = `rgba(140,50,255,${alpha})`;
+            ctx.shadowColor = "rgba(125,0,255,0.5)";
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(0, -10*s.size);
+        ctx.lineTo(4*s.size, 0);
+        ctx.lineTo(0, 11*s.size);
+        ctx.lineTo(-4*s.size, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    });
+
+    ctx.restore();
+}
+
+function drawRadialCracks(){
+    ctx.save();
+    ctx.translate(CX,CY);
+    for(let i=0;i<10;i++){
+        const a = (Math.PI*2/10)*i + Math.sin(t*0.01+i)*0.05;
+        const inner = Math.min(W,H)*0.18;
+        const outer = Math.min(W,H)*(0.42 + (i%2)*0.05);
+
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*inner, Math.sin(a)*inner);
+        for(let p=1;p<=4;p++){
+            const rr = inner + ((outer-inner)/4)*p;
+            const aa = a + Math.sin(t*0.02 + i + p)*0.08;
+            ctx.lineTo(Math.cos(aa)*rr, Math.sin(aa)*rr);
+        }
+
+        ctx.strokeStyle = i%2===0
+            ? "rgba(255,40,100,0.14)"
+            : "rgba(255,225,180,0.10)";
+        ctx.lineWidth = i%2===0 ? 1.8 : 1.1;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = i%2===0 ? "rgba(255,40,100,0.28)" : "rgba(255,215,0,0.20)";
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+function drawDriftingBars(){
+    driftingBars.forEach((b,i)=>{
+        b.x += b.speed + Math.sin(t*0.02+b.phase)*0.12;
+        if(b.x > W + 60){
+            b.x = -b.w - 80;
+            b.y = rand(0,H);
+        }
+
+        const flick = (Math.sin(t*0.08 + b.phase)+1)*0.5;
+        let color = `rgba(255,215,0,${b.alpha*flick})`;
+        if(b.colorMode===1) color = `rgba(255,35,90,${b.alpha*flick})`;
+        if(b.colorMode===2) color = `rgba(125,0,255,${b.alpha*flick})`;
+
+        ctx.fillStyle = color;
+        ctx.fillRect(b.x,b.y,b.w,b.h);
+
+        if(i%4===0){
+            ctx.fillStyle = `rgba(255,255,230,${(b.alpha*0.6)*flick})`;
+            ctx.fillRect(b.x+rand(0,b.w*0.65), b.y+1, b.w*0.22, Math.max(1,b.h-2));
+        }
+    });
+}
+
+function drawSideSigils(){
+    ctx.save();
+    ctx.font = "18px serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const leftX = 48;
+    const rightX = W - 48;
+    const topStart = H*0.18;
+    const gap = Math.min(52, H*0.08);
+
+    for(let i=0;i<7;i++){
+        const y = topStart + i*gap + Math.sin(t*0.04+i)*4;
+        const alpha = 0.14 + (Math.sin(t*0.03+i)+1)*0.12;
+
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = "rgba(255,215,0,0.35)";
+        ctx.fillStyle = `rgba(255,225,170,${alpha})`;
+        ctx.fillText(runes[i % runes.length], leftX, y);
+
+        ctx.shadowColor = "rgba(255,0,90,0.35)";
+        ctx.fillStyle = `rgba(255,75,120,${alpha})`;
+        ctx.fillText(runes[(i+4) % runes.length], rightX, y);
+    }
+
+    ctx.restore();
+}
+
+function framePulseWash(){
+    const alpha = 0.04 + (Math.sin(t*0.03)+1)*0.02;
+    ctx.strokeStyle = `rgba(255,215,0,${alpha})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(18,18,W-36,H-36);
+
+    ctx.strokeStyle = `rgba(255,0,90,${alpha*0.8})`;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(32,32,W-64,H-64);
+
+    ctx.strokeStyle = `rgba(125,0,255,${alpha*0.75})`;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(46,46,W-92,H-92);
+}
+
+function loop(){
+    t++;
+
+    ctx.clearRect(0,0,W,H);
+
+    drawBackgroundGlow();
+    drawOuterRings();
+    drawRadialCracks();
+    drawOrbitGlyphs();
+    drawShards();
+    drawDriftingBars();
+    drawSideSigils();
+    framePulseWash();
+
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

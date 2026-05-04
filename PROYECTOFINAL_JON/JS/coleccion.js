@@ -1393,6 +1393,9 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
         if (!st.completa) return false;
 
         if (window.RW_INIT) window.RW_INIT.basic_collection_complete = true;
+        if (typeof window.RW_marcarColeccionBasicaCompleta === 'function') {
+            window.RW_marcarColeccionBasicaCompleta();
+        }
 
         var pill = document.querySelector('.coleccion-variante-pill[data-variant="corrupta"]');
         if (pill) {
@@ -1411,6 +1414,10 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
             if (label) label.textContent = 'Bonus activo';
             if (sub) sub.textContent = 'Colección Básica completada · Total colección x1.50';
         });
+
+        if (typeof window.RW_actualizarBonusColeccionVisual === 'function') {
+            window.RW_actualizarBonusColeccionVisual();
+        }
 
         return true;
     }

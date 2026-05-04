@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Marco Divina Corrupta</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:transparent;
+    font-family:monospace;
+}
+
+:root{
+    --gold:#ffd700;
+    --ivory:#fff4c4;
+    --red:#ff245c;
+    --violet:#7d00ff;
+    --dark:rgba(3,2,8,.84);
+}
+
+#frame{
+    position:fixed;
+    inset:14px;
+    pointer-events:none;
+    z-index:10;
+}
+
+/* =========================
+   BORDES BASE
+========================= */
+
+.border-main,
+.border-second,
+.border-third{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+}
+
+.border-main{
+    border:2px solid rgba(255,215,0,.40);
+    box-shadow:
+        inset 0 0 18px rgba(255,215,0,.10),
+        inset 0 0 56px rgba(255,0,90,.06),
+        0 0 18px rgba(255,215,0,.08);
+    animation:mainFlicker 3.4s steps(2,end) infinite;
+}
+
+.border-second{
+    inset:12px;
+    border:1px solid rgba(255,244,196,.22);
+    box-shadow:
+        inset 0 0 26px rgba(125,0,255,.08),
+        inset 0 0 8px rgba(255,215,0,.05);
+    animation:secondDrift 7s linear infinite;
+}
+
+.border-third{
+    inset:26px;
+    border:1px dashed rgba(255,36,92,.20);
+    opacity:.72;
+    animation:thirdPulse 4.2s ease-in-out infinite;
+}
+
+/* =========================
+   BARRAS DECORATIVAS
+========================= */
+
+.edge-bar{
+    position:absolute;
+    height:3px;
+    background:linear-gradient(90deg, transparent, rgba(255,215,0,.9), rgba(255,36,92,.8), rgba(125,0,255,.8), transparent);
+    box-shadow:0 0 10px rgba(255,215,0,.20);
+    opacity:.92;
+    animation:barShift 3.6s steps(2,end) infinite;
+}
+.edge-bar.top1{top:-1px;left:10%;width:24%}
+.edge-bar.top2{top:11px;right:14%;width:18%;animation-delay:.7s}
+.edge-bar.bottom1{bottom:-1px;right:10%;width:24%;animation-delay:.35s}
+.edge-bar.bottom2{bottom:11px;left:14%;width:18%;animation-delay:1s}
+
+.edge-bar-v{
+    position:absolute;
+    width:3px;
+    background:linear-gradient(180deg, transparent, rgba(255,215,0,.85), rgba(255,36,92,.75), rgba(125,0,255,.75), transparent);
+    box-shadow:0 0 10px rgba(255,0,90,.18);
+    opacity:.85;
+    animation:barShiftV 4.2s steps(2,end) infinite;
+}
+.edge-bar-v.left1{left:-1px;top:10%;height:24%}
+.edge-bar-v.left2{left:11px;bottom:14%;height:18%;animation-delay:.8s}
+.edge-bar-v.right1{right:-1px;bottom:10%;height:24%;animation-delay:.45s}
+.edge-bar-v.right2{right:11px;top:14%;height:18%;animation-delay:1.05s}
+
+/* =========================
+   ESQUINAS
+========================= */
+
+.corner{
+    position:absolute;
+    width:84px;
+    height:84px;
+    pointer-events:none;
+}
+
+.corner::before,
+.corner::after{
+    content:"";
+    position:absolute;
+    display:block;
+}
+
+.corner.tl{top:-2px;left:-2px}
+.corner.tr{top:-2px;right:-2px}
+.corner.bl{bottom:-2px;left:-2px}
+.corner.br{bottom:-2px;right:-2px}
+
+.corner.tl::before,
+.corner.tr::before,
+.corner.bl::before,
+.corner.br::before{
+    width:82px;
+    height:82px;
+    border-color:rgba(255,215,0,.88);
+    filter:drop-shadow(0 0 8px rgba(255,215,0,.25));
+}
+
+.corner.tl::after,
+.corner.tr::after,
+.corner.bl::after,
+.corner.br::after{
+    width:58px;
+    height:58px;
+    border-color:rgba(255,36,92,.65);
+    filter:drop-shadow(0 0 10px rgba(255,0,90,.24));
+    opacity:.9;
+}
+
+.corner.tl::before{left:0;top:0;border-left:3px solid;border-top:3px solid}
+.corner.tr::before{right:0;top:0;border-right:3px solid;border-top:3px solid}
+.corner.bl::before{left:0;bottom:0;border-left:3px solid;border-bottom:3px solid}
+.corner.br::before{right:0;bottom:0;border-right:3px solid;border-bottom:3px solid}
+
+.corner.tl::after{left:10px;top:10px;border-left:2px solid;border-top:2px solid}
+.corner.tr::after{right:10px;top:10px;border-right:2px solid;border-top:2px solid}
+.corner.bl::after{left:10px;bottom:10px;border-left:2px solid;border-bottom:2px solid}
+.corner.br::after{right:10px;bottom:10px;border-right:2px solid;border-bottom:2px solid}
+
+/* =========================
+   SELLOS LATERALES
+========================= */
+
+.sigil{
+    position:absolute;
+    width:46px;
+    height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--ivory);
+    font-size:22px;
+    text-shadow:
+        0 0 8px rgba(255,215,0,.30),
+        2px 0 0 rgba(255,36,92,.22);
+    border:1px solid rgba(255,215,0,.22);
+    background:rgba(8,5,10,.38);
+    box-shadow:inset 0 0 14px rgba(125,0,255,.10);
+    animation:sigilPulse 3.2s ease-in-out infinite;
+}
+.s1{top:15%;left:24px}
+.s2{top:50%;left:24px;transform:translateY(-50%);animation-delay:.6s}
+.s3{bottom:15%;left:24px;animation-delay:1.2s}
+.s4{top:15%;right:24px;animation-delay:.3s}
+.s5{top:50%;right:24px;transform:translateY(-50%);animation-delay:.9s}
+.s6{bottom:15%;right:24px;animation-delay:1.5s}
+
+/* =========================
+   ETIQUETAS
+========================= */
+
+.tag{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    padding:6px 22px;
+    background:linear-gradient(180deg, rgba(8,6,10,.92), rgba(16,8,18,.80));
+    border:1px solid rgba(255,215,0,.34);
+    color:var(--gold);
+    letter-spacing:5px;
+    font-size:11px;
+    white-space:nowrap;
+    text-shadow:
+        0 0 8px rgba(255,215,0,.20),
+        2px 0 0 rgba(125,0,255,.32);
+    box-shadow:
+        inset 0 0 18px rgba(255,215,0,.05),
+        0 0 12px rgba(255,0,90,.08);
+}
+
+.tag.top{top:10px}
+.tag.bottom{
+    bottom:10px;
+    color:#ff5f8f;
+    border-color:rgba(255,36,92,.34);
+    text-shadow:
+        0 0 8px rgba(255,36,92,.20),
+        2px 0 0 rgba(255,215,0,.18);
+}
+
+/* =========================
+   GLITCH LINES
+========================= */
+
+.glitch-line{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    height:2px;
+    background:linear-gradient(90deg, transparent, rgba(255,36,92,.9), rgba(255,244,196,.8), rgba(125,0,255,.85), transparent);
+    opacity:0;
+    pointer-events:none;
+    animation:glitchLine 3.8s steps(2,end) infinite;
+}
+.g1{top:18%;width:34%;animation-delay:.1s}
+.g2{top:34%;width:24%;animation-delay:.9s}
+.g3{bottom:28%;width:28%;animation-delay:1.55s}
+.g4{bottom:16%;width:40%;animation-delay:2.2s}
+
+/* =========================
+   ORNAMENTOS TOP/BOTTOM
+========================= */
+
+.ornament{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+    opacity:.88;
+}
+.ornament.top{top:38px}
+.ornament.bottom{bottom:38px}
+
+.ornament i{
+    display:block;
+    width:8px;
+    height:8px;
+    transform:rotate(45deg);
+    background:rgba(255,215,0,.85);
+    box-shadow:0 0 8px rgba(255,215,0,.25);
+}
+
+.ornament i:nth-child(2),
+.ornament i:nth-child(4){
+    background:rgba(255,36,92,.7);
+    box-shadow:0 0 8px rgba(255,0,90,.22);
+}
+
+.ornament i:nth-child(3){
+    width:12px;
+    height:12px;
+    background:rgba(255,244,196,.88);
+}
+
+/* =========================
+   ANIMACIONES
+========================= */
+
+@keyframes mainFlicker{
+    0%,86%,100%{opacity:1}
+    88%{opacity:.62}
+    90%{opacity:1}
+    92%{opacity:.78}
+}
+
+@keyframes secondDrift{
+    0%{transform:translate(0,0)}
+    25%{transform:translate(1px,0)}
+    50%{transform:translate(0,1px)}
+    75%{transform:translate(-1px,0)}
+    100%{transform:translate(0,0)}
+}
+
+@keyframes thirdPulse{
+    0%,100%{opacity:.44}
+    50%{opacity:.82}
+}
+
+@keyframes barShift{
+    0%,84%,100%{opacity:.88;transform:translateX(0)}
+    86%{opacity:.22;transform:translateX(9px)}
+    88%{opacity:1;transform:translateX(-5px)}
+    90%{opacity:.65;transform:translateX(4px)}
+}
+
+@keyframes barShiftV{
+    0%,84%,100%{opacity:.82;transform:translateY(0)}
+    86%{opacity:.20;transform:translateY(9px)}
+    88%{opacity:1;transform:translateY(-5px)}
+    90%{opacity:.62;transform:translateY(4px)}
+}
+
+@keyframes sigilPulse{
+    0%,100%{opacity:.76;transform:scale(1)}
+    50%{opacity:1;transform:scale(1.08)}
+}
+
+@keyframes glitchLine{
+    0%,86%,100%{opacity:0;transform:translateX(-50%) scaleX(.72)}
+    88%{opacity:.82;transform:translateX(calc(-50% + 10px)) scaleX(1.08)}
+    90%{opacity:.22;transform:translateX(calc(-50% - 7px)) scaleX(.88)}
+    92%{opacity:.95;transform:translateX(calc(-50% + 4px)) scaleX(1.02)}
+}
+
+@media(max-width:768px){
+    #frame{inset:8px}
+    .corner{width:62px;height:62px}
+    .corner.tl::before,.corner.tr::before,.corner.bl::before,.corner.br::before{width:60px;height:60px}
+    .corner.tl::after,.corner.tr::after,.corner.bl::after,.corner.br::after{width:40px;height:40px}
+    .sigil{
+        width:34px;
+        height:34px;
+        font-size:16px;
+    }
+    .tag{
+        font-size:9px;
+        letter-spacing:3px;
+        padding:5px 12px;
+    }
+    .ornament.top{top:30px}
+    .ornament.bottom{bottom:30px}
+}
+</style>
+</head>
+<body>
+
+<div id="frame">
+    <div class="border-main"></div>
+    <div class="border-second"></div>
+    <div class="border-third"></div>
+
+    <div class="edge-bar top1"></div>
+    <div class="edge-bar top2"></div>
+    <div class="edge-bar bottom1"></div>
+    <div class="edge-bar bottom2"></div>
+
+    <div class="edge-bar-v left1"></div>
+    <div class="edge-bar-v left2"></div>
+    <div class="edge-bar-v right1"></div>
+    <div class="edge-bar-v right2"></div>
+
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div class="sigil s1">ᚠ</div>
+    <div class="sigil s2">ᛟ</div>
+    <div class="sigil s3">ᚦ</div>
+    <div class="sigil s4">ᚱ</div>
+    <div class="sigil s5">ᛉ</div>
+    <div class="sigil s6">ᚷ</div>
+
+    <div class="ornament top">
+        <i></i><i></i><i></i><i></i><i></i>
+    </div>
+
+    <div class="ornament bottom">
+        <i></i><i></i><i></i><i></i><i></i>
+    </div>
+
+    <div class="tag top">DIVINA.CORRUPTA</div>
+    <div class="tag bottom">SANCTUM_SIGNAL_CORRUPTED</div>
+
+    <div class="glitch-line g1"></div>
+    <div class="glitch-line g2"></div>
+    <div class="glitch-line g3"></div>
+    <div class="glitch-line g4"></div>
+</div>
+
+</body>
+</html>

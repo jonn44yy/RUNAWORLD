@@ -88,6 +88,9 @@ function _rwPintarCantidadRuna(id, cantidad, rareza) {
             }
         });
     });
+    if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') {
+        window.RW_actualizarVisibilidadRunasLaterales();
+    }
 }
 function _rwTextoRuna(r) {
     if (!r) return '';
@@ -375,15 +378,6 @@ function actualizarPanelRunas(runas) {
         _rwPintarCantidadRuna(r.id, cantidadFinal, r.rareza);
         var card = document.querySelector('.runa-card-btn[data-id="' + r.id + '"]');
         if (!card) return;
-        const esCorrupta =
-        String(r.nombre || "").toLowerCase().includes("corrupta") ||
-        String(r.variante || "").toLowerCase() === "corrupta";
-        if (esCorrupta && r.cantidad <= 0) {
-            card.style.display = "none";
-            return;
-        } else {
-            card.style.display = "";
-        }
         if (card) {
             card.dataset.cantidad = r.cantidad;
             var cantEl = card.querySelector(".runa-card-cantidad");
@@ -402,12 +396,8 @@ function actualizarPanelRunas(runas) {
         }
     });
 
-    // contador "X/Y desbloqueadas"
-    var countEl = document.getElementById("panel-runas-count");
-    if (countEl) {
-        var desbloqueadas = document.querySelectorAll(".runa-card-btn:not(.runa-bloqueada)").length;
-        var total = document.querySelectorAll(".runa-card-btn").length;
-        countEl.textContent = desbloqueadas + "/" + total;
+    if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') {
+        window.RW_actualizarVisibilidadRunasLaterales();
     }
 
     // botones de coleccion — especiales (con canvas neon)

@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Marco - Eterna Agujero Negro</title>
+<style>
+:root{
+    --evo: 0;
+
+    --pad: clamp(14px, 1.6vw, 24px);
+    --pad2: clamp(28px, 3vw, 42px);
+    --pad3: clamp(44px, 4.6vw, 64px);
+
+    --amber: #ffbe5b;
+    --orange: #ff7a2f;
+    --orange2: #ff9438;
+    --red: #d82c1e;
+    --red2: #a31218;
+    --blood: #4c050a;
+    --violet: #7b1a74;
+    --violet2: #43113f;
+    --ink: rgba(7,2,4,.80);
+    --glass: rgba(16,6,10,.46);
+    --line-soft: rgba(255,190,91,.20);
+    --line-main: rgba(255,140,55,.58);
+    --line-hot: rgba(255,210,120,.82);
+}
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:transparent;
+    font-family: "Courier New", monospace;
+}
+
+body{
+    pointer-events:none;
+    user-select:none;
+}
+
+#frame-root{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    overflow:hidden;
+    animation: frame-tremor 1.2s steps(2,end) infinite;
+}
+
+/* =========================
+   ENVOLTORIOS PRINCIPALES
+========================= */
+
+#frame-outer,
+#frame-mid,
+#frame-inner{
+    position:absolute;
+    pointer-events:none;
+    clip-path: polygon(
+        46px 0,
+        calc(100% - 46px) 0,
+        100% 46px,
+        100% calc(100% - 46px),
+        calc(100% - 46px) 100%,
+        46px 100%,
+        0 calc(100% - 46px),
+        0 46px
+    );
+}
+
+#frame-outer{
+    inset:var(--pad);
+    border:1px solid rgba(255,170,70,.36);
+    background:
+        linear-gradient(90deg,
+            rgba(255,150,65,.10),
+            rgba(255,80,35,.06) 18%,
+            rgba(18,4,6,.06) 50%,
+            rgba(255,80,35,.06) 82%,
+            rgba(255,150,65,.10)),
+        linear-gradient(180deg,
+            rgba(255,190,110,.10),
+            rgba(18,4,6,.05) 22%,
+            rgba(12,2,4,.04) 78%,
+            rgba(255,70,34,.08));
+    box-shadow:
+        inset 0 0 0 1px rgba(255,214,140,.10),
+        inset 0 0 22px rgba(255,130,48,.12),
+        inset 0 0 70px rgba(180,18,18,.10),
+        0 0 18px rgba(255,120,45,.10);
+}
+
+#frame-mid{
+    inset:var(--pad2);
+    border:1px solid rgba(255,145,62,.26);
+    box-shadow:
+        inset 0 0 12px rgba(255,190,95,.10),
+        inset 0 0 34px rgba(255,94,32,.12),
+        0 0 16px rgba(255,110,45,.08);
+}
+
+#frame-inner{
+    inset:var(--pad3);
+    border:1px solid rgba(255,170,78,.18);
+    box-shadow:
+        inset 0 0 18px rgba(255,130,44,.10),
+        inset 0 0 40px rgba(160,15,25,.10);
+}
+
+/* =========================
+   BARRAS ENERGÉTICAS
+========================= */
+
+.bar-h,
+.bar-v{
+    position:absolute;
+    pointer-events:none;
+    overflow:hidden;
+}
+
+.bar-h::before,
+.bar-h::after,
+.bar-v::before,
+.bar-v::after{
+    content:"";
+    position:absolute;
+    inset:0;
+}
+
+.bar-h{
+    height:4px;
+    border-radius:20px;
+    background:linear-gradient(90deg,
+        transparent 0%,
+        rgba(255,190,100,.20) 8%,
+        rgba(255,120,45,.90) 32%,
+        rgba(255,210,120,.98) 50%,
+        rgba(220,45,25,.94) 70%,
+        rgba(123,26,116,.72) 86%,
+        transparent 100%);
+    box-shadow:
+        0 0 10px rgba(255,120,45,.28),
+        0 0 24px rgba(255,60,20,.20);
+    animation: flick-bar 3.1s steps(2,end) infinite;
+}
+
+.bar-h::before{
+    background:repeating-linear-gradient(90deg,
+        transparent 0 14px,
+        rgba(255,220,140,.22) 14px 16px);
+    opacity:.6;
+}
+
+.bar-h::after{
+    background:linear-gradient(90deg,
+        transparent,
+        rgba(255,255,255,.40),
+        transparent);
+    animation: scan-h 4.8s linear infinite;
+    mix-blend-mode:screen;
+}
+
+.bar-v{
+    width:4px;
+    border-radius:20px;
+    background:linear-gradient(180deg,
+        transparent 0%,
+        rgba(255,190,100,.16) 8%,
+        rgba(255,120,45,.88) 30%,
+        rgba(255,210,120,.96) 50%,
+        rgba(220,45,25,.94) 70%,
+        rgba(123,26,116,.72) 86%,
+        transparent 100%);
+    box-shadow:
+        0 0 10px rgba(255,120,45,.24),
+        0 0 20px rgba(255,60,20,.18);
+    animation: flick-bar-v 3.8s steps(2,end) infinite;
+}
+
+.bar-v::before{
+    background:repeating-linear-gradient(180deg,
+        transparent 0 14px,
+        rgba(255,220,140,.20) 14px 16px);
+    opacity:.6;
+}
+
+.bar-v::after{
+    background:linear-gradient(180deg,
+        transparent,
+        rgba(255,255,255,.36),
+        transparent);
+    animation: scan-v 5.1s linear infinite;
+    mix-blend-mode:screen;
+}
+
+.bt1{ top:var(--pad); left:10%; width:23%; }
+.bt2{ top:calc(var(--pad) + 14px); right:14%; width:17%; animation-delay:.55s; }
+.bb1{ bottom:var(--pad); right:10%; width:23%; animation-delay:.32s; }
+.bb2{ bottom:calc(var(--pad) + 14px); left:14%; width:17%; animation-delay:.84s; }
+
+.bl1{ left:var(--pad); top:12%; height:24%; }
+.bl2{ left:calc(var(--pad) + 14px); bottom:16%; height:17%; animation-delay:.66s; }
+.br1{ right:var(--pad); bottom:12%; height:24%; animation-delay:.28s; }
+.br2{ right:calc(var(--pad) + 14px); top:16%; height:17%; animation-delay:.92s; }
+
+/* =========================
+   CORNERS
+========================= */
+
+.corner{
+    position:absolute;
+    width:140px;
+    height:140px;
+    pointer-events:none;
+}
+
+.corner::before,
+.corner::after{
+    content:"";
+    position:absolute;
+    display:block;
+}
+
+.corner .core{
+    position:absolute;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:
+        radial-gradient(circle at 35% 35%,
+            rgba(255,240,180,.95),
+            rgba(255,150,56,.92) 35%,
+            rgba(180,26,20,.88) 68%,
+            rgba(70,12,52,.82) 100%);
+    box-shadow:
+        0 0 10px rgba(255,165,70,.38),
+        0 0 24px rgba(200,30,20,.22);
+}
+
+.corner .ticks{
+    position:absolute;
+    inset:0;
+}
+
+.corner .ticks::before,
+.corner .ticks::after{
+    content:"";
+    position:absolute;
+    background:linear-gradient(90deg,
+        rgba(255,200,105,.10),
+        rgba(255,145,52,.86),
+        rgba(255,215,150,.24));
+    box-shadow:0 0 8px rgba(255,118,45,.22);
+}
+
+.corner.tl{ top:8px; left:8px; }
+.corner.tr{ top:8px; right:8px; transform:scaleX(-1); }
+.corner.bl{ bottom:8px; left:8px; transform:scaleY(-1); }
+.corner.br{ bottom:8px; right:8px; transform:scale(-1); }
+
+.corner::before{
+    inset:0;
+    border-top:3px solid rgba(255,180,85,.94);
+    border-left:3px solid rgba(255,180,85,.94);
+    clip-path: polygon(0 0, 100% 0, 100% 18%, 34% 18%, 18% 34%, 18% 100%, 0 100%);
+    filter: drop-shadow(0 0 8px rgba(255,145,52,.28));
+}
+
+.corner::after{
+    inset:14px;
+    border-top:2px solid rgba(220,48,28,.90);
+    border-left:2px solid rgba(220,48,28,.90);
+    clip-path: polygon(0 0, 100% 0, 100% 18%, 38% 18%, 18% 38%, 18% 100%, 0 100%);
+    filter: drop-shadow(0 0 8px rgba(220,48,28,.22));
+}
+
+.corner .core{
+    left:18px;
+    top:18px;
+}
+
+.corner .ticks::before{
+    width:48px;
+    height:2px;
+    left:48px;
+    top:31px;
+}
+.corner .ticks::after{
+    width:2px;
+    height:48px;
+    left:31px;
+    top:48px;
+}
+
+/* =========================
+   SIDE NODES / SIGILS
+========================= */
+
+.sigil{
+    position:absolute;
+    width:48px;
+    height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#ffd997;
+    font-size:22px;
+    letter-spacing:0;
+    background:
+        radial-gradient(circle at 35% 35%,
+            rgba(255,210,120,.18),
+            rgba(255,110,38,.12) 45%,
+            rgba(20,5,10,.42) 100%);
+    border:1px solid rgba(255,160,66,.28);
+    box-shadow:
+        inset 0 0 12px rgba(255,115,40,.10),
+        0 0 14px rgba(255,120,45,.08);
+    text-shadow:
+        0 0 8px rgba(255,190,110,.18),
+        1px 0 0 rgba(220,45,25,.18);
+    animation: sigil-pulse 4.2s ease-in-out infinite;
+}
+
+.sigil::before{
+    content:"";
+    position:absolute;
+    inset:5px;
+    border:1px solid rgba(255,214,140,.14);
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.s1{ top:18%; left:22px; }
+.s2{ top:50%; left:22px; transform:translateY(-50%); animation-delay:.6s; }
+.s3{ bottom:18%; left:22px; animation-delay:1.2s; }
+
+.s4{ top:18%; right:22px; animation-delay:.3s; }
+.s5{ top:50%; right:22px; transform:translateY(-50%); animation-delay:.9s; }
+.s6{ bottom:18%; right:22px; animation-delay:1.5s; }
+
+/* =========================
+   TITLE PLATES
+========================= */
+
+.plate{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    min-width:min(540px, 64vw);
+    max-width:76vw;
+    height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 26px;
+    overflow:hidden;
+    color:#ffe2b0;
+    border:1px solid rgba(255,170,70,.34);
+    background:
+        linear-gradient(90deg,
+            rgba(48,7,10,.78),
+            rgba(14,4,8,.92) 18%,
+            rgba(12,4,9,.94) 82%,
+            rgba(48,7,10,.78)),
+        radial-gradient(circle at 50% 50%,
+            rgba(255,145,52,.08),
+            transparent 60%);
+    box-shadow:
+        inset 0 0 12px rgba(255,120,40,.10),
+        0 0 14px rgba(255,120,45,.08);
+    clip-path: polygon(22px 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 22px 100%, 0 50%);
+}
+
+.plate::before,
+.plate::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    width:44px;
+    height:2px;
+    transform:translateY(-50%);
+    background:linear-gradient(90deg, transparent, rgba(255,190,92,.95), rgba(220,46,26,.85), transparent);
+    box-shadow:0 0 8px rgba(255,120,45,.20);
+}
+.plate::before{ left:16px; }
+.plate::after{ right:16px; }
+
+.plate.top{ top:14px; }
+.plate.bottom{ bottom:14px; }
+
+.plate .text{
+    position:relative;
+    z-index:2;
+    font-size:14px;
+    font-weight:700;
+    letter-spacing:4px;
+    text-transform:uppercase;
+    white-space:nowrap;
+    text-shadow:
+        0 0 8px rgba(255,170,78,.12),
+        2px 0 0 rgba(220,46,26,.18);
+    animation: plate-flicker 4.4s steps(2,end) infinite;
+}
+
+.plate.bottom .text{
+    color:#ffb871;
+    text-shadow:
+        0 0 8px rgba(255,155,62,.12),
+        2px 0 0 rgba(123,26,116,.18);
+}
+
+/* =========================
+   TOP / BOTTOM SMALL MARKERS
+========================= */
+
+.marker{
+    position:absolute;
+    width:72px;
+    height:18px;
+    border:1px solid rgba(255,150,66,.20);
+    background:
+        linear-gradient(90deg,
+            transparent,
+            rgba(255,130,44,.14),
+            transparent);
+    box-shadow: inset 0 0 8px rgba(255,118,45,.06);
+}
+
+.mt1{ top:calc(var(--pad2) + 2px); left:calc(50% - 250px); }
+.mt2{ top:calc(var(--pad2) + 2px); right:calc(50% - 250px); }
+.mb1{ bottom:calc(var(--pad2) + 2px); left:calc(50% - 250px); }
+.mb2{ bottom:calc(var(--pad2) + 2px); right:calc(50% - 250px); }
+
+/* =========================
+   SVG OVERLAY
+========================= */
+
+#overlay-svg{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    overflow:visible;
+}
+
+.arc-a{
+    fill:none;
+    stroke:rgba(255,162,64,.58);
+    stroke-width:1.7;
+    filter:drop-shadow(0 0 5px rgba(255,118,45,.22));
+}
+
+.arc-b{
+    fill:none;
+    stroke:rgba(220,46,26,.46);
+    stroke-width:1.2;
+    filter:drop-shadow(0 0 4px rgba(220,46,26,.18));
+}
+
+.rune-lines{
+    fill:none;
+    stroke:rgba(255,210,130,.28);
+    stroke-width:1.15;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+
+.crack-hot{
+    fill:none;
+    stroke:rgba(255,120,45,.44);
+    stroke-width:1.5;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    filter:drop-shadow(0 0 4px rgba(255,118,45,.18));
+}
+
+.crack-red{
+    fill:none;
+    stroke:rgba(200,28,24,.34);
+    stroke-width:1.0;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+
+.center-vignette{
+    position:absolute;
+    inset:0;
+    background:
+        radial-gradient(ellipse at center,
+            rgba(0,0,0,0) 54%,
+            rgba(0,0,0, calc(.10 + var(--evo) * .08)) 78%,
+            rgba(0,0,0, calc(.24 + var(--evo) * .10)) 100%);
+}
+
+/* =========================
+   ANIMATIONS
+========================= */
+
+@keyframes frame-tremor{
+    0%,100%{ transform:translate(0,0); }
+    25%{ transform:translate(calc(var(--evo) * .7px), calc(var(--evo) * -.4px)); }
+    50%{ transform:translate(calc(var(--evo) * -.5px), calc(var(--evo) * .4px)); }
+    75%{ transform:translate(calc(var(--evo) * .4px), calc(var(--evo) * .5px)); }
+}
+
+@keyframes flick-bar{
+    0%,84%,100%{ opacity:.92; }
+    86%{ opacity:.35; transform:translateX(5px); }
+    89%{ opacity:1; transform:translateX(-3px); }
+}
+
+@keyframes flick-bar-v{
+    0%,84%,100%{ opacity:.90; }
+    86%{ opacity:.30; transform:translateY(5px); }
+    89%{ opacity:1; transform:translateY(-3px); }
+}
+
+@keyframes scan-h{
+    0%{ transform:translateX(-100%); opacity:0; }
+    10%{ opacity:.2; }
+    50%{ opacity:.55; }
+    100%{ transform:translateX(100%); opacity:0; }
+}
+
+@keyframes scan-v{
+    0%{ transform:translateY(-100%); opacity:0; }
+    10%{ opacity:.2; }
+    50%{ opacity:.55; }
+    100%{ transform:translateY(100%); opacity:0; }
+}
+
+@keyframes plate-flicker{
+    0%,89%,100%{ opacity:.96; transform:translateZ(0); }
+    91%{ opacity:.42; transform:translateX(2px); }
+    94%{ opacity:1; transform:translateX(-1px); }
+}
+
+@keyframes sigil-pulse{
+    0%,100%{
+        opacity:.88;
+        transform:scale(1);
+    }
+    50%{
+        opacity:1;
+        transform:scale(1.06);
+    }
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 900px){
+    .corner{
+        width:112px;
+        height:112px;
+    }
+
+    .plate{
+        min-width:min(390px, 72vw);
+        height:40px;
+        padding:0 18px;
+    }
+
+    .plate .text{
+        font-size:12px;
+        letter-spacing:3px;
+    }
+
+    .sigil{
+        width:42px;
+        height:42px;
+        font-size:19px;
+    }
+}
+
+@media (max-width: 768px){
+    :root{
+        --pad: 10px;
+        --pad2: 18px;
+        --pad3: 28px;
+    }
+
+    #frame-outer,
+    #frame-mid,
+    #frame-inner{
+        clip-path: polygon(
+            26px 0,
+            calc(100% - 26px) 0,
+            100% 26px,
+            100% calc(100% - 26px),
+            calc(100% - 26px) 100%,
+            26px 100%,
+            0 calc(100% - 26px),
+            0 26px
+        );
+    }
+
+    .corner{
+        width:86px;
+        height:86px;
+    }
+
+    .corner .core{
+        width:20px;
+        height:20px;
+        left:14px;
+        top:14px;
+    }
+
+    .corner .ticks::before{
+        width:30px;
+        left:34px;
+        top:20px;
+    }
+
+    .corner .ticks::after{
+        height:30px;
+        left:20px;
+        top:34px;
+    }
+
+    .plate{
+        min-width:min(320px, 80vw);
+        height:34px;
+        padding:0 14px;
+    }
+
+    .plate .text{
+        font-size:10px;
+        letter-spacing:2px;
+    }
+
+    .plate::before,
+    .plate::after{
+        width:24px;
+    }
+
+    .sigil{
+        width:34px;
+        height:34px;
+        font-size:16px;
+    }
+
+    .s1,.s2,.s3{ left:10px; }
+    .s4,.s5,.s6{ right:10px; }
+
+    .marker{
+        display:none;
+    }
+
+    .bt2,.bb2,.bl2,.br2{
+        display:none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce){
+    #frame-root,
+    .bar-h,
+    .bar-v,
+    .sigil,
+    .plate .text{
+        animation:none !important;
+    }
+
+    .bar-h::after,
+    .bar-v::after{
+        animation:none !important;
+    }
+}
+</style>
+</head>
+<body>
+<div id="frame-root">
+
+    <div id="frame-outer"></div>
+    <div id="frame-mid"></div>
+    <div id="frame-inner"></div>
+
+    <!-- barras -->
+    <div class="bar-h bt1"></div>
+    <div class="bar-h bt2"></div>
+    <div class="bar-h bb1"></div>
+    <div class="bar-h bb2"></div>
+
+    <div class="bar-v bl1"></div>
+    <div class="bar-v bl2"></div>
+    <div class="bar-v br1"></div>
+    <div class="bar-v br2"></div>
+
+    <!-- corners -->
+    <div class="corner tl"><div class="core"></div><div class="ticks"></div></div>
+    <div class="corner tr"><div class="core"></div><div class="ticks"></div></div>
+    <div class="corner bl"><div class="core"></div><div class="ticks"></div></div>
+    <div class="corner br"><div class="core"></div><div class="ticks"></div></div>
+
+    <!-- sigils -->
+    <div class="sigil s1">✦</div>
+    <div class="sigil s2">⌬</div>
+    <div class="sigil s3">⟁</div>
+    <div class="sigil s4">✦</div>
+    <div class="sigil s5">⌬</div>
+    <div class="sigil s6">⟁</div>
+
+    <!-- plates -->
+    <div class="plate top">
+        <div class="text">ETERNA.AGUJERO_NEGRO</div>
+    </div>
+
+    <div class="plate bottom">
+        <div class="text">EVENT_HORIZON : ACTIVE</div>
+    </div>
+
+    <div class="marker mt1"></div>
+    <div class="marker mt2"></div>
+    <div class="marker mb1"></div>
+    <div class="marker mb2"></div>
+
+    <!-- overlay SVG -->
+    <svg id="overlay-svg" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+        <!-- arcos superiores -->
+        <path class="arc-a" d="M120 112 C220 88, 320 88, 420 112" />
+        <path class="arc-b" d="M142 132 C228 112, 312 112, 396 132" />
+
+        <path class="arc-a" d="M580 112 C680 88, 780 88, 880 112" />
+        <path class="arc-b" d="M604 132 C688 112, 772 112, 858 132" />
+
+        <!-- arcos inferiores -->
+        <path class="arc-a" d="M120 888 C220 912, 320 912, 420 888" />
+        <path class="arc-b" d="M142 868 C228 888, 312 888, 396 868" />
+
+        <path class="arc-a" d="M580 888 C680 912, 780 912, 880 888" />
+        <path class="arc-b" d="M604 868 C688 888, 772 888, 858 868" />
+
+        <!-- runas laterales -->
+        <path class="rune-lines" d="M86 220 L108 198 L130 220 L108 242 Z" />
+        <path class="rune-lines" d="M86 500 L108 478 L130 500 L108 522 Z" />
+        <path class="rune-lines" d="M86 780 L108 758 L130 780 L108 802 Z" />
+
+        <path class="rune-lines" d="M914 220 L892 198 L870 220 L892 242 Z" />
+        <path class="rune-lines" d="M914 500 L892 478 L870 500 L892 522 Z" />
+        <path class="rune-lines" d="M914 780 L892 758 L870 780 L892 802 Z" />
+
+        <!-- grietas calientes -->
+        <path class="crack-hot" d="M36 70 L74 84 L96 108 L124 118 L152 148" />
+        <path class="crack-red" d="M58 92 L86 104 L108 126 L132 136" />
+
+        <path class="crack-hot" d="M964 70 L926 84 L904 108 L876 118 L848 148" />
+        <path class="crack-red" d="M942 92 L914 104 L892 126 L868 136" />
+
+        <path class="crack-hot" d="M36 930 L74 916 L96 892 L124 882 L152 852" />
+        <path class="crack-red" d="M58 908 L86 896 L108 874 L132 864" />
+
+        <path class="crack-hot" d="M964 930 L926 916 L904 892 L876 882 L848 852" />
+        <path class="crack-red" d="M942 908 L914 896 L892 874 L868 864" />
+    </svg>
+
+    <div class="center-vignette"></div>
+</div>
+
+<script>
+(function(){
+    const root = document.documentElement;
+
+    function getParentEvo(){
+        let value = '0';
+
+        try{
+            if (window.parent && window.parent !== window){
+                const pdoc = window.parent.document;
+                const v1 = getComputedStyle(pdoc.documentElement).getPropertyValue('--evo').trim();
+                const v2 = getComputedStyle(pdoc.body).getPropertyValue('--evo').trim();
+                value = v1 || v2 || '0';
+            } else {
+                value = getComputedStyle(document.documentElement).getPropertyValue('--evo').trim() || '0';
+            }
+        } catch(err){
+            value = '0';
+        }
+
+        const n = Math.max(0, Math.min(1, parseFloat(value) || 0));
+        return n.toFixed(3);
+    }
+
+    function syncEvo(){
+        root.style.setProperty('--evo', getParentEvo());
+    }
+
+    syncEvo();
+    setInterval(syncEvo, 120);
+})();
+</script>
+</body>
+</html>

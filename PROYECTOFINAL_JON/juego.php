@@ -946,10 +946,10 @@ $conexion->close();
                     <?php endif; ?>
                     <button type="button" class="coleccion-variante-pill locked" data-variant="caos" disabled aria-label="Caos bloqueada">🔒</button>
                 </div>
-                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= $completed_collections > 0 ? 'activo' : '' ?>" title="Cada colección completada multiplica la suerte por x1.5">
+                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= $completed_collections > 0 ? 'activo' : 'bloqueado' ?>" title="Cada colección completada multiplica la suerte por x1.5">
                     <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
                     <strong>x1.5 suerte</strong>
-                    <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Completa una colección' ?></span>
+                    <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Bloqueado hasta completar una colección' ?></span>
                 </div>
             </div>
 
@@ -1074,10 +1074,10 @@ $conexion->close();
                     </div>
                     <?php endforeach; ?>
 
-                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= $completed_collections > 0 ? 'activo' : '' ?>" title="Cada colección completada multiplica la suerte por x1.5">
+                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= $completed_collections > 0 ? 'activo' : 'bloqueado' ?>" title="Cada colección completada multiplica la suerte por x1.5">
                         <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
                         <strong>x1.5 suerte</strong>
-                        <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Completa una colección' ?></span>
+                        <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Bloqueado hasta completar una colección' ?></span>
                     </div>
 
                 </div>
@@ -1386,19 +1386,35 @@ $conexion->close();
                 $mis_cantidades = [];
                 foreach ($mis_runas as $runa_jug) { $mis_cantidades[$runa_jug["id"]] = (int)$runa_jug["cantidad"]; }
                 ?>
-                <?php foreach ($todas_runas_agrupadas as $grupo_nombre => $runas_grupo): ?>
-                    <div class="grupo-runas">
-                        <div class="grupo-nombre"><?= htmlspecialchars($grupo_nombre) ?></div>
+                <?php foreach ($todas_runas_agrupadas as $grupo_nombre => $runas_grupo):
+                    $grupo_slug_panel = ($grupo_nombre === 'Runas Corruptas') ? 'corruptas' : 'basicas';
+                ?>
+              <div class="grupo-runas" data-runa-grupo="<?= $grupo_slug_panel ?>" <?= ($grupo_slug_panel === 'corruptas' && !$coleccion_basica_completa) ? 'style="display:none;"' : '' ?>>
+                        <div class="grupo-nombre" role="button" tabindex="0"
+                             data-runa-grupo-toggle="<?= $grupo_slug_panel ?>"
+                             onclick="RW_toggleGrupoRunasLaterales('<?= $grupo_slug_panel ?>')">
+                            <?= htmlspecialchars($grupo_nombre) ?> <span class="grupo-runas-flecha">▼</span>
+                        </div>
+                        <div class="grupo-runas-lista">
+                        <?php if ($grupo_slug_panel === 'corruptas'): ?>
+                            <div class="grupo-runas-msg" data-corruptas-msg style="display:none;">
+                                Las runas corruptas han despertado. Ahora pueden aparecer al tirar runas.
+                            </div>
+                        <?php endif; ?>
                         <?php foreach ($runas_grupo as $runa_item):
                             $id_runa   = $runa_item["id"];
                             $cantidad  = $mis_cantidades[$id_runa] ?? 0;
                             $tiene     = $cantidad > 0;
                             $pct_prob  = isset($prob_map[$id_runa]) ? $prob_map[$id_runa]["prob"] : 0;
                             $rareza    = htmlspecialchars($runa_item["rareza"]);
+                            $variant_card = rw_variant_slug($runa_item["nombre"] ?? '');
                         ?>
                             <div class="runa-card <?= $rareza ?> runa-card-btn <?= !$tiene ? 'runa-bloqueada' : '' ?>"
                                  data-id="<?= $id_runa ?>"
+                                 data-cantidad="<?= $cantidad ?>"
                                  data-prob="<?= $pct_prob ?>"
+                                 data-runa-grupo="<?= $grupo_slug_panel ?>"
+                                 data-runa-variante="<?= htmlspecialchars($variant_card) ?>"
                                  onclick="toggleRunaProb(this)">
                                 <div class="runa-card-main">
                                     <span class="runa-card-nombre"><?= htmlspecialchars($runa_item["nombre"]) ?></span>
@@ -1419,6 +1435,7 @@ $conexion->close();
                                 </div>
                             </div>
                         <?php endforeach; ?>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             </div>

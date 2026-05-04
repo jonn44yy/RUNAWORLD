@@ -2320,8 +2320,10 @@ body {
 }
 
 #seccion-coleccion .coleccion-bonus-suerte-v74 {
-    border: 1px solid rgba(255,215,0,.22);
-    background: linear-gradient(135deg, rgba(255,215,0,.075), rgba(120,50,255,.05));
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(150,155,175,.22);
+    background: linear-gradient(135deg, rgba(120,125,145,.08), rgba(40,45,60,.18));
     padding: 8px 10px;
     width: max-content;
     max-width: 220px;
@@ -2331,23 +2333,62 @@ body {
     font-family: 'Oswald', sans-serif;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: rgba(210,215,235,.72);
+    color: rgba(180,185,205,.62);
+    opacity: .78;
 }
 #seccion-coleccion .coleccion-bonus-suerte-v74 strong {
-    color: #ffd700;
+    color: rgba(190,195,210,.62);
     font-size: .78rem;
     line-height: 1;
-    text-shadow: 0 0 12px rgba(255,215,0,.2);
+    text-shadow: none;
 }
 #seccion-coleccion .coleccion-bonus-label,
 #seccion-coleccion .coleccion-bonus-sub {
     font-size: .48rem;
     line-height: 1.15;
-    color: rgba(180,185,205,.62);
+    color: rgba(155,160,180,.58);
 }
 #seccion-coleccion .coleccion-bonus-suerte-v74.activo {
     border-color: rgba(255,215,0,.46);
     background: linear-gradient(135deg, rgba(255,215,0,.12), rgba(255,34,90,.05));
+    color: rgba(255,245,205,.92);
+    opacity: 1;
+    box-shadow: 0 0 18px rgba(255,215,0,.16), inset 0 0 14px rgba(255,215,0,.08);
+    animation: rwBonusColeccionPulso 2.6s ease-in-out infinite;
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74.activo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 0%, rgba(255,245,180,.18) 45%, transparent 62%);
+    transform: translateX(-130%);
+    animation: rwBonusColeccionBrillo 3.8s ease-in-out infinite;
+    pointer-events: none;
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74.activo strong {
+    color: #ffe66d;
+    text-shadow: 0 0 10px rgba(255,215,0,.45), 0 0 18px rgba(255,170,40,.22);
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74.activo .coleccion-bonus-label,
+#seccion-coleccion .coleccion-bonus-suerte-v74.activo .coleccion-bonus-sub {
+    color: rgba(255,238,180,.82);
+}
+#seccion-coleccion .coleccion-bonus-suerte-v74.bloqueado {
+    filter: grayscale(.45);
+}
+@keyframes rwBonusColeccionPulso {
+    0%, 100% { box-shadow: 0 0 14px rgba(255,215,0,.12), inset 0 0 12px rgba(255,215,0,.06); }
+    50% { box-shadow: 0 0 24px rgba(255,215,0,.24), inset 0 0 16px rgba(255,215,0,.12); }
+}
+@keyframes rwBonusColeccionBrillo {
+    0%, 55% { transform: translateX(-130%); }
+    78%, 100% { transform: translateX(130%); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #seccion-coleccion .coleccion-bonus-suerte-v74.activo,
+    #seccion-coleccion .coleccion-bonus-suerte-v74.activo::after {
+        animation: none;
+    }
 }
 #seccion-coleccion .coleccion-bonus-mobile { display: none; }
 #seccion-coleccion .coleccion-bonus-desktop { margin-top: 14px; width: 100%; max-width: none; }
@@ -2502,3 +2543,436 @@ body {
 #btn-tirar.mitica-corrupta-activa .rune-symbol,#btn-tirar.mitica-corrupta-activa .rune-orbit span { color:#ff2244 !important; text-shadow:0 0 18px rgba(255,34,68,.95),0 0 42px rgba(170,0,255,.42) !important; }
 #btn-tirar.mitica-corrupta-activa .rune-click-hint { border-color:rgba(255,34,68,.55) !important; box-shadow:0 0 22px rgba(255,34,68,.35) !important; }
 #btn-tirar.mitica-corrupta-activa .rune-mandala-out,#btn-tirar.mitica-corrupta-activa .rune-mandala-in,#btn-tirar.mitica-corrupta-activa .rune-orbit { filter:drop-shadow(0 0 8px rgba(255,34,68,.75)) drop-shadow(0 0 18px rgba(170,0,255,.28)) !important; }
+
+
+/* ============================================================
+   PANEL DERECHO — DROPDOWNS DE RUNAS MÁS CLAROS
+   Objetivo: que cada runa parezca claramente abrible/cerrable
+   ============================================================ */
+
+/* card base: más apariencia de botón desplegable */
+.runa-card-btn {
+    position: relative;
+    padding: 0 !important;
+    margin-bottom: 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 215, 0, 0.16);
+    border-left-width: 3px;
+    background:
+        linear-gradient(90deg, rgba(255,215,0,0.035), rgba(255,255,255,0.018)),
+        rgba(255,255,255,0.025);
+    cursor: pointer;
+    overflow: hidden;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+/* brillo lateral sutil para indicar interactividad */
+.runa-card-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg,
+            rgba(255,215,0,0.10) 0%,
+            transparent 32%,
+            transparent 100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+}
+
+/* línea superior tipo "botón activo" */
+.runa-card-btn::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,215,0,0.45), transparent);
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* fila principal más clara */
+.runa-card-main {
+    position: relative;
+    z-index: 1;
+    min-height: 44px;
+    padding: 11px 10px 11px 12px;
+    gap: 10px;
+}
+
+/* hover: que se note que es clicable */
+.runa-card-btn:hover {
+    background:
+        linear-gradient(90deg, rgba(255,215,0,0.075), rgba(255,255,255,0.028)),
+        rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,215,0,0.36) !important;
+    box-shadow:
+        0 0 14px rgba(255,215,0,0.08),
+        inset 0 0 18px rgba(255,215,0,0.035);
+    transform: translateX(2px);
+}
+
+.runa-card-btn:hover::before {
+    opacity: 1;
+}
+
+/* estado abierto: parece desplegable expandido, no texto suelto */
+.runa-card-btn.expandida {
+    background:
+        linear-gradient(180deg, rgba(255,215,0,0.085), rgba(255,255,255,0.025)),
+        rgba(255,215,0,0.035) !important;
+    border-color: rgba(255,215,0,0.55) !important;
+    box-shadow:
+        0 0 18px rgba(255,215,0,0.12),
+        inset 0 0 24px rgba(255,215,0,0.045);
+}
+
+/* nombre de la runa: un poco más botón, menos texto plano */
+.runa-card-nombre {
+    font-size: 0.9rem;
+    letter-spacing: 1.6px;
+}
+
+/* derecha de la card: cantidad + flecha dentro de una zona visible */
+.runa-card-right {
+    min-width: 48px;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+/* cantidad como mini etiqueta */
+.runa-card-cantidad {
+    font-family: var(--font-title);
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    color: var(--silver-dim);
+    opacity: 0.9;
+}
+
+/* flecha convertida en botón circular */
+.runa-card-flecha {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,215,0,0.24);
+    border-radius: 50%;
+    background: rgba(0,0,0,0.28);
+    color: var(--gold);
+    font-size: 0.75rem;
+    line-height: 1;
+    margin-left: 2px;
+    box-shadow:
+        inset 0 0 8px rgba(255,215,0,0.045),
+        0 0 8px rgba(255,215,0,0.08);
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+/* hover sobre la card: la flecha también responde */
+.runa-card-btn:hover .runa-card-flecha {
+    border-color: rgba(255,215,0,0.55);
+    background: rgba(255,215,0,0.09);
+    box-shadow:
+        0 0 12px rgba(255,215,0,0.16),
+        inset 0 0 10px rgba(255,215,0,0.06);
+}
+
+/* abierta: flecha gira y se ilumina */
+.runa-card-btn.expandida .runa-card-flecha {
+    transform: rotate(180deg);
+    background: rgba(255,215,0,0.14);
+    border-color: rgba(255,215,0,0.75);
+    color: #fff3a0;
+}
+
+/* contenido desplegado: separado como panel real */
+.runa-card-prob {
+    position: relative;
+    z-index: 1;
+    background:
+        linear-gradient(180deg, rgba(0,0,0,0.18), rgba(255,215,0,0.025));
+    margin: 0 8px 8px;
+    border-radius: 0 0 5px 5px;
+    transition:
+        max-height 0.24s ease,
+        padding 0.18s ease,
+        opacity 0.18s ease;
+    opacity: 0;
+}
+
+/* cuando abre, aparece como cajón desplegado */
+.runa-card-btn.expandida .runa-card-prob {
+    opacity: 1;
+    border-top: 1px solid rgba(255,215,0,0.18);
+    padding: 9px 9px 8px;
+    margin-top: 0;
+}
+
+/* filas internas más legibles */
+.prob-fila {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.035);
+}
+
+.prob-fila:last-child {
+    border-bottom: none;
+}
+
+.prob-label {
+    font-family: var(--font-title);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: rgba(221,228,240,0.55);
+}
+
+.prob-val {
+    font-size: 0.78rem;
+    color: var(--silver);
+}
+
+/* las bloqueadas siguen pareciendo cards, pero claramente no disponibles */
+.runa-card-btn.runa-bloqueada {
+    cursor: default;
+    background: rgba(255,255,255,0.018) !important;
+    border-color: rgba(255,255,255,0.065) !important;
+    box-shadow: none;
+    transform: none;
+}
+
+.runa-card-btn.runa-bloqueada::before {
+    display: none;
+}
+
+.runa-card-btn.runa-bloqueada .runa-card-flecha {
+    opacity: 0.35;
+    border-color: rgba(255,255,255,0.12);
+    color: rgba(221,228,240,0.35);
+}
+
+/* detalle extra: pequeña pista textual en hover, solo desktop */
+@media (hover:hover) and (pointer:fine) {
+    .runa-card-btn:not(.runa-bloqueada) .runa-card-main::after {
+        content: "abrir";
+        position: absolute;
+        right: 40px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-family: var(--font-title);
+        font-size: 0.55rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: rgba(255,215,0,0.42);
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        pointer-events: none;
+    }
+
+    .runa-card-btn:not(.runa-bloqueada):hover .runa-card-main::after {
+        opacity: 1;
+    }
+
+    .runa-card-btn.expandida .runa-card-main::after {
+        content: "cerrar";
+        opacity: 0.65;
+    }
+}
+
+/* móvil: sin texto "abrir/cerrar", solo flecha más grande */
+@media (max-width:768px) {
+    .runa-card-main {
+        min-height: 48px;
+        padding: 12px 10px 12px 12px;
+    }
+
+    .runa-card-flecha {
+        width: 25px;
+        height: 25px;
+        flex-basis: 25px;
+        font-size: 0.82rem;
+    }
+}
+
+/* ============================================================
+   PANEL DERECHO — HEADER DE GRUPO TIPO DROPDOWN
+   Runas Básicas / Runas Corruptas
+   ============================================================ */
+
+/* Header del grupo: que parezca botón/desplegable, no texto plano */
+#panel-runas-contenido .grupo-nombre {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    margin: 10px 0 8px;
+    padding: 9px 12px;
+
+    min-height: 34px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 215, 0, 0.18);
+    border-left: 3px solid rgba(255, 215, 0, 0.48);
+
+    background:
+        linear-gradient(90deg, rgba(255,215,0,0.075), rgba(255,255,255,0.035)),
+        rgba(14,16,24,0.98);
+
+    color: rgba(221,228,240,0.88);
+    font-family: var(--font-title);
+    font-size: 0.66rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+
+    box-shadow:
+        inset 0 0 16px rgba(255,215,0,0.035),
+        0 0 12px rgba(255,215,0,0.045);
+
+    cursor: pointer;
+    user-select: none;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
+}
+
+/* Quitamos la flecha vieja si viene escrita como texto dentro */
+#panel-runas-contenido .grupo-nombre {
+    overflow: hidden;
+}
+
+/* Flecha clara a la derecha */
+#panel-runas-contenido .grupo-nombre::after {
+    content: "▾";
+    width: 22px;
+    height: 22px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    margin-left: 8px;
+    flex: 0 0 22px;
+
+    border-radius: 50%;
+    border: 1px solid rgba(255,215,0,0.28);
+    background: rgba(0,0,0,0.28);
+
+    color: var(--gold);
+    font-size: 0.68rem;
+    letter-spacing: 0;
+
+    box-shadow:
+        inset 0 0 8px rgba(255,215,0,0.04),
+        0 0 8px rgba(255,215,0,0.08);
+
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        background 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+/* Hover: se nota que se puede pulsar */
+#panel-runas-contenido .grupo-nombre:hover {
+    color: var(--gold);
+    border-color: rgba(255,215,0,0.42);
+    background:
+        linear-gradient(90deg, rgba(255,215,0,0.12), rgba(255,255,255,0.045)),
+        rgba(14,16,24,1);
+
+    box-shadow:
+        inset 0 0 18px rgba(255,215,0,0.055),
+        0 0 16px rgba(255,215,0,0.09);
+
+    transform: translateX(2px);
+}
+
+#panel-runas-contenido .grupo-nombre:hover::after {
+    border-color: rgba(255,215,0,0.65);
+    background: rgba(255,215,0,0.10);
+    box-shadow:
+        0 0 12px rgba(255,215,0,0.16),
+        inset 0 0 10px rgba(255,215,0,0.06);
+}
+
+/* Estado abierto: por defecto asumimos que están abiertos */
+#panel-runas-contenido .grupo-nombre.is-open::after,
+#panel-runas-contenido .grupo-nombre.abierto::after {
+    transform: rotate(180deg);
+}
+
+/* Estado cerrado, por si tu JS añade .cerrado o .is-closed */
+#panel-runas-contenido .grupo-nombre.cerrado::after,
+#panel-runas-contenido .grupo-nombre.is-closed::after {
+    transform: rotate(0deg);
+    opacity: 0.75;
+}
+
+/* Variante visual para corruptas si el texto contiene esa sección.
+   CSS puro no puede seleccionar por texto, así que lo dejamos preparado
+   por si añades clase .grupo-corruptas desde PHP/JS. */
+#panel-runas-contenido .grupo-nombre.grupo-corruptas {
+    border-left-color: rgba(255,51,68,0.58);
+    border-color: rgba(255,51,68,0.24);
+    background:
+        linear-gradient(90deg, rgba(255,51,68,0.10), rgba(255,215,0,0.025)),
+        rgba(14,16,24,0.98);
+    color: rgba(255,170,185,0.9);
+}
+
+#panel-runas-contenido .grupo-nombre.grupo-corruptas::after {
+    color: #ff6677;
+    border-color: rgba(255,51,68,0.34);
+    box-shadow:
+        inset 0 0 8px rgba(255,51,68,0.045),
+        0 0 8px rgba(255,51,68,0.10);
+}
+
+#panel-runas-contenido .grupo-nombre.grupo-corruptas:hover {
+    color: #ff8a99;
+    border-color: rgba(255,51,68,0.48);
+    box-shadow:
+        inset 0 0 18px rgba(255,51,68,0.06),
+        0 0 16px rgba(255,51,68,0.10);
+}
+
+/* Separación visual: el bloque siguiente ya se entiende como contenido desplegado */
+#panel-runas-contenido .grupo-runas {
+    margin-bottom: 18px;
+    padding-bottom: 4px;
+}
+
+/* En móvil/tablet, menos sticky para no tapar demasiado */
+@media (max-width: 768px) {
+    #panel-runas-contenido .grupo-nombre {
+        position: relative;
+        top: auto;
+        padding: 10px 12px;
+        font-size: 0.62rem;
+        letter-spacing: 3px;
+    }
+
+    #panel-runas-contenido .grupo-nombre::after {
+        width: 24px;
+        height: 24px;
+        flex-basis: 24px;
+    }
+}
