@@ -276,6 +276,13 @@ window.RW_TIENDA_VERSION = '8.0';
     // ----------------------------------------------------------------
 
     function comprarMejora(id, fila) {
+        if (window.RW_DEBUG_ECONOMIA) {
+            console.log('[RW economia][tienda:click]', {
+                mejora_id: id,
+                points_cliente: (typeof window.getPointsActual === "function") ? window.getPointsActual() : null,
+                points_ps_cliente: typeof window.points_ps !== "undefined" ? window.points_ps : null
+            });
+        }
         // flush de runa-sync para que los pts del server reflejen los
         // clicks pendientes (si compras justo despues de tirar mucho)
         var p = (window.runaSync && typeof window.runaSync.flushSync === 'function')
@@ -289,6 +296,7 @@ window.RW_TIENDA_VERSION = '8.0';
                 headers:     { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     mejora_id: id,
+                    debug: window.RW_DEBUG_ECONOMIA ? 1 : 0,
                     points_cliente: (typeof window.getPointsActual === "function")
                         ? window.getPointsActual()
                         : 0
@@ -297,6 +305,9 @@ window.RW_TIENDA_VERSION = '8.0';
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
+            if (window.RW_DEBUG_ECONOMIA) {
+                console.log('[RW economia][tienda:respuesta]', data);
+            }
             var msgEl = document.getElementById('msg-tienda');
             if (!data.ok) {
                 if (msgEl) {
@@ -338,7 +349,9 @@ window.RW_TIENDA_VERSION = '8.0';
                     total: data.luck_multiplier,
                     tienda: data.luck_shop_multiplier,
                     colecciones: data.luck_collection_multiplier,
-                    colecciones_completadas: data.completed_collections
+                    colecciones_completadas: data.completed_collections,
+                    collection_states: data.collection_states,
+                    collection_bulk_bonus: data.collection_bulk_bonus
                 });
             } else if (data.luck_multiplier !== undefined && typeof window.setLuck === "function") {
                 window.setLuck(data.luck_multiplier);
@@ -388,6 +401,13 @@ window.RW_TIENDA_VERSION = '8.0';
             if (data.points_por_seg !== undefined && typeof window.setPointsPs === 'function') {
                 window.setPointsPs(data.points_por_seg);
             }
+            if (window.RW_DEBUG_ECONOMIA) {
+                console.log('[RW economia][tienda:post-aplicar]', {
+                    points: (typeof window.getPointsActual === "function") ? window.getPointsActual() : null,
+                    points_por_seg_servidor: data.points_por_seg,
+                    debug_economia: data.debug_economia || null
+                });
+            }
 
             actualizarGlowNav();
             renderTienda();
@@ -432,9 +452,35 @@ window.RW_TIENDA_VERSION = '8.0';
         window.RW_INIT.hay_mejoras_nuevas = hay;
     }
 
+    function refrescarDesbloqueosMejorasLocal() {
+        if (!window.RW_INIT || !Array.isArray(window.RW_INIT.mejoras_completas)) return;
+        var totalTiradas = parseInt(window.RW_INIT.total_tiradas, 10) || 0;
+        var cambio = false;
+        window.RW_INIT.mejoras_completas.forEach(function (m) {
+            if (!m || !m.bloqueada) return;
+            if (m.condicion_tipo === 'tirar_runa_x' && totalTiradas >= (parseInt(m.condicion_valor, 10) || 0)) {
+                m.bloqueada = false;
+                m.condicion_texto = '';
+                m.es_nueva = true;
+                cambio = true;
+            }
+            if (m.condicion_tipo === 'coleccion_basica' && window.RW_INIT.basic_collection_complete) {
+                m.bloqueada = false;
+                m.condicion_texto = '';
+                m.es_nueva = true;
+                cambio = true;
+            }
+        });
+        if (cambio) {
+            actualizarGlowNav();
+            renderTienda();
+        }
+    }
+
     window.marcarMejorasComoVistas = marcarMejorasComoVistas;
     window.renderTienda            = renderTienda;
     window.actualizarGlowNav       = actualizarGlowNav;
+    window.RW_refrescarDesbloqueosMejorasLocal = refrescarDesbloqueosMejorasLocal;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', renderTienda);

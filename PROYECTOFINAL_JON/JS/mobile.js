@@ -102,7 +102,7 @@ window.RW_MOBILE_VERSION = '8.0';
             </div>
             <div class="mob-sep"></div>
             <div class="mob-stat">
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><polygon points="20,4 22,15 33,15 24,22 27,33 20,26 13,33 16,22 7,15 18,15" stroke="#ffd700" stroke-width="1.2" fill="none" opacity="0.7"/></svg>
+                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><path d="M20 22 C17 15 7 18 9 10 C11 4 18 7 20 13 C22 7 29 4 31 10 C33 18 23 15 20 22Z" stroke="#ffd700" stroke-width="1.35" fill="rgba(255,215,0,0.10)" stroke-linejoin="round"/><path d="M20 22 C18 28 15 31 11 34" stroke="#ffd700" stroke-width="1.45" stroke-linecap="round"/></svg>
                 <span class="mob-val" id="ms-suerte">x1.00</span>
                 <span class="mob-rate">suerte</span>
             </div>
@@ -162,6 +162,8 @@ window.RW_MOBILE_VERSION = '8.0';
     function syncStats() {
         const g = id => document.getElementById(id)?.textContent || '';
         document.getElementById('ms-coins').textContent     = g('coins-display');
+        document.getElementById('ms-coins-ps').textContent  = g('coins-ps-display');
+        document.getElementById('ms-points').textContent    = g('points-display');
         const suerteTxt = g("luck-display") || g("suerte-display") || (
             typeof window.luck_multiplier !== "undefined"
                 ? "x" + (parseFloat(window.luck_multiplier) || 1).toFixed(2)

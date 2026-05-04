@@ -176,7 +176,7 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cantidad: cantidadPedida, pack_id: packId })
+            body: JSON.stringify({ cantidad: cantidadPedida, pack_id: packId, debug: window.RW_DEBUG_ECONOMIA ? 1 : 0 })
         })
         .then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -365,7 +365,7 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pack_id: packId, consumidas: snapshot[packId] })
+                body: JSON.stringify({ pack_id: packId, consumidas: snapshot[packId], debug: window.RW_DEBUG_ECONOMIA ? 1 : 0 })
             })
             .then(function (r) { return r.json(); })
             .then(function (data) {

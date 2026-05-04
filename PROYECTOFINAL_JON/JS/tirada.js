@@ -30,6 +30,7 @@ window.RW_TIRADA_VERSION = '8.0-fix-runas-visual-v112';
 // hecho entre marzo y abril, reescrito 23/04 para batching. !hi
 
 var syncSafetyTimer = null;
+var rwProcesarRespuestaSyncCount = 0;
 
 
 // FIX V110 — helpers de runas corruptas y actualización visual por delta.
@@ -77,6 +78,18 @@ function _rwPintarCantidadRuna(id, cantidad, rareza) {
                 if (!el.getAttribute('onclick') && (el.classList.contains('col-runa-btn') || el.classList.contains('col-runa-comun'))) {
                     el.setAttribute('onclick', 'seleccionarRunaCol(this)');
                 }
+                var nombreReal = el.dataset ? (el.dataset.nombreReal || el.dataset.nombre) : '';
+                if (nombreReal) {
+                    var nombreEl = el.querySelector('.runa-card-nombre, .col-runa-nombre, .col-comun-nombre');
+                    if (nombreEl) nombreEl.textContent = nombreReal;
+                    var rarezaEl = el.querySelector('.col-comun-rareza');
+                    if (rarezaEl && el.dataset.rareza) {
+                        var rarezaTxt = String(el.dataset.rareza).replace(/_/g, ' ');
+                        rarezaEl.textContent = rarezaTxt.charAt(0).toUpperCase() + rarezaTxt.slice(1) + (el.dataset.variant === 'corrupta' ? ' - Corrupta' : '');
+                    }
+                    var metaEl = el.querySelector('.col-runa-meta');
+                    if (metaEl && el.dataset.variant === 'corrupta') metaEl.textContent = 'Corrupta';
+                }
             }
             var spans = el.querySelectorAll('.runa-card-cantidad, .col-runa-cantidad');
             if (spans.length) {
@@ -94,14 +107,18 @@ function _rwPintarCantidadRuna(id, cantidad, rareza) {
 }
 function _rwTextoRuna(r) {
     if (!r) return '';
-    return [r.nombre, r.imagen, r.slug, r.runa_file, r.runaFile, r.animacion_slug, r.rareza_animacion, r.variante].map(_rwNormTxt).join(' | ');
+    return [r.nombre, r.slug, r.runa_file, r.runaFile, r.animacion_slug, r.rareza_animacion, r.variante].map(_rwNormTxt).join(' | ');
 }
 function _rwEsAnimCorrupta(r, key) {
     var txt = _rwTextoRuna(r);
     if (txt.indexOf(key) !== -1) return true;
+    if (key === 'eterna_corrupta' && txt.indexOf('eterna corrupta') !== -1) return true;
+    if (key === 'divina_corrupta' && txt.indexOf('divina corrupta') !== -1) return true;
     if (key === 'mitica_corrupta' && (txt.indexOf('mítica corrupta') !== -1 || txt.indexOf('mitica corrupta') !== -1)) return true;
     if (key === 'legendaria_corrupta' && txt.indexOf('legendaria corrupta') !== -1) return true;
     if (r && r.variante === 'corrupta') {
+        if (key === 'eterna_corrupta' && r.rareza === 'eterna') return true;
+        if (key === 'divina_corrupta' && r.rareza === 'divina') return true;
         if (key === 'mitica_corrupta' && r.rareza === 'mitica') return true;
         if (key === 'legendaria_corrupta' && r.rareza === 'legendaria') return true;
     }
@@ -149,6 +166,20 @@ function tirarRuna() {
 // server como fuente de verdad (antes los ignoraba y confiaba en el JS,
 // ahora el server aplica los pasivos y manda el total correcto)
 function procesarRespuestaSync(data) {
+    rwProcesarRespuestaSyncCount++;
+    if (window.RW_DEBUG_ECONOMIA) {
+        console.log("[RW economia][procesarRespuestaSync:antes]", {
+            count: rwProcesarRespuestaSyncCount,
+            batch_id: data && (data.batch_id || data.pack_id),
+            local_visual: !!(data && data.local_visual),
+            points_antes: typeof points !== "undefined" ? points : null,
+            points_ps_antes: typeof points_ps !== "undefined" ? points_ps : null,
+            points_ps_base_antes: typeof points_ps_base !== "undefined" ? points_ps_base : null,
+            respuesta: data
+        });
+    } else if (window.RW_DEBUG_RUNAS && data && data.runas_ganadas) {
+        console.log("[RW servidor runas_ganadas]", data.runas_ganadas);
+    }
 
     // ── coins: fuente de verdad = servidor ────────────────────
     // coins SI se gastan en cada tirada, asi que el server manda el valor
@@ -184,16 +215,38 @@ function procesarRespuestaSync(data) {
         points = Math.max(points, serverPoints);
     }
 
-    // points_por_seg viene del server como valor FINAL ya calculado
+    // points_por_seg viene del server como BASE permanente ya calculada
     // (runas + mejoras). no lo metas en _runas_points_ps ni vuelvas a
     // aplicar _mejora_points_add/_mejora_multi_pts, porque duplicaria mejoras.
+    // Los boosts temporales se aplican encima una sola vez con aplicarBoosts().
     if (data.points_por_seg !== undefined && !isNaN(parseFloat(data.points_por_seg))) {
         var serverPpsFinal = parseFloat(data.points_por_seg) || 0;
 
         points_ps_base = serverPpsFinal;
-        points_ps = serverPpsFinal;
-    
-        if (typeof aplicarBoosts === "function") aplicarBoosts();
+        if (typeof aplicarBoosts === "function") {
+            aplicarBoosts();
+        } else {
+            points_ps = serverPpsFinal;
+            window.points_ps = serverPpsFinal;
+        }
+    }
+
+    if (typeof setLuckDetalle === "function" && data.luck_multiplier !== undefined) {
+        setLuckDetalle({
+            total: data.luck_multiplier,
+            tienda: data.luck_shop_multiplier,
+            colecciones: data.luck_collection_multiplier,
+            colecciones_completadas: data.completed_collections,
+            collection_states: data.collection_states,
+            collection_bulk_bonus: data.collection_bulk_bonus
+        });
+    }
+    if (data.bulk !== undefined) {
+        actualizarSuerte(null, parseInt(data.bulk, 10) || bulk_runas, null);
+    }
+    if (window.RW_INIT && data.clicks_validos !== undefined) {
+        window.RW_INIT.total_tiradas = (parseInt(window.RW_INIT.total_tiradas, 10) || 0) + (parseInt(data.clicks_validos, 10) || 0);
+        if (typeof window.RW_refrescarDesbloqueosMejorasLocal === "function") window.RW_refrescarDesbloqueosMejorasLocal();
     }
     
     // Estoy hasta los huevos de hacer copias de seguridad y probando se me olviden lineas de codigo pensando que eran inutiles
@@ -270,25 +323,47 @@ function procesarRespuestaSync(data) {
 
     if (eternas.length > 0) {
         var totalMulti = eternas.reduce(function (s, r) { return s + parseFloat(r.multiplicador); }, 0);
+        var hayEternaCorrupta = eternas.some(function(r){ return _rwEsAnimCorrupta(r, "eterna_corrupta"); });
+        var runaEBase = eternas.find(function(r){ return hayEternaCorrupta ? _rwEsAnimCorrupta(r, "eterna_corrupta") : true; }) || eternas[0];
         var runaE = {
-            nombre: eternas.length > 1 ? "¡" + eternas.length + " Eternas!" : eternas[0].nombre,
+            id: runaEBase.id,
+            nombre: eternas.length > 1 ? (hayEternaCorrupta ? "Eternas Corruptas x" + eternas.length : "Eternas x" + eternas.length) : runaEBase.nombre,
             rareza: "eterna",
-            multiplicador: totalMulti.toFixed(2)
+            imagen: runaEBase.imagen,
+            runa_file: runaEBase.runa_file,
+            animacion_slug: hayEternaCorrupta ? "eterna_corrupta" : "eterna",
+            rareza_animacion: hayEternaCorrupta ? "eterna_corrupta" : "eterna",
+            variante: hayEternaCorrupta ? "corrupta" : "normal",
+            multiplicador: totalMulti.toFixed(2),
+            cantidad: eternas.length
         };
-        if (getAnimActiva("eterna")) {
-            lanzarEterna(runaE);
+        if (window.RW_DEBUG_RUNAS) console.log("[RW tirada especial]", runaE);
+        if (typeof getAnimActiva === "function" && getAnimActiva(runaE.animacion_slug)) {
+            if (hayEternaCorrupta && typeof window.RW_lanzarAnimacionCorruptaEspecial === "function") window.RW_lanzarAnimacionCorruptaEspecial(runaE, "eterna_corrupta");
+            else lanzarEterna(runaE);
         } else {
             mostrarResultado(runaE);
         }
     } else if (divinas.length > 0) {
         var totalMulti = divinas.reduce(function (s, r) { return s + parseFloat(r.multiplicador); }, 0);
+        var hayDivinaCorrupta = divinas.some(function(r){ return _rwEsAnimCorrupta(r, "divina_corrupta"); });
+        var runaDBase = divinas.find(function(r){ return hayDivinaCorrupta ? _rwEsAnimCorrupta(r, "divina_corrupta") : true; }) || divinas[0];
         var runaD = {
-            nombre: divinas.length > 1 ? "¡" + divinas.length + " Divinas!" : divinas[0].nombre,
+            id: runaDBase.id,
+            nombre: divinas.length > 1 ? (hayDivinaCorrupta ? "Divinas Corruptas x" + divinas.length : "Divinas x" + divinas.length) : runaDBase.nombre,
             rareza: "divina",
-            multiplicador: totalMulti.toFixed(2)
+            imagen: runaDBase.imagen,
+            runa_file: runaDBase.runa_file,
+            animacion_slug: hayDivinaCorrupta ? "divina_corrupta" : "divina",
+            rareza_animacion: hayDivinaCorrupta ? "divina_corrupta" : "divina",
+            variante: hayDivinaCorrupta ? "corrupta" : "normal",
+            multiplicador: totalMulti.toFixed(2),
+            cantidad: divinas.length
         };
-        if (getAnimActiva("divina")) {
-            lanzarDivina(runaD);
+        if (window.RW_DEBUG_RUNAS) console.log("[RW tirada especial]", runaD);
+        if (typeof getAnimActiva === "function" && getAnimActiva(runaD.animacion_slug)) {
+            if (hayDivinaCorrupta && typeof window.RW_lanzarAnimacionCorruptaEspecial === "function") window.RW_lanzarAnimacionCorruptaEspecial(runaD, "divina_corrupta");
+            else lanzarDivina(runaD);
         } else {
             mostrarResultado(runaD);
         }
@@ -343,6 +418,15 @@ function procesarRespuestaSync(data) {
 
     // refrescar cantidades en panel lateral y coleccion
     if (data.runas) actualizarPanelRunas(data.runas);
+    if (window.RW_DEBUG_ECONOMIA) {
+        console.log("[RW economia][procesarRespuestaSync:despues]", {
+            count: rwProcesarRespuestaSyncCount,
+            batch_id: data && (data.batch_id || data.pack_id),
+            points_despues: typeof points !== "undefined" ? points : null,
+            points_ps_despues: typeof points_ps !== "undefined" ? points_ps : null,
+            points_ps_base_despues: typeof points_ps_base !== "undefined" ? points_ps_base : null
+        });
+    }
 }
 
 // ── 3. Listeners ─────────────────────────────────────────────
@@ -490,6 +574,8 @@ function actualizarPanelRunas(runas) {
 function guardarProgreso() {
     fetch("PHP/guardar_progreso.php", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ debug: window.RW_DEBUG_ECONOMIA ? 1 : 0 })
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
@@ -540,9 +626,14 @@ function guardarProgreso() {
             if (typeof points_ps !== "undefined" && data.points_por_seg !== undefined) {
                 var serverPps = parseFloat(data.points_por_seg) || 0;
 
-                // valor final autoritativo del servidor; no es raw de runas.
-                points_ps = serverPps;
+                // valor base autoritativo del servidor; no incluye boosts temporales.
                 points_ps_base = serverPps;
+                if (typeof aplicarBoosts === "function") {
+                    aplicarBoosts();
+                } else {
+                    points_ps = serverPps;
+                    window.points_ps = serverPps;
+                }
             }
 
             actualizarPantalla();

@@ -104,6 +104,53 @@ function calcularStatsJugadorConConfig($conexion, $jugador_id) {
     list($coins_ps_max, $points_ps_max) = calcularStatsJugador($conexion, $jugador_id);
     return [max(1.0, floatval($coins_ps_max)), max(0.0, floatval($points_ps_max)), max(1.0, floatval($coins_ps_max)), max(0.0, floatval($points_ps_max))];
 }
+
+function debugEconomiaActivo(array $datos = []): bool {
+    $debugBody = isset($datos["debug"]) && (string)$datos["debug"] === "1";
+    $debugQuery = isset($_GET["debug"]) && (string)$_GET["debug"] === "1";
+    $local = in_array($_SERVER["REMOTE_ADDR"] ?? "", ["127.0.0.1", "::1"], true);
+    return $local || $debugBody || $debugQuery;
+}
+
+function topAportesPpsJugador(mysqli $conexion, int $jugador_id, int $limit = 10): array {
+    $limit = max(1, min(50, $limit));
+    $stmt = $conexion->prepare("
+        SELECT r.nombre, jr.cantidad, r.multiplicador,
+               (jr.cantidad * r.multiplicador) AS aporte
+        FROM jugador_runas jr
+        INNER JOIN runas r ON jr.runa_id = r.id
+        WHERE jr.jugador_id = ?
+          AND jr.cantidad > 0
+        ORDER BY aporte DESC
+        LIMIT $limit
+    ");
+    $stmt->bind_param("i", $jugador_id);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return array_map(function ($r) {
+        return [
+            "nombre" => $r["nombre"],
+            "cantidad" => (int)$r["cantidad"],
+            "multiplicador" => (float)$r["multiplicador"],
+            "aporte" => (float)$r["aporte"],
+        ];
+    }, $rows);
+}
+
+function totalAportesPpsJugador(mysqli $conexion, int $jugador_id): float {
+    $stmt = $conexion->prepare("
+        SELECT COALESCE(SUM(r.multiplicador * jr.cantidad), 0) AS total
+        FROM jugador_runas jr
+        INNER JOIN runas r ON jr.runa_id = r.id
+        WHERE jr.jugador_id = ?
+    ");
+    $stmt->bind_param("i", $jugador_id);
+    $stmt->execute();
+    $total = (float)($stmt->get_result()->fetch_assoc()["total"] ?? 0);
+    $stmt->close();
+    return $total;
+}
 /**
  * Devuelve informacion completa de suerte del jugador.
  * Formula nueva:
@@ -111,6 +158,16 @@ function calcularStatsJugadorConConfig($conexion, $jugador_id) {
  *   suerte_tienda = min(1.5, 1 + SUM(mejora_suerte.valor * nivel))
  *   suerte_colecciones = 1.5 ^ colecciones_completadas
  */
+function coleccionBasicaCorruptaCompletaJugador($conexion, $jugador_id) {
+    $stmt = $conexion->prepare("\n        SELECT\n          COUNT(*) AS total_basicas,\n          COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas\n        FROM runas r\n        LEFT JOIN grupos_runas g ON r.grupo_id = g.id\n        LEFT JOIN jugador_runas jr ON r.id = jr.runa_id AND jr.jugador_id = ?\n        WHERE r.activa = 1\n          AND LOWER(COALESCE(g.nombre, 'Runas Basicas')) NOT LIKE '%inter%'\n          AND LOWER(COALESCE(g.nombre, 'Runas Basicas')) NOT LIKE '%avanz%'\n          AND LOWER(COALESCE(g.nombre, 'Runas Basicas')) NOT LIKE '%caos%'\n          AND LOWER(r.nombre) LIKE '%corrupt%'\n    ");
+    if (!$stmt) return false;
+    $stmt->bind_param("i", $jugador_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row && (int)$row["total_basicas"] > 0 && (int)$row["poseidas"] >= (int)$row["total_basicas"];
+}
+
 function calcularSuerteJugadorDetalle($conexion, $jugador_id) {
     $stmt = $conexion->prepare("\n        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS suerte_bonus\n        FROM jugador_mejoras jm\n        INNER JOIN mejoras m ON m.id = jm.mejora_id\n        WHERE jm.jugador_id = ?\n          AND m.activa = 1\n          AND m.tipo IN ('suerte', 'luck', 'luck_add')\n    ");
     $suerte_bonus = 0.0;
@@ -124,17 +181,13 @@ function calcularSuerteJugadorDetalle($conexion, $jugador_id) {
 
     $suerte_tienda = max(1.0, min(1.5, 1.0 + $suerte_bonus));
 
-    $stmt = $conexion->prepare("\n        SELECT COUNT(*) AS completadas\n        FROM (\n            SELECT\n                COALESCE(r.grupo_id, 0) AS grupo_id_norm,\n                COUNT(*) AS total_runas,\n                COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas\n            FROM runas r\n            LEFT JOIN jugador_runas jr\n                ON jr.runa_id = r.id AND jr.jugador_id = ?\n            WHERE r.activa = 1\n            GROUP BY COALESCE(r.grupo_id, 0)\n            HAVING total_runas > 0 AND poseidas >= total_runas\n        ) completas\n    ");
-    $completadas = 0;
-    if ($stmt) {
-        $stmt->bind_param("i", $jugador_id);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $completadas = (int)($row["completadas"] ?? 0);
-    }
+    $basica_normal = coleccionBasicaCompletaJugador($conexion, $jugador_id);
+    $basica_corrupta = coleccionBasicaCorruptaCompletaJugador($conexion, $jugador_id);
+    $completadas = ($basica_normal ? 1 : 0) + ($basica_corrupta ? 1 : 0);
 
-    $suerte_colecciones = pow(1.5, max(0, $completadas));
+    $suerte_colecciones = 1.0;
+    if ($basica_normal) $suerte_colecciones *= 1.5;
+    if ($basica_corrupta) $suerte_colecciones *= 2.0;
     $suerte_total = $suerte_tienda * $suerte_colecciones;
 
     return [
@@ -143,6 +196,15 @@ function calcularSuerteJugadorDetalle($conexion, $jugador_id) {
         "colecciones" => $suerte_colecciones,
         "colecciones_completadas" => $completadas,
         "bonus_por_coleccion" => 1.5,
+        "bulk_bonus_colecciones" => $basica_corrupta ? 2 : 0,
+        "colecciones_estado" => [
+            "basica_normal" => ["completa" => $basica_normal],
+            "basica_corrupta" => ["completa" => $basica_corrupta],
+            "intermedia_normal" => ["completa" => false, "disponible" => false],
+            "intermedia_corrupta" => ["completa" => false, "disponible" => false],
+            "avanzada_normal" => ["completa" => false, "disponible" => false],
+            "avanzada_corrupta" => ["completa" => false, "disponible" => false],
+        ],
     ];
 }
 

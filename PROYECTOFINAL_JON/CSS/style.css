@@ -2766,7 +2766,7 @@ body {
 /* detalle extra: pequeña pista textual en hover, solo desktop */
 @media (hover:hover) and (pointer:fine) {
     .runa-card-btn:not(.runa-bloqueada) .runa-card-main::after {
-        content: "abrir";
+        content: none;
         position: absolute;
         right: 40px;
         top: 50%;
@@ -2786,9 +2786,36 @@ body {
     }
 
     .runa-card-btn.expandida .runa-card-main::after {
-        content: "cerrar";
+        content: none;
         opacity: 0.65;
     }
+}
+
+/* v9.1: probabilidades mas legibles y sin pista textual de hover */
+.prob-fila {
+    gap: 12px;
+    min-height: 28px;
+}
+.prob-label {
+    font-size: 0.68rem;
+    color: rgba(221,228,240,0.72);
+}
+.prob-val {
+    font-size: 0.92rem;
+    color: #f1f4ff;
+    letter-spacing: 1.2px;
+}
+.prob-suerte .prob-val {
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255,215,0,0.22);
+}
+.ajuste-btn-anim-global {
+    margin-top: 12px;
+    width: 100%;
+}
+.ajuste-btn-anim-global.anim-global-off {
+    color: rgba(221,228,240,0.72);
+    border-color: rgba(221,228,240,0.22);
 }
 
 /* móvil: sin texto "abrir/cerrar", solo flecha más grande */
@@ -2975,4 +3002,40 @@ body {
         height: 24px;
         flex-basis: 24px;
     }
+}
+
+/* ==========================================================
+   RUNAWORLD — colección: botones más legibles desktop
+   ========================================================== */
+
+#seccion-coleccion .coleccion-lista-pill,
+#seccion-coleccion .coleccion-variante-pill {
+    min-height: 42px;
+    padding: 0 22px;
+    font-size: 0.78rem;
+    letter-spacing: 3.4px;
+    line-height: 1.1;
+}
+
+#seccion-coleccion .coleccion-lista-pill {
+    min-width: 178px;
+}
+
+#seccion-coleccion .coleccion-variante-pill {
+    min-width: 138px;
+}
+
+#seccion-coleccion .coleccion-bonus-suerte-v74 {
+    padding: 11px 14px;
+    max-width: 280px;
+}
+
+#seccion-coleccion .coleccion-bonus-suerte-v74 strong {
+    font-size: 0.95rem;
+}
+
+#seccion-coleccion .coleccion-bonus-label,
+#seccion-coleccion .coleccion-bonus-sub {
+    font-size: 0.58rem;
+    line-height: 1.25;
 }

@@ -1346,6 +1346,30 @@
         min-height: calc(100dvh - 164px) !important;
         height: calc(100dvh - 164px) !important;
     }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 35 !important;
+        background: rgba(5,5,8,0.96) !important;
+        backdrop-filter: blur(10px) !important;
+        border-bottom: 1px solid rgba(255,215,0,0.14) !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+
+    #seccion-coleccion .col-contador {
+        position: sticky !important;
+        top: 74px !important;
+        z-index: 30 !important;
+        background: rgba(5,5,8,0.94) !important;
+        border-bottom: 1px solid rgba(255,215,0,0.10) !important;
+    }
+
+    #panel-mis-runas-mobile .grupo-runas,
+    #panel-mis-runas-mobile .runa-card-btn {
+        max-width: 100% !important;
+    }
 }
 
 @media (max-width: 420px) {
@@ -1367,5 +1391,56 @@
 
     .mob-rate {
         font-size: .66rem !important;
+    }
+}
+
+
+/* ==========================================================
+   RUNAWORLD MOBILE — colección: tabs más legibles
+   ========================================================== */
+
+@media (max-width: 1024px) {
+    #seccion-coleccion .coleccion-lista-pill,
+    #seccion-coleccion .coleccion-variante-pill {
+        min-height: 40px !important;
+        padding: 0 16px !important;
+        font-size: 0.68rem !important;
+        letter-spacing: 2.6px !important;
+        line-height: 1.1 !important;
+    }
+
+    #seccion-coleccion .coleccion-lista-pill {
+        min-width: 156px !important;
+    }
+
+    #seccion-coleccion .coleccion-variante-pill {
+        min-width: 122px !important;
+    }
+
+    #seccion-coleccion .coleccion-bonus-suerte-v74 {
+        padding: 10px 12px !important;
+        max-width: none !important;
+    }
+
+    #seccion-coleccion .coleccion-bonus-suerte-v74 strong {
+        font-size: 0.86rem !important;
+    }
+
+    #seccion-coleccion .coleccion-bonus-label,
+    #seccion-coleccion .coleccion-bonus-sub {
+        font-size: 0.56rem !important;
+        line-height: 1.25 !important;
+    }
+}
+
+@media (max-width: 520px) {
+    #seccion-coleccion .coleccion-lista-pill {
+        min-width: 150px !important;
+        font-size: 0.66rem !important;
+    }
+
+    #seccion-coleccion .coleccion-variante-pill {
+        min-width: 118px !important;
+        font-size: 0.62rem !important;
     }
 }

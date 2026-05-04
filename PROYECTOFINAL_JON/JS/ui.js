@@ -55,13 +55,31 @@
 // todos los parseFloat devuelven NaN --> los defaults posteriores entran
 window.RW_UI_VERSION = '8.0';
 const _i = window.RW_INIT || {};
-let coins         = parseFloat(_i.coins)        || 0;
-let points        = parseFloat(_i.points)       || 0;
-let coins_ps      = parseFloat(_i.coins_ps)     || 1;
-let points_ps     = parseFloat(_i.points_ps)    || 0;
-let coins_ps_max  = parseFloat(_i.coins_ps_max) || coins_ps;
-let points_ps_max = parseFloat(_i.points_ps_max)|| points_ps;
-let bulk_runas    = parseInt(_i.bulk_total)     || 1;
+let coins                   = parseFloat(_i.coins)                   || 0;
+let points                  = parseFloat(_i.points)                  || 0;
+let coins_ps                = parseFloat(_i.coins_ps)                || 1;
+let points_ps               = parseFloat(_i.points_ps)               || 0;
+let coins_ps_max            = parseFloat(_i.coins_ps_max)            || coins_ps;
+let points_ps_max           = parseFloat(_i.points_ps_max)           || points_ps;
+let collection_bulk_bonus = parseInt(_i.collection_bulk_bonus, 10) || 0;
+let bulk_runas = (parseInt(_i.bulk_total, 10) || 1) + collection_bulk_bonus;
+window.bulk_runas = bulk_runas;
+
+if (
+    collection_bulk_bonus <= 0 &&
+    _i.collection_states &&
+    _i.collection_states.basica_corrupta &&
+    (
+        _i.collection_states.basica_corrupta.completa === true ||
+        _i.collection_states.basica_corrupta.completa === 1 ||
+        _i.collection_states.basica_corrupta.completa === '1'
+    )
+) {
+    collection_bulk_bonus = 2;
+    bulk_runas += 2;
+}
+
+window.bulk_runas = bulk_runas;
 
 // suerte total = suerte de tienda x bonus de colección.
 // tienda: 1.0 -> 1.5 por los 5 niveles de +0.1x
@@ -104,26 +122,27 @@ function recalcularLuckTotal() {
 recalcularLuckTotal();
 
 function RW_actualizarBonusColeccionVisual() {
-    var completadas = Math.max(0, parseInt(completed_collections, 10) || 0);
-    var activo = completadas > 0 || rw_basic_collection_complete === true;
-    var totalColeccion = Math.max(1.0, parseFloat(luck_collection_multiplier) || 1.0);
+    var estados = (window.RW_INIT && window.RW_INIT.collection_states) ? window.RW_INIT.collection_states : {};
+    var basicaNormalCompleta = rw_basic_collection_complete === true || !!(estados.basica_normal && estados.basica_normal.completa);
+    var basicaCorruptaCompleta = !!(estados.basica_corrupta && estados.basica_corrupta.completa);
 
     document.querySelectorAll('.coleccion-bonus-suerte-v74').forEach(function (box) {
+        var tipo = box.dataset.bonusColeccion || 'basica_normal';
+        var activo = tipo === 'basica_corrupta' ? basicaCorruptaCompleta : basicaNormalCompleta;
         box.classList.toggle('activo', activo);
         box.classList.toggle('bloqueado', !activo);
 
         var label = box.querySelector('.coleccion-bonus-label');
         var sub = box.querySelector('.coleccion-bonus-sub');
-
-        if (label) label.textContent = activo ? 'Bonus reclamado' : 'Bonus bloqueado';
-        if (sub) {
-            sub.textContent = activo
-                ? ('Completadas: ' + Math.max(1, completadas) + ' · Total colección x' + totalColeccion.toFixed(2))
-                : 'Bloqueado hasta completar una colección';
+        if (tipo === 'basica_corrupta') {
+            if (label) label.textContent = activo ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada';
+            if (sub) sub.textContent = activo ? 'x2 suerte y +2 bulk activos' : 'Completa las runas basicas corruptas';
+        } else {
+            if (label) label.textContent = activo ? 'Basica normal reclamada' : 'Basica normal bloqueada';
+            if (sub) sub.textContent = activo ? 'x1.5 suerte activo' : 'Completa las runas basicas normales';
         }
     });
-}
-window.RW_actualizarBonusColeccionVisual = RW_actualizarBonusColeccionVisual;
+}window.RW_actualizarBonusColeccionVisual = RW_actualizarBonusColeccionVisual;
 RW_actualizarBonusColeccionVisual();
 
 // detecta la colección básica completa usando los botones ya pintados.
@@ -144,6 +163,12 @@ function RW_recalcularSuerteColecciones(forzarCompleta) {
 
     if (completa) {
         rw_basic_collection_complete = true;
+        if (window.RW_INIT) {
+            window.RW_INIT.basic_collection_complete = true;
+            window.RW_INIT.collection_states = window.RW_INIT.collection_states || {};
+            window.RW_INIT.collection_states.basica_normal = window.RW_INIT.collection_states.basica_normal || {};
+            window.RW_INIT.collection_states.basica_normal.completa = true;
+        }
         completed_collections = Math.max(1, parseInt(completed_collections, 10) || 0);
         luck_collection_multiplier = Math.max(luck_collection_multiplier, RW_COLLECTION_LUCK_BONUS);
     }
@@ -216,11 +241,22 @@ const probRareza = _i.prob_rareza || {};
 // formateo de numeros: 1500 --> "1.5k", 2500000 --> "2.5M", etc. el replace
 // final quita ".0" y ".00" para que "5000000" quede "5M" en lugar de "5.00M"
 function formatNum(n) {
-    if (n >= 1e12) return (n/1e12).toFixed(2).replace(/\.?0+$/,"") + "T";
-    if (n >= 1e9)  return (n/1e9) .toFixed(2).replace(/\.?0+$/,"") + "B";
-    if (n >= 1e6)  return (n/1e6) .toFixed(2).replace(/\.?0+$/,"") + "M";
-    if (n >= 1e3)  return (n/1e3) .toFixed(2).replace(/\.?0+$/,"") + "k";
-    return Math.floor(n).toString();
+    n = Number(n) || 0;
+    const abs = Math.abs(n);
+    const sign = n < 0 ? "-" : "";
+
+    function fmt(value, suffix) {
+        return sign + value.toFixed(2).replace(/\.?0+$/, "") + suffix;
+    }
+
+    if (abs >= 1e18) return fmt(abs / 1e18, "Qi");
+    if (abs >= 1e15) return fmt(abs / 1e15, "Qa");
+    if (abs >= 1e12) return fmt(abs / 1e12, "T");
+    if (abs >= 1e9)  return fmt(abs / 1e9,  "B");
+    if (abs >= 1e6)  return fmt(abs / 1e6,  "M");
+    if (abs >= 1e3)  return fmt(abs / 1e3,  "K");
+
+    return sign + Math.floor(abs).toString();
 }
 
 // al cargar formateo los costes pintados desde php. vienen con el numero
@@ -246,6 +282,16 @@ document.querySelectorAll(".coste-num").forEach(el => {
 //   bulk / bulk_normal:  + n (cada nivel suma 1 runa)
 //   bulk_extra:          + v si n>=1
 function recalcularStatsDesdeMejoras(mejoras) {
+    if (window.RW_DEBUG_ECONOMIA) {
+        console.log("[RW economia][recalcularStatsDesdeMejoras:antes]", {
+            points_ps: points_ps,
+            points_ps_base: points_ps_base,
+            runas_points_ps: _runas_points_ps,
+            mejora_points_add: _mejora_points_add,
+            mejora_multi_pts: _mejora_multi_pts,
+            mejoras: mejoras
+        });
+    }
     let coins_add    = 0.0;
     let multi_coins  = 1.0;
     let points_add   = 0.0;
@@ -311,7 +357,8 @@ function recalcularStatsDesdeMejoras(mejoras) {
     points_ps_base = nuevaPointsPs;
     points_ps      = nuevaPointsPs;
 
-    bulk_runas = 1 + bulk_add;
+    bulk_runas = 1 + bulk_add + collection_bulk_bonus;
+    window.bulk_runas = bulk_runas;
     const bulkEl = document.getElementById("bulk-display");
     if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
 
@@ -319,6 +366,15 @@ function recalcularStatsDesdeMejoras(mejoras) {
     // reaplicar boosts (ya solo de coins/points) sobre los nuevos valores
     if (typeof aplicarBoosts === "function") {
         aplicarBoosts();
+    }
+    if (window.RW_DEBUG_ECONOMIA) {
+        console.log("[RW economia][recalcularStatsDesdeMejoras:despues]", {
+            runasBaseLimpia: runasBaseLimpia,
+            points_add: points_add,
+            multi_points: multi_points,
+            points_ps_base: points_ps_base,
+            points_ps: points_ps
+        });
     }
 }
 
@@ -340,8 +396,13 @@ function actualizarPantalla() {
     var suerteEl = document.getElementById("suerte-display");
     if (suerteEl) suerteEl.textContent = luckTxt;
 
+    var bulkReal = parseInt(bulk_runas || window.bulk_runas || 1, 10) || 1;
+    window.bulk_runas = bulkReal;
+
     var bulkEl = document.getElementById("bulk-display");
-    if (bulkEl) bulkEl.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
+    if (bulkEl) {
+        bulkEl.textContent = bulkReal + " runa" + (bulkReal > 1 ? "s" : "");
+    }
 }
 
 // tick cada segundo: sumo coins_ps y points_ps a las variables y repinto.
@@ -367,7 +428,8 @@ resetIdleTimer();
 // no romper la cadena. solo respeta el bulk si llega
 function actualizarSuerte(_nuevaSuerteGrupo, nuevoBulk, _bonusConseguidos) {
     if (nuevoBulk !== undefined) {
-        bulk_runas = nuevoBulk;
+        bulk_runas = parseInt(nuevoBulk, 10) || bulk_runas;
+        window.bulk_runas = bulk_runas;
         const el = document.getElementById("bulk-display");
         if (el) el.textContent = bulk_runas + " runa" + (bulk_runas > 1 ? "s" : "");
     }
@@ -512,11 +574,12 @@ window.RW_actualizarVisibilidadRunasLaterales = function () {
         var grupoEl = card.closest('.grupo-runas[data-runa-grupo]');
         return (!grupoEl || grupoEl.style.display !== 'none') && card.style.display !== 'none';
     });
-    var desbloqueadas = visibles.filter(function (card) {
-        return RW_cantidadRunaLateral(card) > 0 || !card.classList.contains('runa-bloqueada');
-    }).length;
-    var countEl = document.getElementById('panel-runas-count');
-    if (countEl) countEl.textContent = desbloqueadas + '/' + visibles.length;
+    visibles.forEach(function (card) {
+        if (card.classList.contains('runa-bloqueada')) {
+            var nombre = card.querySelector('.runa-card-nombre');
+            if (nombre) nombre.textContent = 'Runa desconocida';
+        }
+    });
 };
 
 
@@ -580,7 +643,13 @@ function mostrarSeccion(id, btn) {
     // animaciones de coleccion: arranco si entramos, paro si salimos. el
     // setTimeout 60ms es para dar tiempo a que el dom pinte las cartas
     // antes de que los canvas empiecen a dibujar sobre ellas
-    if (esCole) { setTimeout(() => { iniciarNeonBotones(); iniciarMiniCanvas(); }, 60); }
+    if (esCole) {
+        if (typeof window.RW_actualizarVisibilidadRunasLaterales === 'function') window.RW_actualizarVisibilidadRunasLaterales();
+        if (typeof window.RW_actualizarBonusColeccionVisual === 'function') window.RW_actualizarBonusColeccionVisual();
+        if (typeof window.RW_recalcularSuerteColecciones === 'function') window.RW_recalcularSuerteColecciones();
+        if (typeof window.RW_aplicarVistaColeccionV81 === 'function') setTimeout(window.RW_aplicarVistaColeccionV81, 0);
+        setTimeout(() => { iniciarNeonBotones(); iniciarMiniCanvas(); }, 60);
+    }
     else pararAnimColeccion();
 
     // si entra al menu de estadisticas, refresco los valores con las variables
@@ -680,6 +749,29 @@ function setLuck(v) {
 }
 function setLuckDetalle(detalle) {
     if (!detalle || typeof detalle !== "object") return;
+    if (detalle.collection_states !== undefined && window.RW_INIT) {
+        window.RW_INIT.collection_states = detalle.collection_states || {};
+        if (window.RW_INIT.collection_states.basica_normal && window.RW_INIT.collection_states.basica_normal.completa) {
+            window.RW_INIT.basic_collection_complete = true;
+            rw_basic_collection_complete = true;
+        }
+    }
+    if (detalle.collection_bulk_bonus !== undefined) {
+        collection_bulk_bonus = parseInt(detalle.collection_bulk_bonus, 10) || 0;
+
+        if (window.RW_INIT) {
+            window.RW_INIT.collection_bulk_bonus = collection_bulk_bonus;
+        }
+
+        if (Array.isArray(window.RW_INIT?.mejoras_completas)) {
+            recalcularStatsDesdeMejoras(window.RW_INIT.mejoras_completas);
+        } else {
+            bulk_runas = Math.max(1, bulk_runas + collection_bulk_bonus);
+            actualizarPantalla();
+        }
+        window.bulk_runas = bulk_runas;
+        actualizarPantalla();
+    }
     if (detalle.tienda !== undefined) {
         luck_shop_multiplier = Math.max(1.0, Math.min(1.5, parseFloat(detalle.tienda) || luck_shop_multiplier));
     }
@@ -697,15 +789,33 @@ function setLuckDetalle(detalle) {
 
     const total = (detalle.total !== undefined) ? parseFloat(detalle.total) : recalcularLuckTotal();
     if (!isNaN(total)) setLuck(total);
+    RW_actualizarBonusColeccionVisual();
 }
 
 function setPointsPs(v) {
     const n = parseFloat(v);
     if (!isNaN(n)) {
+        if (window.RW_DEBUG_ECONOMIA) {
+            console.log("[RW economia][setPointsPs]", {
+                valor_servidor_base: n,
+                points_ps_antes: points_ps,
+                points_ps_base_antes: points_ps_base
+            });
+        }
         points_ps_base = n;
-        points_ps      = n;
-        window.points_ps = n;
-        actualizarPantalla();
+        if (typeof aplicarBoosts === "function") {
+            aplicarBoosts();
+        } else {
+            points_ps = n;
+            window.points_ps = n;
+            actualizarPantalla();
+        }
+        if (window.RW_DEBUG_ECONOMIA) {
+            console.log("[RW economia][setPointsPs:despues]", {
+                points_ps: points_ps,
+                points_ps_base: points_ps_base
+            });
+        }
     }
 }
 function setCoinsPs(v) {
@@ -748,3 +858,4 @@ window.getPointsActual = function () {
 window.getCoinsActual = function () {
     return coins;
 };
+

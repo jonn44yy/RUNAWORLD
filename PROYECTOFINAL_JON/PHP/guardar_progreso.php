@@ -34,6 +34,8 @@ require_once "conexion.php";
 require_once "calcular_stats.php";  // 28/04 v3.1: helper compartido
 
 $id_usuario = $_SESSION["idUsuario"];
+$datos = json_decode(file_get_contents("php://input"), true);
+if (!is_array($datos)) $datos = [];
 
 $conexion->begin_transaction();
 
@@ -104,17 +106,41 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    $debug_economia = null;
+    if (function_exists('debugEconomiaActivo') && debugEconomiaActivo($datos)) {
+        $debug_economia = [
+            "endpoint" => "guardar_progreso.php",
+            "jugador_id" => $jugador_id,
+            "points_antes" => $points_bd,
+            "points_despues" => $points_final,
+            "points_por_seg_antes" => null,
+            "points_por_seg_despues" => $points_ps_real,
+            "elapsed_segundos" => $elapsed,
+            "passive_awarded" => $points_ps_real * $elapsed,
+            "clicks_recibidos" => 0,
+            "cantidad_bulk" => null,
+            "tiradas_efectivas" => 0,
+            "count_runas_ganadas" => 0,
+            "batch_id" => null,
+            "batch_ya_procesado" => false,
+            "pps_recalc_query_total" => function_exists('totalAportesPpsJugador') ? totalAportesPpsJugador($conexion, $jugador_id) : null,
+            "top_aportes_pps" => function_exists('topAportesPpsJugador') ? topAportesPpsJugador($conexion, $jugador_id, 10) : [],
+        ];
+    }
+
     $conexion->commit();
 
     // devuelvo el estado real para que el cliente lo refleje. asi se
     // arregla auto-magicamente cualquier display inflado del cliente
-    echo json_encode([
+    $respuesta = [
         "ok"             => true,
         "coins"          => $coins_final,
         "points"         => $points_final,
         "coins_por_seg"  => $coins_ps_real,
         "points_por_seg" => $points_ps_real
-    ]);
+    ];
+    if ($debug_economia !== null) $respuesta["debug_economia"] = $debug_economia;
+    echo json_encode($respuesta);
 
 } catch (Exception $e) {
     @$conexion->rollback();

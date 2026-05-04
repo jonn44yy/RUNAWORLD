@@ -98,7 +98,13 @@ function aciertaRarezaConSuerte(int $denom, float $luck): bool {
     return rngFloat01() < min(1.0, $probabilidad);
 }
 
-
+function animacionCorruptaKeyPorRareza(string $rareza): string {
+    if ($rareza === "eterna") return "eterna_corrupta";
+    if ($rareza === "divina") return "divina_corrupta";
+    if ($rareza === "mitica") return "mitica_corrupta";
+    if ($rareza === "legendaria") return "legendaria_corrupta";
+    return "";
+}
 
 function aplicarVarianteCorruptaSiToca(array $runa, bool $basicas_completas, array $corruptas_por_rareza): array {
     if (!$basicas_completas) return $runa;
@@ -110,13 +116,10 @@ function aplicarVarianteCorruptaSiToca(array $runa, bool $basicas_completas, arr
         $corrupta["variante"] = "corrupta";
         $corrupta["variante_label"] = "Corrupta";
         $corrupta["base_runa_id"] = (int)($runa["id"] ?? 0);
-        if ($rareza === "mitica") {
-            $corrupta["animacion_slug"] = "mitica_corrupta";
-            $corrupta["rareza_animacion"] = "mitica_corrupta";
-        }
-        if ($rareza === "legendaria") {
-            $corrupta["animacion_slug"] = "legendaria_corrupta";
-            $corrupta["rareza_animacion"] = "legendaria_corrupta";
+        $anim_key = animacionCorruptaKeyPorRareza($rareza);
+        if ($anim_key !== "") {
+            $corrupta["animacion_slug"] = $anim_key;
+            $corrupta["rareza_animacion"] = $anim_key;
         }
         return $corrupta;
     }
@@ -124,13 +127,10 @@ function aplicarVarianteCorruptaSiToca(array $runa, bool $basicas_completas, arr
     $runa["variante"] = "corrupta";
     $runa["variante_label"] = "Corrupta";
     $runa["multiplicador"] = ((float)($runa["multiplicador"] ?? 1)) * 100;
-    if ($rareza === "mitica") {
-        $runa["animacion_slug"] = "mitica_corrupta";
-        $runa["rareza_animacion"] = "mitica_corrupta";
-    }
-    if ($rareza === "legendaria") {
-        $runa["animacion_slug"] = "legendaria_corrupta";
-        $runa["rareza_animacion"] = "legendaria_corrupta";
+    $anim_key = animacionCorruptaKeyPorRareza($rareza);
+    if ($anim_key !== "") {
+        $runa["animacion_slug"] = $anim_key;
+        $runa["rareza_animacion"] = $anim_key;
     }
     $runa["nombre"] = ($runa["nombre"] ?? "Runa") . " Corrupta";
     return $runa;
@@ -159,7 +159,16 @@ if (!in_array($motivo, ["interval","burst","unload","critical"], true)) {
 // idempotencia por sesion
 if (!isset($_SESSION["batches_procesados"])) $_SESSION["batches_procesados"] = [];
 if (in_array($batch_id, $_SESSION["batches_procesados"], true)) {
-    echo json_encode(["ok" => true, "duplicado" => true, "clicks_validos" => 0]);
+    $resp_dup = ["ok" => true, "duplicado" => true, "clicks_validos" => 0];
+    if (function_exists('debugEconomiaActivo') && debugEconomiaActivo(is_array($datos) ? $datos : [])) {
+        $resp_dup["debug_economia"] = [
+            "endpoint" => "tirar_runa.php",
+            "batch_id" => $batch_id,
+            "batch_ya_procesado" => true,
+            "clicks_recibidos" => $clicks_envs,
+        ];
+    }
+    echo json_encode($resp_dup);
     exit;
 }
 
@@ -238,7 +247,9 @@ try {
             "luck_multiplier"   => $luck_multiplier,
         "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
         "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
-        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0)
+        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0),
+        "collection_states" => ($luck_detalle["colecciones_estado"] ?? []),
+        "collection_bulk_bonus" => ($luck_detalle["bulk_bonus_colecciones"] ?? 0)
         ]);
         exit;
     }
@@ -263,6 +274,7 @@ try {
     $bulk_row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     $cantidad_bulk = max(1, 1 + (int)($bulk_row["bulk_add"] ?? 0));
+    $cantidad_bulk += (int)($luck_detalle["bulk_bonus_colecciones"] ?? 0);
 
     $total_sorteos = $clicks_validos * $cantidad_bulk;
 
@@ -325,6 +337,26 @@ try {
     foreach ($runas_corruptas_all as $cr) {
         $corruptas_por_rareza[$cr["rareza"]] = $cr;
     }
+    $debug_runa_forzada = null;
+    $debug_nombre = trim((string)($datos["debug_runa"] ?? ""));
+    $debug_local = in_array($_SERVER["REMOTE_ADDR"] ?? "", ["127.0.0.1", "::1"], true);
+    if ($debug_local && $debug_nombre !== "") {
+        foreach (array_merge($runas_all, $runas_corruptas_all) as $dbg) {
+            if ((string)($dbg["id"] ?? "") === $debug_nombre || strcasecmp((string)($dbg["nombre"] ?? ""), $debug_nombre) === 0) {
+                $debug_runa_forzada = $dbg;
+                if (stripos((string)$debug_runa_forzada["nombre"], "corrupt") !== false) {
+                    $debug_runa_forzada["variante"] = "corrupta";
+                    $debug_runa_forzada["variante_label"] = "Corrupta";
+                    $anim_key = animacionCorruptaKeyPorRareza((string)$debug_runa_forzada["rareza"]);
+                    if ($anim_key !== "") {
+                        $debug_runa_forzada["animacion_slug"] = $anim_key;
+                        $debug_runa_forzada["rareza_animacion"] = $anim_key;
+                    }
+                }
+                break;
+            }
+        }
+    }
 
     if (empty($runas_all)) {
         $conexion->rollback();
@@ -384,13 +416,14 @@ try {
             $runa_elegida = $cands[array_rand($cands)];
         }
 
-        if ($runa_elegida) {
-            $runa_final = aplicarVarianteCorruptaSiToca($runa_elegida, $basicas_completas, $corruptas_por_rareza);
+        if ($runa_elegida || $debug_runa_forzada) {
+            $runa_final = $debug_runa_forzada ?: aplicarVarianteCorruptaSiToca($runa_elegida, $basicas_completas, $corruptas_por_rareza);
             $rid = (int) $runa_final["id"];
             $contador_runas[$rid] = ($contador_runas[$rid] ?? 0) + 1;
             $runas_ganadas[] = $runa_final;
-            if (isset($counters_rar[$runa_elegida["rareza"]])) {
-                $counters_rar[$runa_elegida["rareza"]]++;
+            $rareza_contador = (string)($runa_final["rareza"] ?? ($runa_elegida["rareza"] ?? ""));
+            if (isset($counters_rar[$rareza_contador])) {
+                $counters_rar[$rareza_contador]++;
             }
         }
     }
@@ -478,6 +511,28 @@ try {
     $mis_runas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 
+    $debug_economia = null;
+    if (function_exists('debugEconomiaActivo') && debugEconomiaActivo(is_array($datos) ? $datos : [])) {
+        $debug_economia = [
+            "endpoint" => "tirar_runa.php",
+            "jugador_id" => $jugador_id,
+            "points_antes" => $points,
+            "points_despues" => $points_final,
+            "points_por_seg_antes" => $points_por_seg,
+            "points_por_seg_despues" => $points_por_seg_new,
+            "elapsed_segundos" => $elapsed_efec,
+            "passive_awarded" => $points_ganados,
+            "clicks_recibidos" => $clicks_envs,
+            "cantidad_bulk" => $cantidad_bulk,
+            "tiradas_efectivas" => $clicks_validos,
+            "count_runas_ganadas" => $total_runas_lote,
+            "batch_id" => $batch_id,
+            "batch_ya_procesado" => false,
+            "pps_recalc_query_total" => function_exists('totalAportesPpsJugador') ? totalAportesPpsJugador($conexion, $jugador_id) : null,
+            "top_aportes_pps" => function_exists('topAportesPpsJugador') ? topAportesPpsJugador($conexion, $jugador_id, 10) : [],
+        ];
+    }
+
     $conexion->commit();
 
     $_SESSION["batches_procesados"][] = $batch_id;
@@ -485,7 +540,7 @@ try {
         $_SESSION["batches_procesados"] = array_slice($_SESSION["batches_procesados"], -30);
     }
 
-    echo json_encode([
+    $respuesta = [
         "ok"                => true,
         "clicks_enviados"   => $clicks_envs,
         "clicks_validos"    => $clicks_validos,
@@ -500,7 +555,9 @@ try {
         "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
         "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
         "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0)
-    ]);
+    ];
+    if ($debug_economia !== null) $respuesta["debug_economia"] = $debug_economia;
+    echo json_encode($respuesta);
 
 } catch (Exception $e) {
     @$conexion->rollback();

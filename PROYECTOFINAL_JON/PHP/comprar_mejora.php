@@ -336,10 +336,37 @@ try {
         ? calcularSuerteJugadorDetalle($conexion, $jugador_id)
         : ["total" => 1.0, "tienda" => 1.0, "colecciones" => 1.0, "colecciones_completadas" => 0];
     $luck_multiplier = floatval($luck_detalle["total"] ?? 1.0);
+    $bulk_total_resp += (int)($luck_detalle["bulk_bonus_colecciones"] ?? 0);
+
+    $debug_economia = null;
+    if (function_exists('debugEconomiaActivo') && debugEconomiaActivo(is_array($datos) ? $datos : [])) {
+        $debug_economia = [
+            "endpoint" => "comprar_mejora.php",
+            "jugador_id" => $jugador_id,
+            "points_antes" => $points_bd,
+            "points_despues" => $points_final,
+            "points_por_seg_antes" => $points_por_seg,
+            "points_por_seg_despues" => $points_ps_real,
+            "elapsed_segundos" => $elapsed,
+            "passive_awarded" => $points_por_seg * $elapsed,
+            "clicks_recibidos" => 0,
+            "cantidad_bulk" => null,
+            "tiradas_efectivas" => 0,
+            "count_runas_ganadas" => 0,
+            "batch_id" => null,
+            "batch_ya_procesado" => false,
+            "pps_recalc_query_total" => function_exists('totalAportesPpsJugador') ? totalAportesPpsJugador($conexion, $jugador_id) : null,
+            "top_aportes_pps" => function_exists('topAportesPpsJugador') ? topAportesPpsJugador($conexion, $jugador_id, 10) : [],
+            "mejora_tipo" => $mejora["tipo"],
+            "mejora_valor" => (float)$mejora["valor"],
+            "nivel_antes" => $nivel_actual,
+            "nivel_despues" => $nivel_nuevo,
+        ];
+    }
 
     $conexion->commit();
 
-    echo json_encode([
+    $respuesta = [
         "ok"                   => true,
         "mejora_id"            => $mejora_id,
         "tipo"                 => $mejora["tipo"],
@@ -358,9 +385,13 @@ try {
         "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? $luck_multiplier),
         "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1),
         "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0),
+        "collection_states"     => ($luck_detalle["colecciones_estado"] ?? []),
+        "collection_bulk_bonus" => ($luck_detalle["bulk_bonus_colecciones"] ?? 0),
         "bulk_total"           => $bulk_total_resp,
         "nuevas_desbloqueadas" => $nuevas_desbloqueadas
-    ]);
+    ];
+    if ($debug_economia !== null) $respuesta["debug_economia"] = $debug_economia;
+    echo json_encode($respuesta);
 
 } catch (Exception $e) {
     @$conexion->rollback();

@@ -73,18 +73,32 @@ function pararAnimColeccion() {
 //   2. muestra u oculta el boton "ver animacion" segun sea especial o no
 //   3. carga la animacion de esa rareza en el iframe central
 //   4. rellena el panel stats de la derecha con los datos de esa runa
+function rwRunaFileSlugColeccion(nombre, rareza) {
+    var n = String(nombre || '').toLowerCase();
+    rareza = String(rareza || '').toLowerCase();
+    if (n.indexOf('corrupt') !== -1) return rareza + '_corrupta';
+    return rareza;
+}
+
+function rwAnimKeySlugColeccion(nombre, rareza) {
+    var n = String(nombre || '').toLowerCase();
+    rareza = String(rareza || '').toLowerCase();
+    if (n.indexOf('corrupt') !== -1) return rareza + '_corrupta';
+    return rareza;
+}
+
 function seleccionarRunaCol(el) {
     // quitar seleccion previa de cualquier tipo de boton (especial o comun)
     document.querySelectorAll(".col-runa-btn.sel, .col-runa-comun.sel").forEach(b => b.classList.remove("sel"));
     el.classList.add("sel");
 
     const rareza       = el.dataset.rareza;
-    const runaFile     = el.dataset.runaFile || rareza;
     const nombre       = el.dataset.nombre;
+    const runaFile     = el.dataset.runaFile || rwRunaFileSlugColeccion(nombre, rareza);
+    const animKey      = el.dataset.animKey || rwAnimKeySlugColeccion(nombre, rareza);
     const peso         = el.dataset.peso;
     const multiplicador= el.dataset.multiplicador;
     const cantidad     = el.dataset.cantidad;
-    const imagen       = el.dataset.imagen;
 
     // hint solo se ve si no hay ninguna runa seleccionada, lo escondo ya
     var hintEl = document.getElementById("col-canvas-hint");
@@ -109,13 +123,14 @@ function seleccionarRunaCol(el) {
     // cargar el html de la rareza en el iframe. pararAnimColeccion ya limpia
     // cualquier animacion canvas central anterior, asi empiezo limpio
     pararAnimColeccion();
-    colRunaActual = runaFile;
+    colRunaActual = animKey;
     // sincronizar el texto del toggle (ANIM ON / ANIM OFF) con el estado
     // guardado en localStorage para esta rareza. ver toggles.js
-    if (rareza === "eterna" || rareza === "divina" || rareza === "legendaria" || rareza === "mitica") actualizarEstadoToggle(runaFile);
+    if (rareza === "eterna" || rareza === "divina" || rareza === "legendaria" || rareza === "mitica") actualizarEstadoToggle(animKey);
 
     const iframe = document.getElementById("col-iframe");
     if (iframe) iframe.src = "RUNAS_HTML/RUNAS/" + runaFile + ".html";
+    if (window.RW_DEBUG_RUNAS) console.log("[RW runa coleccion]", { id: el.dataset.id, nombre: nombre, rareza: rareza, runaFile: runaFile, animKey: animKey });
 
     // panel stats de la derecha. titulo con el nombre y color por rareza
     var statsTituloEl = document.getElementById("col-stats-titulo");
@@ -144,8 +159,7 @@ function seleccionarRunaCol(el) {
 
     // el html del panel de stats lo pinto con innerHTML. son pocas filas y
     // se repinta solo al seleccionar otra runa, no merece la pena DOM API
-    // nodo a nodo. el onerror del img elimina el contenedor si la imagen
-    // no existe, asi no queda un hueco feo con el icono de imagen rota
+    // nodo a nodo.
     var statsContenidoEl = document.getElementById("col-stats-contenido");
     var puntosPorRuna = parseFloat(multiplicador) || 0;
     var cantidadNum = parseInt(cantidad, 10) || 0;
@@ -179,7 +193,6 @@ function seleccionarRunaCol(el) {
                 <span class="col-stat-label">Total generado</span>
                 <span class="col-stat-valor" style="color:${colorRareza}">${fmt(totalPuntosRuna)} pts/s</span>
             </div>
-            ${imagen ? `<div class="col-stat-imagen"><img src="IMG/${imagen}" alt="${nombre}" onerror="this.parentNode.remove()"></div>` : ""}
         `;
     }
 
@@ -1263,12 +1276,8 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
     var coleccionActual = 'basicas';
 
     function actualizarContadorColeccion(){
-        var visibles = Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection]'))
-            .filter(function(el){ return el.dataset.collection === coleccionActual; });
-        var total = visibles.length;
-        var unlocked = visibles.filter(function(el){ return !el.classList.contains('bloqueada'); }).length;
         var num = document.querySelector('#seccion-coleccion .col-contador-num');
-        if (num) num.innerHTML = unlocked + '<span class="col-contador-sep">/</span>' + total + '<span class="col-contador-txt"> runas</span>';
+        if (num) num.textContent = '';
     }
 
     function aplicarFiltroColeccion(slug){
@@ -1407,12 +1416,13 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
             pill.setAttribute('aria-label', 'Corrupta desbloqueada, uno por ciento de la runa base');
         }
 
-        document.querySelectorAll('.coleccion-bonus-suerte-v74').forEach(function(box){
+        document.querySelectorAll('.coleccion-bonus-suerte-v74[data-bonus-coleccion="basica_normal"]').forEach(function(box){
             box.classList.add('activo');
+            box.classList.remove('bloqueado');
             var label = box.querySelector('.coleccion-bonus-label');
             var sub = box.querySelector('.coleccion-bonus-sub');
-            if (label) label.textContent = 'Bonus activo';
-            if (sub) sub.textContent = 'Colección Básica completada · Total colección x1.50';
+            if (label) label.textContent = 'Basica normal reclamada';
+            if (sub) sub.textContent = 'x1.5 suerte activo';
         });
 
         if (typeof window.RW_actualizarBonusColeccionVisual === 'function') {
@@ -1517,7 +1527,7 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
     }
     function setContador(unlocked, total){
         var num = document.querySelector('#seccion-coleccion .col-contador-num');
-        if (num) num.innerHTML = unlocked + '<span class="col-contador-sep">/</span>' + total + '<span class="col-contador-txt"> runas</span>';
+        if (num) num.textContent = '';
     }
     function mostrarEmpty(tipo){
         document.querySelectorAll('.coleccion-empty-state').forEach(function(el){
@@ -1550,6 +1560,15 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
     function aplicarVista(){
         var col = getColeccionActiva();
         var variante = getVarianteActiva();
+        document.querySelectorAll('.coleccion-bonus-suerte-v74').forEach(function(box){
+            var tipo = box.dataset.bonusColeccion || 'basica_normal';
+
+            var mostrar =
+                (variante === 'normal' && tipo === 'basica_normal') ||
+                (variante === 'corrupta' && tipo === 'basica_corrupta');
+
+            box.classList.toggle('col-hidden-collection', !mostrar);
+        });
         var items = Array.prototype.slice.call(document.querySelectorAll('.coleccion-columna-lista [data-collection]'));
         ocultarEmpty();
 
@@ -1610,7 +1629,7 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
 
     function esAnimKey(key) {
         if (typeof window.RW_esAnimacionEspecialKey === 'function') return window.RW_esAnimacionEspecialKey(key);
-        return ['eterna','divina','mitica','legendaria','mitica_corrupta','legendaria_corrupta'].indexOf(String(key || '').toLowerCase()) !== -1;
+        return ['eterna','divina','mitica','legendaria','eterna_corrupta','divina_corrupta','mitica_corrupta','legendaria_corrupta'].indexOf(String(key || '').toLowerCase()) !== -1;
     }
 
     function animKeyDeBoton(el) {
@@ -1618,6 +1637,8 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
         var file = String((el && el.dataset && el.dataset.runaFile) || rareza).toLowerCase();
         var variant = String((el && el.dataset && el.dataset.variant) || '').toLowerCase();
         var nombre = String((el && el.dataset && el.dataset.nombre) || '').toLowerCase();
+        if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'eterna' || file === 'eterna_corrupta')) return 'eterna_corrupta';
+        if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'divina' || file === 'divina_corrupta')) return 'divina_corrupta';
         if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'mitica' || file === 'mitica_corrupta')) return 'mitica_corrupta';
         if ((variant === 'corrupta' || nombre.indexOf('corrupt') !== -1) && (rareza === 'legendaria' || file === 'legendaria_corrupta')) return 'legendaria_corrupta';
         return file || rareza;
@@ -1648,3 +1669,4 @@ document.querySelector('[onclick*="coleccion"]')?.addEventListener("click", () =
         }
     };
 })();
+

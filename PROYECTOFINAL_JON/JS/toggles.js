@@ -152,7 +152,7 @@ mostrarResultado = function(runa) {
 (function () {
     'use strict';
 
-    var RW_ANIM_KEYS = ['eterna', 'divina', 'mitica', 'legendaria', 'mitica_corrupta', 'legendaria_corrupta'];
+    var RW_ANIM_KEYS = ['eterna', 'divina', 'mitica', 'legendaria', 'eterna_corrupta', 'divina_corrupta', 'mitica_corrupta', 'legendaria_corrupta'];
 
     function rwToggleKey(raw) {
         var r = String(raw || '').toLowerCase();
@@ -184,13 +184,50 @@ mostrarResultado = function(runa) {
     };
 })();
 
+// Toggle maestro de Ajustes: conserva los toggles individuales, solo cambia
+// todos sus valores guardados de golpe.
+(function () {
+    'use strict';
+
+    var TODAS_ANIM_KEYS = ['eterna', 'divina', 'mitica', 'legendaria', 'eterna_corrupta', 'divina_corrupta', 'mitica_corrupta', 'legendaria_corrupta'];
+
+    function todasActivas() {
+        return TODAS_ANIM_KEYS.every(function (key) { return getAnimActiva(key); });
+    }
+
+    function pintarBotonGlobal() {
+        var btn = document.getElementById('btn-toggle-todas-anim');
+        if (!btn) return;
+        btn.textContent = todasActivas() ? 'Desactivar todas las animaciones de runas' : 'Activar todas las animaciones de runas';
+        btn.classList.toggle('anim-global-off', !todasActivas());
+    }
+
+    window.RW_toggleTodasAnimaciones = function () {
+        var nuevo = !todasActivas();
+        TODAS_ANIM_KEYS.forEach(function (key) { setAnimActiva(key, nuevo); });
+        animEternaActiva = getAnimActiva('eterna');
+        animDivinaActiva = getAnimActiva('divina');
+        animMiticaActiva = getAnimActiva('mitica');
+        animLegendariaActiva = getAnimActiva('legendaria');
+        if (typeof actualizarEstadoToggle === 'function') actualizarEstadoToggle();
+        pintarBotonGlobal();
+    };
+
+    window.RW_refrescarBotonTodasAnimaciones = pintarBotonGlobal;
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', pintarBotonGlobal);
+    } else {
+        pintarBotonGlobal();
+    }
+})();
+
 // ================================================================
 // FIX V107 — toggle visible y funcional para corruptas especiales
 // ================================================================
 (function () {
     'use strict';
 
-    var ANIM_KEYS_V107 = ['eterna', 'divina', 'mitica', 'legendaria', 'mitica_corrupta', 'legendaria_corrupta'];
+    var ANIM_KEYS_V107 = ['eterna', 'divina', 'mitica', 'legendaria', 'eterna_corrupta', 'divina_corrupta', 'mitica_corrupta', 'legendaria_corrupta'];
 
     function normalizarAnimKey(raw) {
         var r = String(raw || '').toLowerCase();
@@ -216,6 +253,7 @@ mostrarResultado = function(runa) {
         setAnimActiva(key, nuevo);
         syncMemoria(key, nuevo);
         _renderToggle(key, nuevo);
+        if (typeof window.RW_refrescarBotonTodasAnimaciones === 'function') window.RW_refrescarBotonTodasAnimaciones();
     };
 
     window.actualizarEstadoToggle = actualizarEstadoToggle = function (rareza) {
@@ -233,5 +271,7 @@ mostrarResultado = function(runa) {
         if (!btn) return;
         if (rareza === 'mitica_corrupta') btn.classList.add('btn-toggle-anim-mitica');
         if (rareza === 'legendaria_corrupta') btn.classList.add('btn-toggle-anim-legendaria');
+        if (rareza === 'divina_corrupta') btn.classList.add('btn-toggle-anim-divina');
+        if (rareza === 'eterna_corrupta') btn.classList.add('btn-toggle-anim-eterna');
     };
 })();

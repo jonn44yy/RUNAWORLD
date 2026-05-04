@@ -66,10 +66,35 @@ $points_ps    = $jugador["points_por_seg"] ?? 0;
 $coins_ps_max = $jugador["coins_ps_max"]   ?? $coins_ps;
 $points_ps_max= $jugador["points_ps_max"]  ?? $points_ps;
 $jugador_id_actual = (int)($jugador["id"] ?? 0);
+function rw_coleccion_basica_estado(mysqli $conexion, int $jugador_id, bool $corrupta): array {
+    $filtro_corrupta = $corrupta ? "AND LOWER(r.nombre) LIKE '%corrupt%'" : "AND LOWER(r.nombre) NOT LIKE '%corrupt%'";
+    $stmt = $conexion->prepare("
+        SELECT
+          COUNT(*) AS total,
+          COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas
+        FROM runas r
+        LEFT JOIN grupos_runas g ON r.grupo_id = g.id
+        LEFT JOIN jugador_runas jr ON r.id = jr.runa_id AND jr.jugador_id = ?
+        WHERE r.activa = 1
+          AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%inter%'
+          AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%avanz%'
+          AND LOWER(COALESCE(g.nombre, 'Runas Básicas')) NOT LIKE '%caos%'
+          $filtro_corrupta
+    ");
+    if (!$stmt) return ["total" => 0, "poseidas" => 0, "completa" => false];
+    $stmt->bind_param("i", $jugador_id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    $total = (int)($row["total"] ?? 0);
+    $poseidas = (int)($row["poseidas"] ?? 0);
+    return ["total" => $total, "poseidas" => $poseidas, "completa" => $total > 0 && $poseidas >= $total];
+}
+
 // Suerte nueva:
 // suerte_total = suerte_tienda * suerte_colecciones
 // suerte_tienda = 1 + niveles de Amuleto, capada a x1.50
-// suerte_colecciones = 1.5 ^ colecciones completadas
+// suerte_colecciones: básica normal x1.5, básica corrupta x2.
 function rw_calcular_suerte_detalle(mysqli $conexion, int $jugador_id): array {
     $stmt = $conexion->prepare("\n        SELECT COALESCE(SUM(m.valor * jm.nivel), 0) AS suerte_bonus\n        FROM jugador_mejoras jm\n        INNER JOIN mejoras m ON m.id = jm.mejora_id\n        WHERE jm.jugador_id = ?\n          AND m.activa = 1\n          AND m.tipo IN ('suerte', 'luck', 'luck_add')\n    ");
     $suerte_bonus = 0.0;
@@ -82,17 +107,13 @@ function rw_calcular_suerte_detalle(mysqli $conexion, int $jugador_id): array {
     }
     $suerte_tienda = max(1.0, min(1.5, 1.0 + $suerte_bonus));
 
-    $stmt = $conexion->prepare("\n        SELECT COUNT(*) AS completadas\n        FROM (\n            SELECT\n                COALESCE(r.grupo_id, 0) AS grupo_id_norm,\n                COUNT(*) AS total_runas,\n                COUNT(DISTINCT CASE WHEN COALESCE(jr.cantidad, 0) > 0 THEN r.id END) AS poseidas\n            FROM runas r\n            LEFT JOIN jugador_runas jr\n                ON jr.runa_id = r.id AND jr.jugador_id = ?\n            WHERE r.activa = 1\n            GROUP BY COALESCE(r.grupo_id, 0)\n            HAVING total_runas > 0 AND poseidas >= total_runas\n        ) completas\n    ");
-    $completadas = 0;
-    if ($stmt) {
-        $stmt->bind_param("i", $jugador_id);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $completadas = (int)($row["completadas"] ?? 0);
-    }
+    $basica_normal = rw_coleccion_basica_estado($conexion, $jugador_id, false);
+    $basica_corrupta = rw_coleccion_basica_estado($conexion, $jugador_id, true);
+    $completadas = ($basica_normal["completa"] ? 1 : 0) + ($basica_corrupta["completa"] ? 1 : 0);
 
-    $suerte_colecciones = pow(1.5, max(0, $completadas));
+    $suerte_colecciones = 1.0;
+    if ($basica_normal["completa"]) $suerte_colecciones *= 1.5;
+    if ($basica_corrupta["completa"]) $suerte_colecciones *= 2.0;
     $suerte_total = $suerte_tienda * $suerte_colecciones;
     return [
         "total" => max(1.0, $suerte_total),
@@ -100,6 +121,15 @@ function rw_calcular_suerte_detalle(mysqli $conexion, int $jugador_id): array {
         "colecciones" => $suerte_colecciones,
         "colecciones_completadas" => $completadas,
         "bonus_por_coleccion" => 1.5,
+        "bulk_bonus_colecciones" => $basica_corrupta["completa"] ? 2 : 0,
+        "colecciones_estado" => [
+            "basica_normal" => $basica_normal,
+            "basica_corrupta" => $basica_corrupta,
+            "intermedia_normal" => ["total" => 0, "poseidas" => 0, "completa" => false, "disponible" => false],
+            "intermedia_corrupta" => ["total" => 0, "poseidas" => 0, "completa" => false, "disponible" => false],
+            "avanzada_normal" => ["total" => 0, "poseidas" => 0, "completa" => false, "disponible" => false],
+            "avanzada_corrupta" => ["total" => 0, "poseidas" => 0, "completa" => false, "disponible" => false],
+        ],
     ];
 }
 
@@ -109,6 +139,7 @@ $luck_shop_multiplier = $suerte_detalle["tienda"];
 $luck_collection_multiplier = $suerte_detalle["colecciones"];
 $completed_collections = (int)$suerte_detalle["colecciones_completadas"];
 $collection_bonus_per_complete = 1.5;
+$colecciones_estado = $suerte_detalle["colecciones_estado"] ?? [];
 
 
 // bulk total del jugador. bulk = masa = cuantas runas lanza por cada coin
@@ -125,6 +156,7 @@ $stmt->execute();
 $bulk_row   = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 $bulk_total = 1 + (int)($bulk_row["bulk_total"] ?? 0);
+$bulk_total += (int)($suerte_detalle["bulk_bonus_colecciones"] ?? 0);
 
 // probabilidades por cascada (sin suerte)
 // 27/04 v3: ya no hay curva campana, las probabilidades son fijas por rareza.
@@ -415,7 +447,7 @@ foreach ($todas_runas as $runa) {
 // coleccion completa: todas las runas del juego con la cantidad que tiene
 // el jugador (0 si no la ha desbloqueado). LEFT JOIN es mi mejor amigo
 $stmt = $conexion->prepare("
-    SELECT r.id, r.nombre, r.rareza, r.multiplicador, r.imagen,
+    SELECT r.id, r.nombre, r.rareza, r.multiplicador,
            r.grupo_id,
            COALESCE(g.nombre, 'Runas Básicas') as grupo_nombre,
            COALESCE(jr.cantidad, 0) as cantidad
@@ -445,6 +477,16 @@ function rw_variant_slug($runa_nombre) {
     if (strpos($n, 'corrupt') !== false) return 'corrupta';
     return 'normal';
 }
+function rw_runa_file_slug($runa_nombre, $rareza) {
+    $n = mb_strtolower((string)$runa_nombre, 'UTF-8');
+    if (strpos($n, 'corrupt') !== false) return ((string)$rareza) . '_corrupta';
+    return (string)$rareza;
+}
+function rw_anim_key_slug($runa_nombre, $rareza) {
+    $n = mb_strtolower((string)$runa_nombre, 'UTF-8');
+    if (strpos($n, 'corrupt') !== false) return ((string)$rareza) . '_corrupta';
+    return (string)$rareza;
+}
 
 foreach ($runas_coleccion as &$__runa_col_ref) {
     $__runa_col_ref['collection_slug'] = rw_collection_slug($__runa_col_ref['grupo_nombre'] ?? 'Runas Básicas', $__runa_col_ref['nombre'] ?? '');
@@ -454,8 +496,8 @@ unset($__runa_col_ref);
 
 $colecciones_ui = [
     ['slug'=>'basicas', 'nombre'=>'Básicas', 'estado'=>'active'],
-    ['slug'=>'intermedias', 'nombre'=>'Intermedias', 'estado'=>'unlocked'],
-    ['slug'=>'avanzadas', 'nombre'=>'Avanzadas', 'estado'=>'unlocked'],
+    ['slug'=>'intermedias', 'nombre'=>'Intermedias', 'estado'=>'locked'],
+    ['slug'=>'avanzadas', 'nombre'=>'Avanzadas', 'estado'=>'locked'],
 ];
 for ($__i = 4; $__i <= 25; $__i++) {
     $colecciones_ui[] = ['slug'=>'lista-'.$__i, 'nombre'=>'???', 'estado'=>'locked'];
@@ -513,7 +555,10 @@ foreach ($config_boosts_raw as $item_config) {
 // ej: ["Runas Basicas" => ["eterna" => 3, "divina" => 16, ...], ...]
 // si la rareza no aparece es que no tengo ninguna de esa rareza en ese grupo
 $stmt = $conexion->prepare("
-    SELECT COALESCE(g.nombre, 'Sin grupo') as grupo_nombre,
+    SELECT CASE
+             WHEN LOWER(r.nombre) LIKE '%corrupt%' THEN 'Runas Corruptas'
+             ELSE COALESCE(g.nombre, 'Sin grupo')
+           END as grupo_nombre,
            r.rareza,
            SUM(jr.cantidad) as total
     FROM jugador_runas jr
@@ -521,7 +566,7 @@ $stmt = $conexion->prepare("
     LEFT JOIN grupos_runas g ON r.grupo_id = g.id
     WHERE jr.jugador_id = (SELECT id FROM jugadores WHERE usuario_id = ?)
       AND jr.cantidad > 0
-    GROUP BY g.id, r.rareza
+    GROUP BY grupo_nombre, r.rareza
     ORDER BY g.id ASC, FIELD(r.rareza,'eterna','divina','mitica','legendaria','epica','rara','poco_comun','comun')
 ");
 $stmt->bind_param("i", $id_usuario);
@@ -772,8 +817,9 @@ $conexion->close();
 
         <div class="stat-block stat-block-suerte">
             <svg class="stat-icon" viewBox="0 0 40 40" fill="none">
-                <circle cx="20" cy="20" r="15" stroke="#ffd700" stroke-width="1.3" opacity="0.75"/>
-                <path d="M20 7 L23 17 L34 17 L25 23 L28 34 L20 28 L12 34 L15 23 L6 17 L17 17 Z" stroke="#ffd700" stroke-width="1.1" fill="rgba(255,215,0,0.08)"/>
+                <path d="M20 22 C17 15 7 18 9 10 C11 4 18 7 20 13 C22 7 29 4 31 10 C33 18 23 15 20 22Z" stroke="#ffd700" stroke-width="1.35" fill="rgba(255,215,0,0.10)" stroke-linejoin="round"/>
+                <path d="M20 22 C18 28 15 31 11 34" stroke="#ffd700" stroke-width="1.45" stroke-linecap="round"/>
+                <circle cx="20" cy="20" r="16" stroke="#ffd700" stroke-width="0.8" opacity="0.22"/>
             </svg>
             <div class="stat-info">
                 <span class="stat-value gold" id="luck-display">x<?= number_format($luck_multiplier, 2) ?></span>
@@ -946,10 +992,15 @@ $conexion->close();
                     <?php endif; ?>
                     <button type="button" class="coleccion-variante-pill locked" data-variant="caos" disabled aria-label="Caos bloqueada">🔒</button>
                 </div>
-                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= $completed_collections > 0 ? 'activo' : 'bloqueado' ?>" title="Cada colección completada multiplica la suerte por x1.5">
-                    <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
+                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= !empty($colecciones_estado['basica_normal']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_normal" title="La coleccion basica normal multiplica la suerte por x1.5">
+                    <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Basica normal reclamada' : 'Basica normal bloqueada' ?></span>
                     <strong>x1.5 suerte</strong>
-                    <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Bloqueado hasta completar una colección' ?></span>
+                    <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : 'Completa las runas basicas normales' ?></span>
+                </div>
+                <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_corrupta" title="La coleccion basica corrupta da x2 suerte y +2 bulk">
+                    <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada' ?></span>
+                    <strong>x2 suerte +2 bulk</strong>
+                    <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Bonus corrupto permanente activo' : 'Completa las runas basicas corruptas' ?></span>
                 </div>
             </div>
 
@@ -976,10 +1027,6 @@ $conexion->close();
                     <!-- contador "X/Y runas desbloqueadas" arriba del todo -->
                     <div class="col-contador">
                         <span class="col-contador-label">Colección</span>
-                        <span class="col-contador-num">
-                            <?= $desbloqueadas_num ?><span class="col-contador-sep">/</span><?= $total_runas ?>
-                            <span class="col-contador-txt">runas</span>
-                        </span>
                     </div>
 
 
@@ -1014,18 +1061,18 @@ $conexion->close();
                          data-nombre="<?= htmlspecialchars($runa_col["nombre"]) ?>"
                          data-multiplicador="<?= $runa_col["multiplicador"] ?>"
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
-                         data-imagen="<?= htmlspecialchars($runa_col["imagen"] ?? "") ?>"
                          data-collection="<?= htmlspecialchars($runa_col["collection_slug"] ?? "basicas") ?>"
                          data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"
-                         data-runa-file="<?= htmlspecialchars(($runa_col["variant_slug"] ?? "normal") === "corrupta" ? ($runa_col["rareza"] . "_corrupta") : $runa_col["rareza"]) ?>"
+                         data-runa-file="<?= htmlspecialchars(rw_runa_file_slug($runa_col["nombre"], $runa_col["rareza"])) ?>"
+                         data-anim-key="<?= htmlspecialchars(rw_anim_key_slug($runa_col["nombre"], $runa_col["rareza"])) ?>"
                          data-grupo="<?= htmlspecialchars($runa_col["grupo_nombre"] ?? "Runas Básicas") ?>"
                          data-puntos="<?= $runa_col["multiplicador"] ?>"
                          <?= $desbloqueada ? 'onclick="seleccionarRunaCol(this)"' : '' ?>>
                         <?php if ($desbloqueada): ?>
                             <canvas class="col-btn-neon" data-rareza="<?= $cls_rareza ?>"></canvas>
                         <?php endif; ?>
-                        <span class="col-runa-nombre"><?= htmlspecialchars($runa_col["nombre"]) ?></span>
-                        <span class="col-runa-meta" aria-hidden="true"><?= (($runa_col["variant_slug"] ?? "normal") === "corrupta") ? "Corrupta" : "" ?></span>
+                        <span class="col-runa-nombre"><?= $desbloqueada ? htmlspecialchars($runa_col["nombre"]) : "Runa desconocida" ?></span>
+                        <span class="col-runa-meta" aria-hidden="true"><?= $desbloqueada && (($runa_col["variant_slug"] ?? "normal") === "corrupta") ? "Corrupta" : "" ?></span>
                         <span class="col-runa-right">
                             <?php if ($desbloqueada): ?>
                                 <span class="col-runa-cantidad">x<?= number_format($runa_col["cantidad"]) ?></span>
@@ -1054,14 +1101,15 @@ $conexion->close();
                          data-cantidad="<?= $runa_col["cantidad"] ?>"
                          data-collection="<?= htmlspecialchars($runa_col["collection_slug"] ?? "basicas") ?>"
                          data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"
-                         data-runa-file="<?= htmlspecialchars(($runa_col["variant_slug"] ?? "normal") === "corrupta" ? ($runa_col["rareza"] . "_corrupta") : $runa_col["rareza"]) ?>"
+                         data-runa-file="<?= htmlspecialchars(rw_runa_file_slug($runa_col["nombre"], $runa_col["rareza"])) ?>"
+                         data-anim-key="<?= htmlspecialchars(rw_anim_key_slug($runa_col["nombre"], $runa_col["rareza"])) ?>"
                          data-grupo="<?= htmlspecialchars($runa_col["grupo_nombre"] ?? "Runas Básicas") ?>"
                          data-puntos="<?= $runa_col["multiplicador"] ?>"
                          <?= $desbloqueada ? 'onclick="seleccionarRunaCol(this)"' : '' ?>>
                         <canvas class="col-comun-canvas" width="32" height="32" data-rareza="<?= $cls_rareza ?>" data-activa="<?= $desbloqueada ? '1' : '0' ?>" data-variant="<?= htmlspecialchars($runa_col["variant_slug"] ?? "normal") ?>"></canvas>
                         <div class="col-comun-info">
-                            <span class="col-comun-nombre"><?= htmlspecialchars($runa_col["nombre"]) ?></span>
-                            <span class="col-comun-rareza"><?= ucfirst(str_replace("_"," ",$runa_col["rareza"])) ?><?= (($runa_col["variant_slug"] ?? "normal") === "corrupta") ? " · Corrupta" : "" ?></span>
+                            <span class="col-comun-nombre"><?= $desbloqueada ? htmlspecialchars($runa_col["nombre"]) : "Runa desconocida" ?></span>
+                            <span class="col-comun-rareza"><?= $desbloqueada ? (ucfirst(str_replace("_"," ",$runa_col["rareza"])) . ((($runa_col["variant_slug"] ?? "normal") === "corrupta") ? " - Corrupta" : "")) : "Bloqueada" ?></span>
                             <span class="col-comun-puntos" aria-hidden="true"></span>
                         </div>
                         <span class="col-runa-right">
@@ -1074,10 +1122,15 @@ $conexion->close();
                     </div>
                     <?php endforeach; ?>
 
-                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= $completed_collections > 0 ? 'activo' : 'bloqueado' ?>" title="Cada colección completada multiplica la suerte por x1.5">
-                        <span class="coleccion-bonus-label"><?= $completed_collections > 0 ? 'Bonus activo' : 'Bonus de colección' ?></span>
+                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= !empty($colecciones_estado['basica_normal']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_normal" title="La coleccion basica normal multiplica la suerte por x1.5">
+                        <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Basica normal reclamada' : 'Basica normal bloqueada' ?></span>
                         <strong>x1.5 suerte</strong>
-                        <span class="coleccion-bonus-sub"><?= $completed_collections > 0 ? ('Completadas: ' . $completed_collections . ' · Total colección x' . number_format($luck_collection_multiplier, 2)) : 'Bloqueado hasta completar una colección' ?></span>
+                        <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : 'Completa las runas basicas normales' ?></span>
+                    </div>
+                    <div class="coleccion-bonus-suerte-v74 coleccion-bonus-corrupta <?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_corrupta" title="La coleccion basica corrupta da x2 suerte y +2 bulk">
+                        <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada' ?></span>
+                        <strong>x2 suerte +2 bulk</strong>
+                        <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Bonus corrupto permanente activo' : 'Completa las runas basicas corruptas' ?></span>
                     </div>
 
                 </div>
@@ -1346,6 +1399,9 @@ $conexion->close();
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <button type="button" class="ajuste-btn ajuste-btn-anim-global" id="btn-toggle-todas-anim" onclick="RW_toggleTodasAnimaciones()">
+                    Desactivar todas las animaciones de runas
+                </button>
             </div>
 
             <div class="sidebar-divider"></div>
@@ -1364,7 +1420,7 @@ $conexion->close();
         <!-- mis runas: lista de todas las runas del juego con su cantidad y %.
              cada card es desplegable para ver probabilidad base y con suerte -->
         <div id="panel-mis-runas">
-            <div class="panel-titulo">Mis Runas <span class="panel-titulo-sub" id="panel-runas-count"><?= $desbloqueadas_num ?>/<?= $total_runas ?></span></div>
+            <div class="panel-titulo">Mis Runas</div>
             <div id="panel-runas-contenido">
                 <?php
                 // panel lateral: dos bloques claros, sin mezclar nombres largos.
@@ -1413,11 +1469,12 @@ $conexion->close();
                                  data-id="<?= $id_runa ?>"
                                  data-cantidad="<?= $cantidad ?>"
                                  data-prob="<?= $pct_prob ?>"
+                                 data-nombre-real="<?= htmlspecialchars($runa_item["nombre"]) ?>"
                                  data-runa-grupo="<?= $grupo_slug_panel ?>"
                                  data-runa-variante="<?= htmlspecialchars($variant_card) ?>"
                                  onclick="toggleRunaProb(this)">
                                 <div class="runa-card-main">
-                                    <span class="runa-card-nombre"><?= htmlspecialchars($runa_item["nombre"]) ?></span>
+                                    <span class="runa-card-nombre"><?= $tiene ? htmlspecialchars($runa_item["nombre"]) : "Runa desconocida" ?></span>
                                     <div class="runa-card-right">
                                         <?php if ($tiene): ?>
                                             <span class="runa-card-cantidad">x<?= number_format($cantidad) ?></span>
@@ -1429,8 +1486,12 @@ $conexion->close();
                                 </div>
                                 <div class="runa-card-prob">
                                     <div class="prob-fila">
-                                        <span class="prob-label">Probabilidad</span>
+                                        <span class="prob-label">Base</span>
                                         <span class="prob-val prob-base-val"></span>
+                                    </div>
+                                    <div class="prob-fila prob-suerte">
+                                        <span class="prob-label">Con suerte</span>
+                                        <span class="prob-val prob-luck-val"></span>
                                     </div>
                                 </div>
                             </div>
@@ -1467,7 +1528,7 @@ window.RW_INIT = {
     coins_ps:       <?= $coins_ps  ?>,
     points_ps:      <?= $points_ps ?>,
     coins_ps_max:   <?= $coins_ps_max  ?>,
-    points_ps_max:  <?= $coins_ps_max  ?>,
+    points_ps_max:  <?= $points_ps_max  ?>,
 
     // Suerte total usada por el RNG:
     // total = suerte_tienda * suerte_colecciones.
@@ -1476,6 +1537,8 @@ window.RW_INIT = {
     luck_shop_multiplier: <?= number_format($luck_shop_multiplier, 6, '.', '') ?>,
     luck_collection_multiplier: <?= number_format($luck_collection_multiplier, 6, '.', '') ?>,
     completed_collections: <?= (int)$completed_collections ?>,
+    collection_states: <?= json_encode($colecciones_estado) ?>,
+    collection_bulk_bonus: <?= (int)($suerte_detalle["bulk_bonus_colecciones"] ?? 0) ?>,
     collection_bonus_per_complete: <?= number_format($collection_bonus_per_complete, 2, '.', '') ?>,
     basic_collection_complete: <?= $coleccion_basica_completa ? 'true' : 'false' ?>,
     basic_collection_total: <?= (int)($col_row['total_basicas'] ?? 0) ?>,
@@ -1490,6 +1553,7 @@ window.RW_INIT = {
     runas_points_ps:    <?= isset($runas_pts_base) ? $runas_pts_base : 0.0 ?>,
 
     bulk_total:     <?= $bulk_total ?>,
+    total_tiradas:  <?= (int)$total_tiradas ?>,
     user_id:        <?= (int)$id_usuario ?>,
     probMap:        <?= json_encode($prob_map) ?>,
 
@@ -1521,6 +1585,8 @@ window.RW_INIT = {
             "orden"            => (int)   ($m["orden"] ?? 0),
             "bloqueada"        => (bool)  ($m["bloqueada"] ?? false),
             "condicion_texto"  => (string)($m["condicion_texto"] ?? ""),
+            "condicion_tipo"   => (string)($m["condicion_tipo"] ?? "ninguna"),
+            "condicion_valor"  => (int)   ($m["condicion_valor"] ?? 0),
             "es_nueva"         => false,   // marca tras desbloqueo reciente (pendiente)
         ];
     }, $mejoras_con_estado)) ?>,
@@ -1631,3 +1697,6 @@ function toggleAnimBoton(cb) {
 
 </body>
 </html>
+
+
+

@@ -204,9 +204,35 @@ try {
 
     $runas = cargarInventarioConfirm($conexion, $jugador_id);
 
+    $debug_economia = null;
+    if (function_exists('debugEconomiaActivo') && debugEconomiaActivo(is_array($datos) ? $datos : [])) {
+        $debug_economia = [
+            "endpoint" => "confirmar_pack_tiradas.php",
+            "jugador_id" => $jugador_id,
+            "points_antes" => (float)$pack["points"],
+            "points_despues" => $points_actual,
+            "points_por_seg_antes" => (float)$pack["points_por_seg"],
+            "points_por_seg_despues" => $points_ps_real,
+            "elapsed_segundos" => $elapsed,
+            "passive_awarded" => (float)$pack["points_por_seg"] * $elapsed,
+            "clicks_recibidos" => $consumidas,
+            "cantidad_bulk" => null,
+            "tiradas_efectivas" => $nuevo - $prev,
+            "count_runas_ganadas" => $total_runas_delta,
+            "batch_id" => $pack_id,
+            "batch_ya_procesado" => false,
+            "pps_recalc_query_total" => function_exists('totalAportesPpsJugador') ? totalAportesPpsJugador($conexion, $jugador_id) : null,
+            "top_aportes_pps" => function_exists('topAportesPpsJugador') ? topAportesPpsJugador($conexion, $jugador_id, 10) : [],
+        ];
+    }
+
     $conexion->commit();
 
-    responder([
+    $luck_detalle = function_exists('calcularSuerteJugadorDetalle')
+        ? calcularSuerteJugadorDetalle($conexion, $jugador_id)
+        : ["total" => 1.0, "tienda" => 1.0, "colecciones" => 1.0, "colecciones_completadas" => 0];
+
+    $respuesta = [
         "ok" => true,
         "pack_id" => $pack_id,
         "consumidas" => $nuevo,
@@ -217,8 +243,16 @@ try {
         "points" => $points_actual,
         "coins_por_seg" => $coins_ps_real,
         "points_por_seg" => $points_ps_real,
-        "runas" => $runas
-    ]);
+        "runas" => $runas,
+        "luck_multiplier" => ($luck_detalle["total"] ?? 1.0),
+        "luck_shop_multiplier" => ($luck_detalle["tienda"] ?? 1.0),
+        "luck_collection_multiplier" => ($luck_detalle["colecciones"] ?? 1.0),
+        "completed_collections" => ($luck_detalle["colecciones_completadas"] ?? 0),
+        "collection_states" => ($luck_detalle["colecciones_estado"] ?? []),
+        "collection_bulk_bonus" => ($luck_detalle["bulk_bonus_colecciones"] ?? 0)
+    ];
+    if ($debug_economia !== null) $respuesta["debug_economia"] = $debug_economia;
+    responder($respuesta);
 
 } catch (Throwable $e) {
     @$conexion->rollback();

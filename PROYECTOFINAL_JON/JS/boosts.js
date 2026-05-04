@@ -302,8 +302,20 @@ function aplicarBoosts() {
         // 27/04 v3: boosts de suerte eliminados (ya no existen en boost_tipos)
     });
 
+    if (window.RW_DEBUG_ECONOMIA) {
+        console.log("[RW economia][aplicarBoosts]", {
+            coins_ps_base: coins_ps_base,
+            points_ps_base: points_ps_base,
+            multi_coins_boost: mc,
+            multi_points_boost: mp,
+            boosts_activos: boostsActivos.slice()
+        });
+    }
+
     if (coins_ps_base  !== null) coins_ps  = coins_ps_base  * mc;
     if (points_ps_base !== null) points_ps = points_ps_base * mp;
+    window.coins_ps = coins_ps;
+    window.points_ps = points_ps;
 
     if (typeof actualizarPantalla === "function") actualizarPantalla();
 }
