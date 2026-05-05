@@ -237,6 +237,120 @@ body::before {
     justify-content: center;
 }
 
+.hero-scroll-cue {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(2rem, 6vh, 4.2rem);
+    transform: translateX(-50%);
+    z-index: 3;
+    width: 54px;
+    height: 54px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    text-decoration: none;
+    opacity: 0;
+    animation: fadeIn 1.2s 2.25s ease-out forwards, scrollCueFloat 1.8s 2.25s ease-in-out infinite;
+    filter: drop-shadow(0 0 14px rgba(212,175,55,.42));
+}
+
+.hero-scroll-cue::before,
+.hero-scroll-cue::after {
+    content: '';
+    position: absolute;
+    width: 23px;
+    height: 23px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    opacity: .95;
+}
+
+.hero-scroll-cue::before { top: 7px; }
+.hero-scroll-cue::after  { top: 21px; opacity: .62; }
+
+.hero-scroll-cue:hover,
+.hero-scroll-cue:focus-visible {
+    color: var(--gold-bright);
+    filter: drop-shadow(0 0 20px rgba(255,215,0,.58));
+}
+
+@keyframes scrollCueFloat {
+    0%, 100% { transform: translate(-50%, 0); }
+    50%      { transform: translate(-50%, 12px); }
+}
+
+.scroll-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 74px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 1.4rem;
+    z-index: 60;
+    background: linear-gradient(to bottom, rgba(7,7,7,.92), rgba(7,7,7,.68));
+    border-bottom: 1px solid rgba(212,175,55,.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transform: translateY(-105%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .34s cubic-bezier(.16,1,.3,1), opacity .25s ease;
+}
+
+.scroll-header.visible {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.scroll-header-cta {
+    justify-self: start;
+    display: flex;
+    gap: .65rem;
+    align-items: center;
+}
+
+.scroll-header-brand {
+    justify-self: center;
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.15rem, 2.2vw, 1.9rem);
+    letter-spacing: .25em;
+    color: var(--gold);
+    text-decoration: none;
+    text-shadow: 0 0 18px rgba(212,175,55,.35);
+    white-space: nowrap;
+}
+
+.scroll-header .btn {
+    font-size: .64rem;
+    letter-spacing: .22em;
+    padding: .72rem 1.05rem;
+}
+
+.scroll-header-version {
+    justify-self: end;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .58rem;
+    letter-spacing: .18em;
+    color: var(--gold-deep);
+    text-decoration: none;
+    border: 1px solid rgba(212,175,55,.22);
+    padding: .45rem .7rem;
+    transition: color .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+
+.scroll-header-version:hover,
+.scroll-header-version:focus-visible {
+    color: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(212,175,55,.25);
+}
+
 .btn {
     font-family: 'Cinzel', serif;
     font-weight: 500;
@@ -279,6 +393,7 @@ body::before {
 /* ─── SECCIONES ────────────────────────────────────────────── */
 
 .seccion {
+    scroll-margin-top: 6rem;
     max-width: 1100px;
     margin: 0 auto;
     padding: 8rem 2rem;
@@ -596,7 +711,7 @@ body::before {
 .skip-link:focus { transform:translateY(0); outline:2px solid var(--gold-bright); outline-offset:3px; }
 a:focus-visible, button:focus-visible { outline:2px solid var(--gold-bright); outline-offset:4px; }
 .version-shell { display:grid; grid-template-columns:minmax(130px,190px) minmax(0,1fr); gap:clamp(1.5rem,3vw,3rem); align-items:start; }
-.version-side-nav { position:sticky; top:2rem; align-self:start; border:1px solid rgba(212,175,55,.16); background:rgba(10,10,10,.52); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); padding:.9rem; z-index:5; }
+.version-side-nav { position:sticky; top:6rem; align-self:start; border:1px solid rgba(212,175,55,.16); background:rgba(10,10,10,.52); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); padding:.9rem; z-index:5; }
 .version-side-nav-title { font-family:'JetBrains Mono',monospace; font-size:.58rem; letter-spacing:.22em; color:var(--text-dim); text-transform:uppercase; margin-bottom:.75rem; }
 .version-side-nav a { display:block; color:var(--text-dim); text-decoration:none; font-family:'Cinzel',serif; font-size:.82rem; letter-spacing:.08em; padding:.58rem .7rem; border-left:1px solid rgba(212,175,55,.18); transition:color .2s ease, background .2s ease, border-color .2s ease; }
 .version-side-nav a:hover, .version-side-nav a:focus-visible { color:var(--gold); background:rgba(212,175,55,.06); border-left-color:var(--gold); }
@@ -800,6 +915,48 @@ footer {
         padding: 0.3rem 0.6rem;
     }
 
+    .hero-scroll-cue {
+        bottom: 1.6rem;
+        width: 46px;
+        height: 46px;
+    }
+
+    .scroll-header {
+        height: auto;
+        min-height: 72px;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: .5rem;
+        padding: .7rem .75rem .62rem;
+    }
+
+    .scroll-header-brand { display: none; }
+
+    .scroll-header-cta {
+        justify-self: center;
+        width: 100%;
+        max-width: 360px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .55rem;
+    }
+
+    .scroll-header .btn {
+        text-align: center;
+        padding: .72rem .55rem;
+        font-size: .57rem;
+        letter-spacing: .12em;
+    }
+
+    .scroll-header-version {
+        justify-self: center;
+        font-size: .52rem;
+        padding: .22rem .5rem;
+        letter-spacing: .14em;
+        border-color: rgba(212,175,55,.18);
+        opacity: .86;
+    }
+
     .rarezas {
         grid-template-columns: repeat(4, 1fr);
     }
@@ -819,9 +976,9 @@ footer {
     #bg-eterno,
     #bg-eterno-veil { display: none !important; }
     .version-shell { display:block; }
-    .version-side-nav { position:sticky; top:.75rem; display:flex; gap:.55rem; overflow-x:auto; padding:.65rem; margin-bottom:2rem; background:rgba(8,8,8,.54); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-color:rgba(212,175,55,.2); }
+    .version-side-nav { position:sticky; top:5.25rem; display:flex; gap:.35rem; overflow-x:auto; padding:.42rem; margin-bottom:1.25rem; background:rgba(8,8,8,.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-color:rgba(212,175,55,.18); z-index:35; }
     .version-side-nav-title { display:none; }
-    .version-side-nav a { flex:0 0 auto; border-left:none; border:1px solid rgba(212,175,55,.16); background:rgba(0,0,0,.24); padding:.55rem .8rem; }
+    .version-side-nav a { flex:0 0 auto; border-left:none; border:1px solid rgba(212,175,55,.14); background:rgba(0,0,0,.22); padding:.34rem .52rem; font-size:.66rem; letter-spacing:.06em; }
 
 }
 
@@ -861,14 +1018,28 @@ footer {
 <body>
 <a class="skip-link" href="#main-content">Saltar al contenido</a>
 
+<nav class="scroll-header" id="scroll-header" aria-label="Acceso rápido">
+    <div class="scroll-header-cta">
+        <?php if ($logueado): ?>
+            <a href="juego.php" class="btn btn-primary">Continuar</a>
+            <a href="PHP/cerrar_sesion.php" class="btn btn-secondary">Salir</a>
+        <?php else: ?>
+            <a href="login.php" class="btn btn-primary">Jugar</a>
+            <a href="registro.php" class="btn btn-secondary">Crear cuenta</a>
+        <?php endif; ?>
+    </div>
+    <a href="#top" class="scroll-header-brand" aria-label="Volver al inicio">RUNAWORLD</a>
+    <a href="#version" class="scroll-header-version" aria-label="Ir al changelog de versiones">CHANGELOG</a>
+</nav>
+
 <div class="spine" aria-hidden="true"></div>
 <!-- Fondo animado eterno (bucle infinito) + veil para oscurecer -->
 <iframe id="bg-eterno" data-src="RUNAS_HTML/RUNAS/eterna_index_low_quality.html" 
         loading="lazy" scrolling="no" tabindex="-1" aria-hidden="true"></iframe>
 <div id="bg-eterno-veil" aria-hidden="true"></div>
 <!-- ─── HERO ─────────────────────────────────────────────── -->
-<header class="hero">
-    <a href="#version-v02" class="hero-version" aria-label="Ir a las notas del parche de versiones">PARCHE DE VERSIONES</a>
+<header class="hero" id="top">
+    <a href="#version-v023" class="hero-version" aria-label="Ir a las notas del parche de versiones">VERSIÓN 0.2.3</a>
     <h1 id="hero-h1">
         <span class="letra" style="animation-delay:0.03s">R</span><span class="letra" style="animation-delay:0.06s">U</span><span class="letra" style="animation-delay:0.09s">N</span><span class="letra" style="animation-delay:0.12s">A</span><span class="letra" style="animation-delay:0.15s">W</span><span class="letra" style="animation-delay:0.18s">O</span><span class="letra" style="animation-delay:0.21s">R</span><span class="letra" style="animation-delay:0.24s">L</span><span class="letra" style="animation-delay:0.27s">D</span>
     </h1>
@@ -882,6 +1053,7 @@ footer {
             <a href="registro.php" class="btn btn-secondary">Crear cuenta</a>
         <?php endif; ?>
     </div>
+    <a href="#el-juego" class="hero-scroll-cue" aria-label="Bajar al contenido"></a>
 </header>
 
 <main id="main-content">
@@ -920,7 +1092,7 @@ footer {
 <!-- ─── SECCIÓN 2: PROGRESIÓN ─────────────────────────────── -->
 <section class="seccion" id="progresion">
     <div class="seccion-titulo fade-up">PROGRESIÓN</div>
-    <h2 class="seccion-h fade-up delay-1">Siete rarezas hacia lo eterno</h2>
+    <h2 class="seccion-h fade-up delay-1">Ocho rarezas, variantes corruptas y camino hacia lo eterno</h2>
     <div class="seccion-grid invertido">
         <div class="captura fade-up delay-2">
             <!-- preview de la rareza seleccionada. arranca con eterna por
@@ -931,7 +1103,7 @@ footer {
             <iframe id="preview-runa-2" src="RUNAS_HTML/RUNAS/eterna_index_low_quality.html" loading="lazy" scrolling="no" tabindex="-1" title="Preview rúnico"></iframe>
         </div>
         <div class="seccion-texto fade-up delay-3">
-            <p>Cada runa pertenece a una rareza. Subir desde común a divina lleva tiempo, paciencia y suerte. Lo que viene después es otra historia.</p>
+            <p>Cada runa pertenece a una rareza. Subir desde común a eterna lleva tiempo, paciencia y suerte. Ahora, las variantes corruptas abren una segunda capa de colección, riesgo y recompensa.</p>
             <p style="font-size:0.9rem; color: var(--text-dim); font-style: italic;">Pulsa una rareza para ver su runa.</p>
             <div class="rarezas">
                 <button type="button" class="rareza" data-r="comun"      data-runa="comun">Común</button>
@@ -957,10 +1129,97 @@ footer {
     <div class="version-shell">
         <nav class="version-side-nav" aria-label="Navegación de versiones">
             <div class="version-side-nav-title">Versiones</div>
+            <a href="#version-v023">0.2.3V</a>
+            <a href="#version-v022">0.2.2V</a>
+            <a href="#version-v021">0.2.1V</a>
             <a href="#version-v02">0.2V</a>
             <a href="#version-v01">0.1V</a>
         </nav>
         <div class="version-list">
+    <article class="version-entry" id="version-v023">
+        <h2 class="seccion-h fade-up delay-1">0.2.3V · Runas corruptas, colección y economía visual</h2>
+        <p class="version-note fade-up delay-1">Parche centrado en variantes corruptas, colección, móvil, boosts y coherencia visual</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Añadido y corregido</div>
+                <ul class="cambios">
+                    <li>Añadidas nuevas runas corruptas especiales: Divina Corrupta y Eterna Corrupta, con previews y animaciones independientes.</li>
+                    <li>Unificada la lógica de previews: las runas normales y corruptas cargan sus HTML desde el mismo sistema de colección.</li>
+                    <li>El menú lateral y la colección separan runas básicas y corruptas con estados de desbloqueo coherentes.</li>
+                    <li>Las runas bloqueadas ya no revelan nombres reales en colección, estadísticas ni panel lateral.</li>
+                    <li>Corregidos los toggles de animación para Divina Corrupta y Eterna Corrupta.</li>
+                    <li>Añadido control global en Ajustes para activar o desactivar todas las animaciones de runas.</li>
+                    <li>La colección se refresca al entrar y tras tiradas/sincronizaciones, evitando depender de reiniciar la página.</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Economía e interfaz</div>
+                <ul class="cambios proximo">
+                    <li>Separado el valor base de points/seg del valor visual con boosts temporales, evitando multiplicaciones incorrectas en tienda.</li>
+                    <li>Corregida la visualización de bulk al completar la colección básica corrupta: el bonus aplica x2 suerte y +2 bulk.</li>
+                    <li>Los bonus de colección normal y corrupta son independientes y no se reclaman ni muestran mezclados.</li>
+                    <li>Mejorada la interfaz móvil: stats visibles, colección más estable, tabs más legibles y menú lateral más coherente con escritorio.</li>
+                    <li>Mejorado el formato de números grandes con K, M, B, T, Qa y Qi.</li>
+                    <li>Las probabilidades muestran valor base y valor ajustado por suerte del jugador con mejor contraste.</li>
+                    <li>Actualizado el icono de suerte con un trébol SVG inline en el HUD.</li>
+                </ul>
+            </div>
+        </div>
+    </article>
+
+    <article class="version-entry" id="version-v022">
+        <h2 class="seccion-h fade-up delay-1">0.2.2V · Sincronización económica y estabilidad</h2>
+        <p class="version-note fade-up delay-1">Parche técnico centrado en economía, packs, boosts y tienda</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Correcciones principales</div>
+                <ul class="cambios">
+                    <li>Corregida la sincronización visual de coins para evitar saltos, bajadas falsas y respuestas antiguas del servidor.</li>
+                    <li>Ajustado el sistema de packs para reducir desincronizaciones durante clicks rápidos, boosts activos y tiradas pendientes.</li>
+                    <li>Optimizado el flujo de tiradas con packs de mayor tamaño, prefetch más estable y confirmaciones menos frecuentes.</li>
+                    <li>Corregidas compras de tienda para usar el saldo visible actual del jugador y evitar reseteos incorrectos de puntos.</li>
+                    <li>Protegidas las compras recientes frente a autosaves o sincronizaciones antiguas que podían revertir el gasto.</li>
+                    <li>Actualización inmediata de la suerte al comprar mejoras como el Amuleto de suerte.</li>
+                    <li>Corregido el cálculo de boosts para evitar multiplicar valores ya boosteados de coins/seg o points/seg.</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Estado del parche</div>
+                <ul class="cambios proximo">
+                    <li>La economía queda mucho más estable entre cliente, servidor, packs, autosave y tienda.</li>
+                    <li>Se reducen peticiones innecesarias al servidor durante sesiones activas.</li>
+                    <li>El inventario queda preparado para el nuevo sistema de colección y variantes.</li>
+                    <li>Se continuará revisando el comportamiento de boosts, tiradas rápidas y sincronización entre dispositivos.</li>
+                </ul>
+            </div>
+        </div>
+    </article>
+
+    <article class="version-entry" id="version-v021">
+        <h2 class="seccion-h fade-up delay-1">0.2.1V · Divisas y visibilidad</h2>
+        <p class="version-note fade-up delay-1">Correcciones técnicas y ajustes del flujo de usuario</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Implementado</div>
+                <ul class="cambios">
+                    <li>Corregida la actualización en tiempo real de coins y puntos tras tiradas y sincronizaciones.</li>
+                    <li>Revisada la lógica de economía para que los descuentos de divisas sean más consistentes tras cada transacción.</li>
+                    <li>Añadidas restricciones de visibilidad para elementos bloqueados: el contenido aparece cuando se desbloquea.</li>
+                    <li>Ocultación inicial de runas corruptas no desbloqueadas en el panel de runas.</li>
+                    <li>Mejorada la lógica de aparición de variantes corruptas y animaciones especiales asociadas.</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Pendiente</div>
+                <ul class="cambios proximo">
+                    <li>Rework completo del inventario y de la representación visual de runas obtenidas.</li>
+                    <li>Mejoras adicionales en el sistema de colección y clasificación de variantes.</li>
+                    <li>Revisión de mensajes y feedback visual para desbloqueos nuevos.</li>
+                </ul>
+            </div>
+        </div>
+    </article>
+
     <article class="version-entry" id="version-v02">
         <h2 class="seccion-h fade-up delay-1">0.2V · Mejoras del juego</h2>
         <p class="version-note fade-up delay-1">Avance del proyecto, fase critica, avance en un nuevo campo y contenido</p>
@@ -1156,6 +1415,32 @@ footer {
     cards.forEach(function (card) {
         card.addEventListener('click', function () { seleccionar(card); });
     });
+})();
+
+// header fijo: aparece cuando el hero deja de ser visible.
+(function scrollHeaderControl() {
+    var hero = document.querySelector('.hero');
+    var header = document.getElementById('scroll-header');
+    if (!hero || !header) return;
+
+    function setVisible(visible) {
+        header.classList.toggle('visible', visible);
+    }
+
+    if ('IntersectionObserver' in window) {
+        var ob = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                setVisible(!entry.isIntersecting);
+            });
+        }, { threshold: 0.08, rootMargin: '-74px 0px 0px 0px' });
+        ob.observe(hero);
+    } else {
+        function onScroll() {
+            setVisible(window.scrollY > Math.max(240, hero.offsetHeight * 0.72));
+        }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+    }
 })();
 
 // fondo animado eterno: carga DIFERIDA + bucle + check movil.
