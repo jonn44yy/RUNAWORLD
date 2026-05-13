@@ -1118,19 +1118,29 @@ function iniciarAnimacionJuego() {
 // ================================================================
 (function () {
     'use strict';
-    var RW_CORRUPT_ANIM_MS = { mitica_corrupta: 13500, legendaria_corrupta: 12000 };
+    var RW_CORRUPT_ANIM_MS = { eterna_corrupta: 23000, divina_corrupta: 14000, mitica_corrupta: 13500, legendaria_corrupta: 12000 };
+    var RW_CORRUPT_ANIM_FILE = {
+        eterna_corrupta: 'eterna_corrupta',
+        divina_corrupta: 'divina_corrupta',
+        mitica_corrupta: 'mitica_corrupta',
+        legendaria_corrupta: 'legendaria_corrupta'
+    };
     var _rwBtnMiticaTimer = null;
     var _rwIframeTimer = null;
     function _rwText(v) { return String(v || '').toLowerCase(); }
     function _rwRunaText(runa) {
         if (!runa) return '';
-        return [runa.nombre, runa.imagen, runa.slug, runa.runa_file, runa.runaFile, runa.animacion_slug, runa.rareza_animacion, runa.variante].map(_rwText).join(' | ');
+        return [runa.nombre, runa.slug, runa.runa_file, runa.runaFile, runa.animacion_slug, runa.rareza_animacion, runa.variante].map(_rwText).join(' | ');
     }
     function _rwAnimKeyCorrupta(runa) {
         var txt = _rwRunaText(runa);
+        if (txt.indexOf('eterna_corrupta') !== -1 || txt.indexOf('eterna corrupta') !== -1) return 'eterna_corrupta';
+        if (txt.indexOf('divina_corrupta') !== -1 || txt.indexOf('divina corrupta') !== -1) return 'divina_corrupta';
         if (txt.indexOf('mitica_corrupta') !== -1 || txt.indexOf('mítica corrupta') !== -1 || txt.indexOf('mitica corrupta') !== -1) return 'mitica_corrupta';
         if (txt.indexOf('legendaria_corrupta') !== -1 || txt.indexOf('legendaria corrupta') !== -1) return 'legendaria_corrupta';
         if (runa && runa.variante === 'corrupta') {
+            if (runa.rareza === 'eterna') return 'eterna_corrupta';
+            if (runa.rareza === 'divina') return 'divina_corrupta';
             if (runa.rareza === 'mitica') return 'mitica_corrupta';
             if (runa.rareza === 'legendaria') return 'legendaria_corrupta';
         }
@@ -1151,7 +1161,7 @@ function iniciarAnimacionJuego() {
     };
     window.RW_lanzarAnimacionCorruptaEspecial = function RW_lanzarAnimacionCorruptaEspecial(runa, key) {
         key = key || _rwAnimKeyCorrupta(runa);
-        if (key !== 'mitica_corrupta' && key !== 'legendaria_corrupta') return false;
+        if (!RW_CORRUPT_ANIM_FILE[key]) return false;
         if (typeof getAnimActiva === 'function' && !getAnimActiva(key)) {
             if (typeof mostrarCardEn === 'function') mostrarCardEn('resultado-tirada', runa);
             return true;
@@ -1167,7 +1177,8 @@ function iniciarAnimacionJuego() {
         if (_rwIframeTimer) clearTimeout(_rwIframeTimer);
         var iframe = document.createElement('iframe');
         iframe.id = 'rw-corrupta-anim-iframe';
-        iframe.src = 'RUNAS_HTML/RUNAS_ANIMADAS/' + key + '.html?v=' + Date.now();
+        iframe.src = 'RUNAS_HTML/RUNAS_ANIMADAS/' + RW_CORRUPT_ANIM_FILE[key] + '.html?v=' + Date.now();
+        if (window.RW_DEBUG_RUNAS) console.log('[RW animacion corrupta]', { key: key, src: iframe.src, runa: runa });
         iframe.setAttribute('allow', 'autoplay');
         iframe.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:none;background:#000;z-index:9700;pointer-events:none';
         document.body.appendChild(iframe);
@@ -1197,7 +1208,7 @@ function iniciarAnimacionJuego() {
     var _rwMostrarResultadoBase = window.mostrarResultado || mostrarResultado;
     window.mostrarResultado = mostrarResultado = function (runa) {
         var key = _rwAnimKeyCorrupta(runa);
-        if (key === 'mitica_corrupta' || key === 'legendaria_corrupta') {
+        if (RW_CORRUPT_ANIM_FILE[key]) {
             if (window.RW_lanzarAnimacionCorruptaEspecial(runa, key)) return;
         }
         return _rwMostrarResultadoBase(runa);
