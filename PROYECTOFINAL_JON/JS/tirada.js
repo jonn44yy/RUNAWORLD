@@ -1,4 +1,4 @@
-window.RW_TIRADA_VERSION = '8.0-fix-runas-visual-v112';
+window.RW_TIRADA_VERSION = '8.1-live-pps-pack-unit-fix';
 // tirada.js — runaworld (v2: batch sync)
 // version 2: adaptado al sistema de lotes (runa-sync.js). antes cada click
 // disparaba un fetch. ahora tirarRuna() solo cuenta clicks en un buffer y
@@ -31,6 +31,85 @@ window.RW_TIRADA_VERSION = '8.0-fix-runas-visual-v112';
 
 var syncSafetyTimer = null;
 var rwProcesarRespuestaSyncCount = 0;
+var RW_TIRADAS_CONTADAS_LOCAL = {};
+var RW_PPS_CONTADAS_LOCAL = {};
+
+// ── RW V114 — eventos globales para stats/shop/desbloqueos ─────────────
+// Permite que estadisticas y tienda reaccionen en vivo sin refrescar.
+function RW_emitirEstadoJuegoActualizado(data) {
+    if (!data) return;
+
+    var totalTiradas = null;
+
+    if (window.RW_INIT && window.RW_INIT.total_tiradas !== undefined) {
+        totalTiradas = parseInt(window.RW_INIT.total_tiradas, 10) || 0;
+    }
+
+    var detail = {
+        origen: data.mode || "sync",
+        local_visual: !!data.local_visual,
+        pack_id: data.pack_id || null,
+        seq: data.seq || null,
+        clicks_validos: parseInt(data.clicks_validos, 10) || 0,
+
+        jugador: {
+            coins: typeof coins !== "undefined" ? coins : null,
+            points: typeof points !== "undefined" ? points : null,
+            points_por_seg: typeof points_ps !== "undefined" ? points_ps : null,
+            coins_por_seg: typeof coins_ps !== "undefined" ? coins_ps : null,
+            bulk: typeof bulk_runas !== "undefined" ? bulk_runas : null
+        },
+
+        stats: Object.assign({}, data.stats || {}, {
+            total_tiradas: totalTiradas
+        }),
+
+        desbloqueos: Object.assign({}, data.desbloqueos || {}, {
+            total_tiradas: totalTiradas,
+            puede_ver_mejora_1000: totalTiradas !== null ? totalTiradas >= 1000 : false
+        }),
+
+        respuesta_original: data
+    };
+
+    document.dispatchEvent(new CustomEvent("rw:estado-juego-actualizado", { detail: detail }));
+    document.dispatchEvent(new CustomEvent("rw:stats-actualizadas", { detail: detail }));
+    document.dispatchEvent(new CustomEvent("rw:shop-refresh", { detail: detail }));
+
+    if (window.RW_DEBUG_ECONOMIA || window.RW_DEBUG_RUNAS) {
+        console.log("[RW estado actualizado]", detail);
+    }
+}
+
+function RW_actualizarContadorTiradasLocal(data) {
+    if (!data || data.clicks_validos === undefined) return;
+
+    // En el sistema actual, la unidad visual de pack es la unica respuesta
+    // que debe sumar tiradas localmente. Las confirmaciones del pack pueden
+    // devolver inventario/estado y NO deben volver a sumar lo mismo.
+    if (data.local_visual !== true || data.mode !== "pack_unit") return;
+
+    var key = String(data.pack_id || "sin_pack") + ":" + String(data.seq || "sin_seq");
+    if (RW_TIRADAS_CONTADAS_LOCAL[key]) return;
+    RW_TIRADAS_CONTADAS_LOCAL[key] = true;
+
+    var clicks = parseInt(data.clicks_validos, 10) || 0;
+    if (clicks <= 0) return;
+
+    if (!window.RW_INIT) window.RW_INIT = {};
+
+    var actual = parseInt(window.RW_INIT.total_tiradas, 10) || 0;
+    window.RW_INIT.total_tiradas = actual + clicks;
+
+    if (window.RW_DEBUG_ECONOMIA || window.RW_DEBUG_RUNAS) {
+        console.log("[RW total_tiradas local]", {
+            key: key,
+            antes: actual,
+            suma: clicks,
+            despues: window.RW_INIT.total_tiradas
+        });
+    }
+}
 
 
 // FIX V110 — helpers de runas corruptas y actualización visual por delta.
@@ -97,7 +176,19 @@ function _rwPintarCantidadRuna(id, cantidad, rareza) {
             } else if (cantidad > 0) {
                 var candado = el.querySelector('.col-candado');
                 var right = candado ? candado.closest('.col-runa-right') : el.querySelector('.runa-card-right, .col-runa-right');
-                if (right) right.innerHTML = '<span class="col-runa-cantidad">x' + Number(cantidad).toLocaleString() + '</span><span class="runa-card-flecha">▾</span>';
+            if (right) {
+                if (el.classList.contains('runa-card-btn')) {
+                    right.innerHTML =
+                        '<span class="runa-card-cantidad">x' +
+                        Number(cantidad).toLocaleString() +
+                        '</span><span class="runa-card-flecha">▾</span>';
+                } else {
+                    right.innerHTML =
+                        '<span class="col-runa-cantidad">x' +
+                        Number(cantidad).toLocaleString() +
+                        '</span>';
+                }
+            }
             }
         });
     });
@@ -214,20 +305,36 @@ function procesarRespuestaSync(data) {
         var serverPoints = parseFloat(data.points) || 0;
         points = Math.max(points, serverPoints);
     }
+    
+    // coins_por_seg viene del server como BASE permanente real.
+    // Esto arregla el bug visual donde la UI se queda en +1/seg hasta refrescar.
+    if (data.coins_por_seg !== undefined && !isNaN(parseFloat(data.coins_por_seg))) {
+        var serverCpsFinal = parseFloat(data.coins_por_seg) || 0;
+    
+        coins_ps_base = Math.max(parseFloat(coins_ps_base) || 0, serverCpsFinal);
+    
+        if (typeof aplicarBoosts === "function") {
+            aplicarBoosts();
+        } else {
+            coins_ps = Math.max(parseFloat(coins_ps) || 0, coins_ps_base);
+            window.coins_ps = coins_ps;
+        }
+    }
 
     // points_por_seg viene del server como BASE permanente ya calculada
     // (runas + mejoras). no lo metas en _runas_points_ps ni vuelvas a
     // aplicar _mejora_points_add/_mejora_multi_pts, porque duplicaria mejoras.
     // Los boosts temporales se aplican encima una sola vez con aplicarBoosts().
-    if (data.points_por_seg !== undefined && !isNaN(parseFloat(data.points_por_seg))) {
+    if (!data.local_visual && data.points_por_seg !== undefined && !isNaN(parseFloat(data.points_por_seg))) {
         var serverPpsFinal = parseFloat(data.points_por_seg) || 0;
-
-        points_ps_base = serverPpsFinal;
+    
+        points_ps_base = Math.max(parseFloat(points_ps_base) || 0, serverPpsFinal);
+    
         if (typeof aplicarBoosts === "function") {
             aplicarBoosts();
         } else {
-            points_ps = serverPpsFinal;
-            window.points_ps = serverPpsFinal;
+            points_ps = Math.max(parseFloat(points_ps) || 0, points_ps_base);
+            window.points_ps = points_ps;
         }
     }
 
@@ -244,26 +351,51 @@ function procesarRespuestaSync(data) {
     if (data.bulk !== undefined) {
         actualizarSuerte(null, parseInt(data.bulk, 10) || bulk_runas, null);
     }
-    if (window.RW_INIT && data.clicks_validos !== undefined) {
-        window.RW_INIT.total_tiradas = (parseInt(window.RW_INIT.total_tiradas, 10) || 0) + (parseInt(data.clicks_validos, 10) || 0);
-        if (typeof window.RW_refrescarDesbloqueosMejorasLocal === "function") window.RW_refrescarDesbloqueosMejorasLocal();
+    // ── RW V113 — actualizar contador local y avisar a tienda/stats ────────
+    // En modo pack_unit, cada unidad visual equivale a 1 tirada válida.
+    // Esto hace que la shop pueda desbloquear mejoras en directo sin recargar.
+    RW_actualizarContadorTiradasLocal(data);
+    
+    if (typeof window.RW_refrescarDesbloqueosMejorasLocal === "function") {
+        window.RW_refrescarDesbloqueosMejorasLocal();
     }
+    
+    // El evento global se emite despues de actualizar pantalla/stats visuales.
     
     // Estoy hasta los huevos de hacer copias de seguridad y probando se me olviden lineas de codigo pensando que eran inutiles
     // Si lees esto eres una persona exitosa
-    if (data.points_por_seg === undefined && data.local_visual && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
-    var deltaPpsRunas = data.runas_ganadas.reduce(function (s, r) {
-        return s + (parseFloat(r.multiplicador) || 0);
-    }, 0);
+    // FIX V8.1:
+    // Cada unidad visual de pack debe sumar su aporte de points/s al momento.
+    // Antes esto dependía de que data.points_por_seg fuera undefined.
+    // Pero runa-sync.js estaba mandando points_por_seg en pack_unit, así que
+    // este bloque no corría y points/s solo subía al guardar/confirmar.
+    if (data.local_visual === true && data.mode === "pack_unit" && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
+        var ppsKey = String(data.pack_id || "sin_pack") + ":" + String(data.seq || "sin_seq");
 
-    if (deltaPpsRunas > 0) {
-        _runas_points_ps = (parseFloat(_runas_points_ps) || 0) + deltaPpsRunas;
+        if (!RW_PPS_CONTADAS_LOCAL[ppsKey]) {
+            RW_PPS_CONTADAS_LOCAL[ppsKey] = true;
 
-        var nuevoPpsVisual = (_runas_points_ps + _mejora_points_add) * _mejora_multi_pts;
-        points_ps_base = Math.max(points_ps_base || 0, nuevoPpsVisual);
-        points_ps = Math.max(points_ps || 0, nuevoPpsVisual);
+            var deltaPpsRunas = data.runas_ganadas.reduce(function (s, r) {
+                return s + (parseFloat(r.multiplicador) || 0);
+            }, 0);
 
-        if (typeof aplicarBoosts === "function") aplicarBoosts();
+            if (deltaPpsRunas > 0) {
+                _runas_points_ps = (parseFloat(_runas_points_ps) || 0) + deltaPpsRunas;
+
+                var mejoraAdd = parseFloat(_mejora_points_add) || 0;
+                var mejoraMulti = parseFloat(_mejora_multi_pts) || 1;
+                var nuevoPpsVisual = ((parseFloat(_runas_points_ps) || 0) + mejoraAdd) * mejoraMulti;
+
+                points_ps_base = Math.max(parseFloat(points_ps_base) || 0, nuevoPpsVisual);
+                points_ps = Math.max(parseFloat(points_ps) || 0, nuevoPpsVisual);
+
+                window.points_ps_base = points_ps_base;
+                window.points_ps = points_ps;
+
+                if (typeof aplicarBoosts === "function") {
+                    aplicarBoosts();
+                }
+            }
         }
     }
 
@@ -280,6 +412,10 @@ function procesarRespuestaSync(data) {
     if (!data.runas_ganadas || data.runas_ganadas.length === 0) {
         // nada que animar, pero coins/points ya se actualizaron arriba
         if (data.runas) actualizarPanelRunas(data.runas);
+    
+        // RW V113 — también avisar a shop/stats cuando llega una confirmación sin runas_ganadas.
+        RW_emitirEstadoJuegoActualizado(data);
+    
         return;
     }
 
@@ -418,6 +554,11 @@ function procesarRespuestaSync(data) {
 
     // refrescar cantidades en panel lateral y coleccion
     if (data.runas) actualizarPanelRunas(data.runas);
+
+    // RW V114 — avisar a estadisticas/tienda cuando ya se aplicaron
+    // cantidades visuales, pps y pantalla.
+    RW_emitirEstadoJuegoActualizado(data);
+
     if (window.RW_DEBUG_ECONOMIA) {
         console.log("[RW economia][procesarRespuestaSync:despues]", {
             count: rwProcesarRespuestaSyncCount,
@@ -619,20 +760,28 @@ function guardarProgreso() {
             // coins_ps: evitar bajadas por desync
             if (typeof coins_ps !== "undefined" && data.coins_por_seg !== undefined) {
                 var serverCps = parseFloat(data.coins_por_seg) || 0;
-                coins_ps = Math.max(coins_ps, serverCps);
+            
+                coins_ps_base = Math.max(parseFloat(coins_ps_base) || 0, serverCps);
+            
+                if (typeof aplicarBoosts === "function") {
+                    aplicarBoosts();
+                } else {
+                    coins_ps = Math.max(parseFloat(coins_ps) || 0, coins_ps_base);
+                    window.coins_ps = coins_ps;
+                }
             }
 
             // points_ps: CLAVE del bug
             if (typeof points_ps !== "undefined" && data.points_por_seg !== undefined) {
                 var serverPps = parseFloat(data.points_por_seg) || 0;
-
-                // valor base autoritativo del servidor; no incluye boosts temporales.
-                points_ps_base = serverPps;
+            
+                points_ps_base = Math.max(parseFloat(points_ps_base) || 0, serverPps);
+            
                 if (typeof aplicarBoosts === "function") {
                     aplicarBoosts();
                 } else {
-                    points_ps = serverPps;
-                    window.points_ps = serverPps;
+                    points_ps = Math.max(parseFloat(points_ps) || 0, points_ps_base);
+                    window.points_ps = points_ps;
                 }
             }
 

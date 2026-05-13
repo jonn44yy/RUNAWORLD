@@ -477,6 +477,13 @@ window.RW_TIENDA_VERSION = '8.0';
         }
     }
 
+    // RW V114 — refresco en vivo desde tirada.js.
+    // Cuando una tirada incrementa window.RW_INIT.total_tiradas, la tienda
+    // reevalua las condiciones tipo tirar_runa_x sin esperar a recargar.
+    document.addEventListener('rw:shop-refresh', function () {
+        refrescarDesbloqueosMejorasLocal();
+    });
+
     window.marcarMejorasComoVistas = marcarMejorasComoVistas;
     window.renderTienda            = renderTienda;
     window.actualizarGlowNav       = actualizarGlowNav;

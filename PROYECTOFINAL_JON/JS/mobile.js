@@ -1,257 +1,852 @@
-// mobile.js — runaworld
-// la capa movil del juego. runaworld esta pensado para desktop (1200+ px)
-// con sidebars a ambos lados, pero en movil se descuadra todo. en lugar de
-// hacer media queries gigantes en css y pelearme con cada panel, monto aqui
-// una ui movil nueva por encima del dom existente: topbar, drawers laterales,
-// botones flotantes y una barra de stats compacta abajo. el dom original
-// sigue intacto debajo (solo lo oculto con css), asi si el jugador rota o
-// redimensiona se puede volver al desktop sin rehacer nada
-//
-// indice:
-//   1. early return si estamos en desktop (>1024px), no pinta absolutamente nada
-//   2. inyeccion del html movil (topbar + drawers + botones flotantes + stats bar)
-//   3. clonado del panel de runas desktop al drawer movil
-//   4. syncStats() — sync cada 800ms de stats numericas y cantidades de runas
-//   5. logica de drawers (abrir/cerrar con boton flotante o overlay)
-//   6. navegacion delegada en mostrarSeccion() del desktop (ui.js)
-//   7. swipe desde bordes de pantalla para abrir drawers
-//
-// lenguaje interno para los poco entendidos:
-//   drawer       = panel que entra lateralmente (estilo app nativa). hay dos:
-//                  uno izq con el menu, otro der con "mis runas". se abren
-//                  con sus botones flotantes o con swipe desde el borde
-//   overlay      = fondo semi-transparente que se enciende cuando un drawer
-//                  esta abierto. sirve de click-fuera-para-cerrar y de velo
-//                  visual sobre el juego de detras
-//   syncStats    = en vez de meter listeners o refactorizar ui.js para que
-//                  notifique a movil cuando algo cambia, tiro de polling
-//                  simple: cada 800ms leo los textos del dom desktop y los
-//                  copio al dom movil. feo pero funciona y es dos lineas
-//   clonar panel = el panel de runas no se mueve, se clona. asi el desktop
-//                  conserva su panel original (por si el jugador agranda la
-//                  ventana y vuelve a desktop sin recargar) y el movil tiene
-//                  su copia en el drawer
-//
-// hecho a principios de abril cuando probe el juego en el movil y vi que
-// era un despropolisto. sigue funcionando, por ahora. !hi
-
-// IIFE: envuelvo todo el archivo en una funcion auto-invocada para no
-// ensuciar el scope global con variables como tx0, syncStats, etc. lo unico
-// que exporto al window es cerrarDrawers (ver mas abajo)
-window.RW_MOBILE_VERSION = '8.0';
+// mobile.js — RuneWorld mobile v11.1
+// Capa móvil ligera.
+// Principio: usar la lógica web existente, no inventar otra.
+// - La navegación móvil llama a los botones reales.
+// - La barra inferior solo refleja los displays reales de ui.js.
+// - El drawer derecho clona paneles solo al abrirse.
+// - No clona paneles en cada click de tirar runa.
 
 (function () {
-    // si el viewport es mayor de 1024px es desktop, no inyecto nada. esto hace
-    // que este archivo sea practicamente free en desktop: carga y se va
-    if (window.innerWidth > 1024) return;
+    'use strict';
 
-    // saco el nombre del usuario del header del desktop para ponerlo en la
-    // topbar movil. si no existe dejo string vacio (no fallo)
-    const username = document.querySelector('#header .bienvenido strong')?.textContent || '';
+    window.RW_MOBILE_VERSION = '11.1-light-dom-proxy-stats-sync';
 
-    // inyeccion del html movil al final del body. va todo en un solo
-    // insertAdjacentHTML porque es mas barato que crear los nodos uno a uno
-    // con createElement, y mas legible que encadenar appendChild
-    document.body.insertAdjacentHTML('beforeend', `
-        <div id="mobile-overlay"></div>
-        <div id="mobile-topbar">
-            <button id="btn-menu-nav" class="mobile-topbar-btn" aria-label="Menú" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="1.7" stroke-linecap="round">
-                    <path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>
-                </svg>
-            </button>
-            <div class="topbar-main">
-                <span class="topbar-title">RunaWorld</span>
-                <span class="topbar-user">Bienvenido, <strong>${username}</strong></span>
-            </div>
-            <button id="btn-menu-runas" class="mobile-topbar-btn mobile-topbar-btn-runas" aria-label="Estadísticas de runa" type="button">
-                <svg viewBox="0 0 400 400" fill="none" stroke="#c080ff" stroke-width="18" stroke-linecap="round">
-                    <circle cx="200" cy="200" r="150"/><circle cx="200" cy="200" r="48"/>
-                    <line x1="200" y1="55" x2="200" y2="18"/><line x1="200" y1="345" x2="200" y2="382"/>
-                    <line x1="55" y1="200" x2="18" y2="200"/><line x1="345" y1="200" x2="382" y2="200"/>
-                    <circle cx="200" cy="200" r="16" fill="#c080ff" stroke="none"/>
-                </svg>
-            </button>
-        </div>
-        <div id="mobile-nav-drawer">
-            <div class="drawer-titulo">Menú</div>
-            <button class="mob-nav active" data-sec="tirada"><span>⬡</span> Tirar Runa</button>
-            <button class="mob-nav" data-sec="tienda"><span>◈</span> Tienda</button>
-            <button class="mob-nav" data-sec="coleccion"><span>◎</span> Colección</button>
-            <button class="mob-nav" data-sec="estadisticas"><span>✦</span> Estadisticas</button>
-            <button class="mob-nav" data-sec="ajustes"><span>⚙</span> Ajustes</button>
-            <div class="mob-spacer"></div>
-            <div class="mob-line"></div>
-            <button class="mob-nav danger" onclick="window.location='PHP/logout.php'"><span>→</span> Cerrar Sesión</button>
-        </div>
-        <div id="mobile-runas-drawer">
-            <div class="drawer-titulo">Runas y estadísticas</div>
-            <div id="mobile-runas-scroll"></div>
-        </div>
-        <div id="mobile-stats-bar">
-            <div class="mob-stat">
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="17" stroke="#ffd700" stroke-width="1.5" opacity="0.5"/><text x="20" y="25" text-anchor="middle" fill="#ffd700" font-size="11" font-family="Oswald">C</text></svg>
-                <span class="mob-val" id="ms-coins">0</span>
-                <span class="mob-rate" id="ms-coins-ps">+0/s</span>
-            </div>
-            <div class="mob-sep"></div>
-            <div class="mob-stat">
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><polygon points="20,3 24,15 37,15 26,23 30,35 20,27 10,35 14,23 3,15 16,15" stroke="#dde4f0" stroke-width="1.5" fill="none" opacity="0.6"/></svg>
-                <span class="mob-val silver" id="ms-points">0</span>
-                <span class="mob-rate" id="ms-points-ps">+0/s</span>
-            </div>
-            <div class="mob-sep"></div>
-            <div class="mob-stat">
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><path d="M20 22 C17 15 7 18 9 10 C11 4 18 7 20 13 C22 7 29 4 31 10 C33 18 23 15 20 22Z" stroke="#ffd700" stroke-width="1.35" fill="rgba(255,215,0,0.10)" stroke-linejoin="round"/><path d="M20 22 C18 28 15 31 11 34" stroke="#ffd700" stroke-width="1.45" stroke-linecap="round"/></svg>
-                <span class="mob-val" id="ms-suerte">x1.00</span>
-                <span class="mob-rate">suerte</span>
-            </div>
-            <div class="mob-sep"></div>
-            <div class="mob-stat">
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><rect x="6" y="14" width="8" height="16" stroke="#dde4f0" stroke-width="1.2" opacity="0.5" rx="1"/><rect x="16" y="10" width="8" height="20" stroke="#dde4f0" stroke-width="1.2" opacity="0.7" rx="1"/><rect x="26" y="6" width="8" height="24" stroke="#ffd700" stroke-width="1.2" opacity="0.9" rx="1"/></svg>
-                <span class="mob-val silver" id="ms-bulk">1</span>
-                <span class="mob-rate">por tirada</span>
-            </div>
-        </div>
-    `);
+    const MOBILE_MAX = 1024;
 
-    // clonar al drawer móvil tanto las estadísticas de la runa seleccionada
-    // como la lista completa de Mis Runas. Así el móvil mantiene la misma
-    // separación que PC: Runas Básicas / Runas Corruptas.
-    const panelStatsColeccion = document.getElementById('panel-col-stats');
-    const panelMisRunas = document.getElementById('panel-mis-runas');
-    const scroll = document.getElementById('mobile-runas-scroll');
-    if (scroll) {
-        if (panelStatsColeccion) {
-            const cloneStats = panelStatsColeccion.cloneNode(true);
-            cloneStats.id = 'panel-col-stats-mobile';
-            cloneStats.style.display = 'block';
-            scroll.appendChild(cloneStats);
-        }
-        if (panelMisRunas) {
-            const cloneRunas = panelMisRunas.cloneNode(true);
-            cloneRunas.id = 'panel-mis-runas-mobile';
-            cloneRunas.style.display = 'block';
-            cloneRunas.querySelectorAll('[id]').forEach(function(el){ el.removeAttribute('id'); });
-            scroll.appendChild(cloneRunas);
-        }
-    }
-
-    window.rwSyncMobileCollectionStats = function () {
-        const origStats = document.getElementById("panel-col-stats");
-        const mobStats  = document.getElementById("panel-col-stats-mobile");
-        const mobRunas  = document.getElementById("panel-mis-runas-mobile");
-        const enColeccion = !!document.querySelector("#seccion-coleccion.activa");
-
-        // En Colección, el botón morado enseña SOLO las estadísticas
-        // de la runa seleccionada. El inventario móvil queda para
-        // Tirar Runa, Ajustes y Estadísticas.
-        if (mobRunas) mobRunas.style.display = enColeccion ? "none" : "block";
-
-        if (!origStats || !mobStats) return;
-        mobStats.style.display = enColeccion ? "block" : "none";
-        if (!enColeccion) return;
-
-        mobStats.innerHTML = origStats.innerHTML;
+    const IDS = {
+        topbar: 'mobile-topbar',
+        navBtn: 'btn-menu-nav',
+        runasBtn: 'btn-menu-runas',
+        overlay: 'mobile-overlay',
+        navDrawer: 'mobile-nav-drawer',
+        runasDrawer: 'mobile-runas-drawer',
+        statsBar: 'mobile-stats-bar'
     };
 
-    // sync de stats: leo los valores del dom desktop (coins-display,
-    // points-display, etc) y los copio al dom movil. polling cada 800ms.
-    // si algun dia me aburro lo cambio por un pub/sub en ui.js pero por
-    // ahora 800ms es imperceptible y me ahorra refactorizar todo
-    function syncStats() {
-        const g = id => document.getElementById(id)?.textContent || '';
-        document.getElementById('ms-coins').textContent     = g('coins-display');
-        document.getElementById('ms-coins-ps').textContent  = g('coins-ps-display');
-        document.getElementById('ms-points').textContent    = g('points-display');
-        const suerteTxt = g("luck-display") || g("suerte-display") || (
-            typeof window.luck_multiplier !== "undefined"
-                ? "x" + (parseFloat(window.luck_multiplier) || 1).toFixed(2)
-                : "x1.00"
-        );
-        const bulkTxt = g("bulk-display") || (typeof window.bulk_runas !== "undefined" ? String(window.bulk_runas) : "1");
-        document.getElementById("ms-suerte").textContent = suerteTxt;
-        document.getElementById("ms-bulk").textContent   = bulkTxt;
-        document.getElementById('ms-points-ps').textContent = g('points-ps-display');
+    let statsTimer = null;
+    let statObserver = null;
+    let collectionObserver = null;
 
-        if (typeof window.rwSyncMobileCollectionStats === 'function') {
-            window.rwSyncMobileCollectionStats();
-        }
-    }
-    // polling estable cada 800ms + un sync extra a los 300ms para cubrir el
-    // caso de que el panel movil tarde en renderizarse en el primer frame
-    setInterval(syncStats, 800);
-    setTimeout(syncStats, 300);
-
-    // drawers: abrir/cerrar con el overlay que oscurece el fondo
-    function abrirDrawer(id) {
-        // siempre cierro todo antes de abrir. asi si hay otro drawer abierto
-        // se cambia limpio en vez de apilarse
-        cerrarDrawers(true);
-        document.getElementById(id)?.classList.add('open');
-        document.getElementById('mobile-overlay').classList.add('visible');
-    }
-
-    // cerrarDrawers se expone en window porque lo llaman desde los handlers
-    // inline de los botones (atencion: parametro silent no se usa ahora mismo,
-    // lo deje por si algun dia quiero cerrar sin animacion)
-    window.cerrarDrawers = function(silent) {
-        document.getElementById('mobile-nav-drawer')?.classList.remove('open');
-        document.getElementById('mobile-runas-drawer')?.classList.remove('open');
-        document.getElementById('mobile-overlay')?.classList.remove('visible');
+    const statCache = {
+        coins: '',
+        points: '',
+        coinsPs: '',
+        pointsPs: '',
+        bulk: '',
+        luck: '',
+        ts: 0
     };
 
-    // boton del engranaje (nav) y boton de la runa morada (runas). cada uno
-    // hace toggle: si esta abierto lo cierra, si esta cerrado lo abre
-    document.getElementById('btn-menu-nav').addEventListener('click', () => {
-        const d = document.getElementById('mobile-nav-drawer');
-        if (d.classList.contains('open')) cerrarDrawers(); else abrirDrawer('mobile-nav-drawer');
-    });
-    document.getElementById('btn-menu-runas').addEventListener('click', () => {
-        const d = document.getElementById('mobile-runas-drawer');
-        if (d.classList.contains('open')) cerrarDrawers(); else abrirDrawer('mobile-runas-drawer');
-    });
-    // click en el overlay = cerrar drawer. estandar en todas las apps moviles
-    document.getElementById('mobile-overlay').addEventListener('click', cerrarDrawers);
+    function isMobile() {
+        return window.innerWidth <= MOBILE_MAX || window.matchMedia('(max-width: 1024px)').matches;
+    }
 
-    // navegacion entre secciones: reutilizo mostrarSeccion() de ui.js que es
-    // la misma que usa el desktop. asi no duplico la logica de mostrar/ocultar
-    // secciones, solo cambio el boton "active" en el drawer movil y cierro
-    document.querySelectorAll('#mobile-nav-drawer .mob-nav[data-sec]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            mostrarSeccion(btn.dataset.sec, null);
-            document.querySelectorAll('#mobile-nav-drawer .mob-nav').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            cerrarDrawers();
+    function byId(id) {
+        return document.getElementById(id);
+    }
+
+    function make(tag, attrs, html) {
+        const el = document.createElement(tag);
+        if (attrs) {
+            Object.keys(attrs).forEach((key) => {
+                if (key === 'class') el.className = attrs[key];
+                else if (key === 'text') el.textContent = attrs[key];
+                else el.setAttribute(key, attrs[key]);
+            });
+        }
+        if (html != null) el.innerHTML = html;
+        return el;
+    }
+
+    function normalize(txt) {
+        return String(txt || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+    }
+
+    function getGlobalValue(name) {
+        try {
+            return Function('return (typeof ' + name + ' !== "undefined") ? ' + name + ' : undefined;')();
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    function fmtNumber(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '';
+        if (typeof window.formatNum === 'function') return window.formatNum(n);
+
+        const abs = Math.abs(n);
+        const sign = n < 0 ? '-' : '';
+        function short(div, suffix) {
+            return sign + (abs / div).toFixed(2).replace(/\.?0+$/, '') + suffix;
+        }
+
+        if (abs >= 1e12) return short(1e12, 'T');
+        if (abs >= 1e9) return short(1e9, 'B');
+        if (abs >= 1e6) return short(1e6, 'M');
+        if (abs >= 1e3) return short(1e3, 'K');
+        return sign + Math.floor(abs).toString();
+    }
+
+    function fmtRate(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return '';
+        return '+' + fmtNumber(n) + '/seg';
+    }
+
+    function deepFind(obj, keys) {
+        if (!obj || typeof obj !== 'object') return undefined;
+
+        for (const key of keys) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+        }
+
+        const stack = [obj];
+        const seen = new Set();
+
+        while (stack.length) {
+            const cur = stack.pop();
+            if (!cur || typeof cur !== 'object' || seen.has(cur)) continue;
+            seen.add(cur);
+
+            for (const key of keys) {
+                if (Object.prototype.hasOwnProperty.call(cur, key)) return cur[key];
+            }
+
+            Object.keys(cur).forEach((k) => {
+                const v = cur[k];
+                if (v && typeof v === 'object') stack.push(v);
+            });
+        }
+
+        return undefined;
+    }
+
+    function ingestStatsPayload(payload) {
+        const d = payload && payload.detail ? payload.detail : payload;
+        if (!d || typeof d !== 'object') return;
+
+        const coinsVal = deepFind(d, ['coins', 'monedas']);
+        const pointsVal = deepFind(d, ['points', 'puntos']);
+        const coinsPsVal = deepFind(d, ['coins_ps', 'coins_por_seg', 'coinsPerSecond', 'monedas_por_seg']);
+        const pointsPsVal = deepFind(d, ['points_ps', 'points_por_seg', 'pointsPerSecond', 'puntos_por_seg']);
+        const bulkVal = deepFind(d, ['bulk', 'bulk_total', 'bulk_runas']);
+        const luckVal = deepFind(d, ['luck_multiplier', 'suerte', 'suerte_total']);
+
+        if (coinsVal !== undefined) statCache.coins = fmtNumber(coinsVal);
+        if (pointsVal !== undefined) statCache.points = fmtNumber(pointsVal);
+        if (coinsPsVal !== undefined) statCache.coinsPs = fmtRate(coinsPsVal);
+        if (pointsPsVal !== undefined) statCache.pointsPs = fmtRate(pointsPsVal);
+        if (bulkVal !== undefined) statCache.bulk = String(parseInt(bulkVal, 10) || 1);
+        if (luckVal !== undefined) statCache.luck = String(luckVal).charAt(0) === 'x'
+            ? String(luckVal)
+            : 'x' + (parseFloat(luckVal) || 1).toFixed(2);
+
+        statCache.ts = Date.now();
+    }
+
+    function cacheValue(key) {
+        return (Date.now() - statCache.ts) < 4000 ? (statCache[key] || '') : '';
+    }
+
+    function textOf(id) {
+        const el = byId(id);
+        return el ? String(el.textContent || el.value || '').replace(/\s+/g, ' ').trim() : '';
+    }
+
+    function setText(id, value) {
+        const el = byId(id);
+        if (el) el.textContent = value;
+    }
+
+    function visibleUsername() {
+        const candidates = [
+            '#header .bienvenido strong',
+            '.bienvenido strong',
+            '#nombre-usuario',
+            '#usuario-nombre',
+            '#user-name',
+            '.nombre-usuario',
+            '.usuario-nombre',
+            '.user-name',
+            '[data-usuario]',
+            '[data-username]'
+        ];
+
+        for (const sel of candidates) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const txt = String(el.textContent || el.value || '').trim();
+            if (txt) return txt;
+        }
+
+        return 'JUGADOR';
+    }
+
+    function svgMenu() {
+        return '<svg class="mobile-topbar-icon-svg" viewBox="0 0 24 24" aria-hidden="true">' +
+            '<path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' +
+        '</svg>';
+    }
+
+    function svgRunas() {
+        return '<svg class="mobile-topbar-icon-svg" viewBox="0 0 24 24" aria-hidden="true">' +
+            '<path d="M12 3l7 4v10l-7 4-7-4V7l7-4z" fill="none" stroke="currentColor" stroke-width="1.9"/>' +
+            '<path d="M12 7v10M8.5 9.2l7 5.6M15.5 9.2l-7 5.6" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/>' +
+        '</svg>';
+    }
+
+    function createTopbar() {
+        if (byId(IDS.topbar)) return;
+
+        const topbar = make('div', { id: IDS.topbar });
+
+        const navBtn = make('button', {
+            id: IDS.navBtn,
+            class: 'mobile-topbar-btn',
+            type: 'button',
+            'aria-label': 'Abrir menú'
+        }, svgMenu());
+
+        const main = make('div', { class: 'topbar-main' });
+        main.innerHTML =
+            '<div class="topbar-title">RuneWorld</div>' +
+            '<div class="topbar-user">USUARIO <strong></strong></div>';
+        main.querySelector('strong').textContent = visibleUsername();
+
+        const runasBtn = make('button', {
+            id: IDS.runasBtn,
+            class: 'mobile-topbar-btn',
+            type: 'button',
+            'aria-label': 'Abrir panel derecho'
+        }, svgRunas());
+
+        topbar.appendChild(navBtn);
+        topbar.appendChild(main);
+        topbar.appendChild(runasBtn);
+        document.body.appendChild(topbar);
+    }
+
+    function createOverlay() {
+        if (byId(IDS.overlay)) return;
+        document.body.appendChild(make('div', { id: IDS.overlay }));
+    }
+
+    function originalNavButtons() {
+        return Array.from(document.querySelectorAll(
+            '#sidebar .nav-btn, #sidebar button, #sidebar a, #header .nav-btn, [data-sec], [data-section], [data-seccion]'
+        )).filter((el) => {
+            if (!el || el.closest('#mobile-nav-drawer')) return false;
+            if (el.closest('#mobile-topbar')) return false;
+            const txt = normalize(el.textContent);
+            if (!txt || txt.length > 60) return false;
+            return true;
         });
+    }
+
+    function prefixIds(root, prefix) {
+        if (!root || !root.querySelectorAll) return;
+
+        if (root.id) root.id = prefix + root.id;
+
+        root.querySelectorAll('[id]').forEach((el) => {
+            el.id = prefix + el.id;
+        });
+
+        root.querySelectorAll('label[for]').forEach((el) => {
+            el.setAttribute('for', prefix + el.getAttribute('for'));
+        });
+    }
+
+    function sectionFromOriginal(el) {
+        const ds = el.dataset || {};
+        let target = ds.sec || ds.section || ds.seccion || ds.target || ds.tab || el.getAttribute('href') || '';
+        target = String(target || '').replace(/^#/, '');
+        if (!target) return '';
+        if (!target.startsWith('seccion-')) target = 'seccion-' + target;
+        return target;
+    }
+
+    function fallbackShowSection(sectionId) {
+        if (!sectionId) return;
+
+        if (typeof window.mostrarSeccion === 'function') {
+            window.mostrarSeccion(sectionId.replace(/^seccion-/, ''));
+            return;
+        }
+
+        const sec = byId(sectionId);
+        if (!sec) return;
+
+        document.querySelectorAll('.seccion').forEach((s) => s.classList.remove('activa'));
+        sec.classList.add('activa');
+    }
+
+    function createNavDrawer() {
+        if (byId(IDS.navDrawer)) return;
+
+        const drawer = make('aside', { id: IDS.navDrawer, 'aria-hidden': 'true' });
+        drawer.appendChild(make('div', { class: 'drawer-titulo', text: 'Navegación' }));
+
+        const holder = make('div', { class: 'mobile-nav-items' });
+        drawer.appendChild(holder);
+        document.body.appendChild(drawer);
+
+        rebuildNavDrawer();
+    }
+
+    function rebuildNavDrawer() {
+        const holder = document.querySelector('#mobile-nav-drawer .mobile-nav-items');
+        if (!holder) return;
+
+        holder.innerHTML = '';
+
+        const originals = originalNavButtons();
+        const used = new Set();
+
+        originals.forEach((original) => {
+            const label = String(original.textContent || '').replace(/\s+/g, ' ').trim();
+            const key = normalize(label);
+            if (!key || used.has(key)) return;
+            used.add(key);
+
+            const clone = make('button', {
+                type: 'button',
+                class: 'mob-nav' + (original.classList.contains('danger') || key.includes('borrar') ? ' danger' : ''),
+                'data-mobile-target': sectionFromOriginal(original)
+            });
+
+            clone.innerHTML = original.innerHTML || label;
+            prefixIds(clone, 'mob-nav-');
+
+            clone.addEventListener('click', () => {
+                if (typeof original.click === 'function') original.click();
+                else fallbackShowSection(sectionFromOriginal(original));
+
+                closeDrawers();
+                window.setTimeout(() => {
+                    updateActiveNav();
+                    updateRightDrawerMode();
+                    applyCollectionMobileCleanup();
+                    syncStatsBar();
+                }, 40);
+            });
+
+            holder.appendChild(clone);
+        });
+
+        if (!holder.children.length) {
+            [
+                ['Tirar runa', 'seccion-tirada'],
+                ['Tienda', 'seccion-tienda'],
+                ['Colección', 'seccion-coleccion'],
+                ['Estadísticas', 'seccion-estadisticas'],
+                ['Ajustes', 'seccion-ajustes'],
+                ['Engranajes', 'seccion-engranajes']
+            ].forEach(([label, id]) => {
+                if (!byId(id)) return;
+
+                const btn = make('button', {
+                    type: 'button',
+                    class: 'mob-nav',
+                    'data-mobile-target': id,
+                    text: label
+                });
+
+                btn.addEventListener('click', () => {
+                    fallbackShowSection(id);
+                    closeDrawers();
+                    updateActiveNav();
+                    updateRightDrawerMode();
+                    applyCollectionMobileCleanup();
+                });
+
+                holder.appendChild(btn);
+            });
+        }
+
+        updateActiveNav();
+    }
+
+    function updateActiveNav() {
+        const active = document.querySelector('.seccion.activa');
+        const activeId = active ? active.id : '';
+
+        document.querySelectorAll('#mobile-nav-drawer .mob-nav').forEach((btn) => {
+            btn.classList.toggle('active', btn.getAttribute('data-mobile-target') === activeId);
+        });
+    }
+
+    function createRightDrawer() {
+        if (byId(IDS.runasDrawer)) return;
+
+        const drawer = make('aside', { id: IDS.runasDrawer, 'aria-hidden': 'true' });
+        drawer.innerHTML =
+            '<div id="mobile-runas-scroll">' +
+                '<div id="panel-col-stats-mobile"></div>' +
+                '<div id="panel-mis-runas-mobile"></div>' +
+            '</div>';
+
+        document.body.appendChild(drawer);
+        updateRightDrawerMode();
+    }
+
+    function isCollectionActive() {
+        const sec = byId('seccion-coleccion');
+        return !!(sec && sec.classList.contains('activa'));
+    }
+
+    function updateRightDrawerMode() {
+        const drawer = byId(IDS.runasDrawer);
+        if (!drawer) return;
+
+        const collection = isCollectionActive();
+        drawer.classList.toggle('rw-drawer-mode-stats', collection);
+        drawer.classList.toggle('rw-drawer-mode-runas', !collection);
+
+        const title = drawer.querySelector('.drawer-titulo');
+        if (title) title.textContent = collection ? 'Stats de runa' : 'Mis runas';
+    }
+
+    function clonePanel(sourceSelector, targetId) {
+        const source = document.querySelector(sourceSelector);
+        const target = byId(targetId);
+        if (!source || !target) return;
+
+        const html = source.innerHTML || '';
+        if (target.getAttribute('data-last-html') === html) return;
+        target.setAttribute('data-last-html', html);
+
+        target.innerHTML = '';
+
+        Array.from(source.childNodes).forEach((node) => {
+            const clone = node.cloneNode(true);
+            if (clone.nodeType === 1) prefixIds(clone, 'mob-');
+            target.appendChild(clone);
+        });
+    }
+
+    function syncRightDrawerNow() {
+        updateRightDrawerMode();
+
+        if (isCollectionActive()) {
+            clonePanel('#panel-col-stats', 'panel-col-stats-mobile');
+        } else {
+            clonePanel('#panel-mis-runas', 'panel-mis-runas-mobile');
+            removeDuplicateCollectionTitle(byId('panel-mis-runas-mobile'));
+        }
+    }
+
+    function openDrawer(which) {
+        const nav = byId(IDS.navDrawer);
+        const runas = byId(IDS.runasDrawer);
+        const overlay = byId(IDS.overlay);
+
+        if (which === 'nav') {
+            if (runas) {
+                runas.classList.remove('open');
+                runas.setAttribute('aria-hidden', 'true');
+            }
+
+            if (nav) {
+                nav.classList.add('open');
+                nav.setAttribute('aria-hidden', 'false');
+            }
+        }
+
+        if (which === 'runas') {
+            if (nav) {
+                nav.classList.remove('open');
+                nav.setAttribute('aria-hidden', 'true');
+            }
+
+            if (runas) {
+                syncRightDrawerNow();
+                runas.classList.add('open');
+                runas.setAttribute('aria-hidden', 'false');
+            }
+        }
+
+        if (overlay) overlay.classList.add('visible');
+    }
+
+    function closeDrawers() {
+        const nav = byId(IDS.navDrawer);
+        const runas = byId(IDS.runasDrawer);
+        const overlay = byId(IDS.overlay);
+
+        if (document.activeElement && document.activeElement.closest &&
+            (document.activeElement.closest('#mobile-nav-drawer') || document.activeElement.closest('#mobile-runas-drawer'))) {
+            const fallback = byId(IDS.navBtn) || byId(IDS.runasBtn) || document.body;
+            if (fallback && fallback.focus) fallback.focus({ preventScroll: true });
+        }
+
+        if (nav) {
+            nav.classList.remove('open');
+            nav.setAttribute('aria-hidden', 'true');
+        }
+
+        if (runas) {
+            runas.classList.remove('open');
+            runas.setAttribute('aria-hidden', 'true');
+        }
+
+        if (overlay) overlay.classList.remove('visible');
+    }
+
+    function statIconFor(displayId, fallback) {
+        const el = byId(displayId);
+        if (!el) return fallback;
+
+        const box = el.closest('.stat-block') ||
+            el.closest('.stat-card, .stat-box, .panel-stat, .stats-card, .stat') ||
+            el.parentElement;
+
+        if (!box) return fallback;
+
+        const icon = box.querySelector('svg.stat-icon, .stat-icon svg, img.stat-icon, .stat-icon, svg, img, .icon, .ico');
+        return icon ? icon.outerHTML : fallback;
+    }
+
+    function statItem(key, label, valueId, rateId, iconHtml) {
+        const el = make('div', { class: 'mob-stat mob-stat-' + key });
+        el.innerHTML =
+            '<div class="mob-icon">' + iconHtml + '</div>' +
+            '<div class="mob-val" id="' + valueId + '">0</div>' +
+            '<div class="mob-rate" id="' + rateId + '">' + label + '</div>';
+        return el;
+    }
+
+    function sep() {
+        return make('div', { class: 'mob-sep' });
+    }
+
+    function createStatsBar() {
+        if (byId(IDS.statsBar)) return;
+
+        const bar = make('div', { id: IDS.statsBar });
+
+        bar.appendChild(statItem('coins', 'coins/s', 'ms-coins', 'ms-coins-rate', statIconFor('coins-display', '◈')));
+        bar.appendChild(sep());
+        bar.appendChild(statItem('points', 'pts/s', 'ms-points', 'ms-points-rate', statIconFor('points-display', '✦')));
+        bar.appendChild(sep());
+        bar.appendChild(statItem('bulk', 'por tirada', 'ms-bulk', 'ms-bulk-rate', statIconFor('bulk-display', '×')));
+        bar.appendChild(sep());
+        bar.appendChild(statItem('suerte', 'suerte total', 'ms-suerte', 'ms-suerte-rate', statIconFor('luck-display', '☽')));
+
+        document.body.appendChild(bar);
+        syncStatsBar();
+    }
+
+    function syncStatsBar() {
+        const coins = cacheValue('coins') || textOf('coins-display') || fmtNumber(getGlobalValue('coins')) || '0';
+        const points = cacheValue('points') || textOf('points-display') || fmtNumber(getGlobalValue('points')) || '0';
+
+        const bulkGlobal = getGlobalValue('bulk_runas');
+        const bulkText = cacheValue('bulk') || textOf('bulk-display') || (bulkGlobal !== undefined ? String(parseInt(bulkGlobal, 10) || 1) : '1');
+        const bulkNum = String(bulkText || '').match(/\d+/);
+        const bulk = bulkNum ? bulkNum[0] : '1';
+
+        const luckGlobal = getGlobalValue('luck_multiplier');
+        const luck = cacheValue('luck') || textOf('luck-display') || textOf('suerte-display') ||
+            (luckGlobal !== undefined ? 'x' + (parseFloat(luckGlobal) || 1).toFixed(2) : 'x1.00');
+
+        const coinsPsGlobal = getGlobalValue('coins_ps');
+        const pointsPsGlobal = getGlobalValue('points_ps');
+
+        const coinsPs = cacheValue('coinsPs') ||
+            (coinsPsGlobal !== undefined ? fmtRate(coinsPsGlobal) : '') ||
+            textOf('coins-ps-display') ||
+            'coins/s';
+
+        const pointsPs = cacheValue('pointsPs') ||
+            (pointsPsGlobal !== undefined ? fmtRate(pointsPsGlobal) : '') ||
+            textOf('points-ps-display') ||
+            'pts/s';
+
+        setText('ms-coins', coins);
+        setText('ms-points', points);
+        setText('ms-bulk', bulk);
+        setText('ms-suerte', luck);
+        setText('ms-coins-rate', coinsPs);
+        setText('ms-points-rate', pointsPs);
+        setText('ms-bulk-rate', 'por tirada');
+        setText('ms-suerte-rate', 'suerte total');
+    }
+
+    function patchStatsPainters() {
+        ['actualizarPantalla', 'refrescarEstadisticas', 'recalcularStatsDesdeMejoras', 'aplicarBoosts'].forEach((name) => {
+            if (typeof window[name] !== 'function') return;
+            if (window[name].__rwMobileStatsPatched) return;
+
+            const original = window[name];
+
+            window[name] = function () {
+                const result = original.apply(this, arguments);
+                syncStatsBar();
+                window.setTimeout(syncStatsBar, 60);
+                window.setTimeout(syncStatsBar, 180);
+                return result;
+            };
+
+            window[name].__rwMobileStatsPatched = true;
+            window[name].__rwOriginal = original;
+        });
+    }
+
+    function observeStatsDisplays() {
+        if (statObserver || !('MutationObserver' in window)) return;
+
+        const ids = [
+            'coins-display',
+            'points-display',
+            'coins-ps-display',
+            'points-ps-display',
+            'bulk-display',
+            'luck-display',
+            'suerte-display'
+        ];
+
+        const nodes = ids.map(byId).filter(Boolean);
+        if (!nodes.length) return;
+
+        statObserver = new MutationObserver(() => {
+            window.requestAnimationFrame(syncStatsBar);
+        });
+
+        nodes.forEach((node) => {
+            statObserver.observe(node, {
+                childList: true,
+                characterData: true,
+                subtree: true
+            });
+        });
+    }
+
+    function removeDuplicateCollectionTitle(root) {
+        if (!root || !root.querySelectorAll) return;
+
+        root.querySelectorAll('.col-contador, .col-contador-label, h1, h2, h3, h4, .panel-titulo, .coleccion-title, .coleccion-titulo, .seccion-titulo, .titulo-seccion').forEach((el) => {
+            if (!el || !el.isConnected) return;
+            if (el.closest('#mobile-nav-drawer')) return;
+
+            const txt = normalize(el.textContent);
+            if (txt === 'coleccion' || txt === 'collection') {
+                const counter = el.closest('.col-contador');
+                if (counter) counter.remove();
+                else el.remove();
+            }
+        });
+    }
+
+    function activeVariantIsCorrupt(root) {
+        if (!root) return false;
+
+        const active = root.querySelector(
+            '.coleccion-variante-pill.active, ' +
+            '.coleccion-variante-pill.activa, ' +
+            '.coleccion-variante-pill[aria-current="true"], ' +
+            '[data-variante].active, [data-variante].activa, ' +
+            '[data-variant].active, [data-variant].activa'
+        );
+
+        if (!active) return false;
+
+        const raw = [
+            active.textContent,
+            active.className,
+            active.getAttribute('data-variante'),
+            active.getAttribute('data-variant')
+        ].join(' ');
+
+        const txt = normalize(raw);
+        const locked = active.disabled ||
+            active.getAttribute('aria-disabled') === 'true' ||
+            txt.includes('bloquead') ||
+            txt.includes('locked') ||
+            Boolean(active.querySelector('.locked, .bloqueado, .bloqueada, [data-locked]'));
+
+        return txt.includes('corrupt') && !locked;
+    }
+
+    function applyCollectionMobileCleanup() {
+        const sec = byId('seccion-coleccion');
+        if (!sec) return;
+
+        removeDuplicateCollectionTitle(sec);
+
+        if (!isMobile()) return;
+
+        const showCorrupt = activeVariantIsCorrupt(sec);
+
+        sec.classList.toggle('rw-variant-corrupta', showCorrupt);
+        sec.classList.toggle('rw-variant-normal', !showCorrupt);
+
+        // El bloque desktop no debe verse en móvil. En móvil solo usamos el bonus mobile.
+        sec.querySelectorAll('.coleccion-bonus-desktop').forEach((el) => {
+            el.style.setProperty('display', 'none', 'important');
+            el.setAttribute('data-rw-mobile-hidden', '1');
+        });
+
+        sec.querySelectorAll('.coleccion-bonus-mobile .coleccion-bonus-suerte-v74, .coleccion-bonus-mobile [data-bonus-coleccion]').forEach((el) => {
+            const tipo = normalize(el.getAttribute('data-bonus-coleccion') || el.dataset.bonusColeccion || el.textContent);
+            const isCorrupt = tipo.includes('corrupt');
+            const hide = isCorrupt ? !showCorrupt : showCorrupt;
+
+            if (hide) {
+                el.style.setProperty('display', 'none', 'important');
+                el.setAttribute('data-rw-bonus-hidden', '1');
+            } else {
+                el.style.removeProperty('display');
+                el.removeAttribute('data-rw-bonus-hidden');
+            }
+        });
+    }
+
+    function observeCollectionLight() {
+        if (collectionObserver || !('MutationObserver' in window)) return;
+
+        const sec = byId('seccion-coleccion');
+        if (!sec) return;
+
+        collectionObserver = new MutationObserver(() => {
+            window.requestAnimationFrame(applyCollectionMobileCleanup);
+        });
+
+        collectionObserver.observe(sec, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden', 'aria-disabled', 'aria-current', 'data-variante', 'data-variant', 'data-bonus-coleccion']
+        });
+    }
+
+    function bindEvents() {
+        const navBtn = byId(IDS.navBtn);
+        const runasBtn = byId(IDS.runasBtn);
+        const overlay = byId(IDS.overlay);
+
+        if (navBtn && !navBtn.__rwMobileBound) {
+            navBtn.__rwMobileBound = true;
+            navBtn.addEventListener('click', () => openDrawer('nav'));
+        }
+
+        if (runasBtn && !runasBtn.__rwMobileBound) {
+            runasBtn.__rwMobileBound = true;
+            runasBtn.addEventListener('click', () => openDrawer('runas'));
+        }
+
+        if (overlay && !overlay.__rwMobileBound) {
+            overlay.__rwMobileBound = true;
+            overlay.addEventListener('click', closeDrawers);
+        }
+
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') closeDrawers();
+        });
+
+        document.addEventListener('click', (ev) => {
+            const collectionControl = ev.target && ev.target.closest
+                ? ev.target.closest('.coleccion-lista-pill, .coleccion-variante-pill, [data-variante], [data-variant]')
+                : null;
+
+            if (collectionControl) {
+                window.setTimeout(applyCollectionMobileCleanup, 30);
+                window.setTimeout(applyCollectionMobileCleanup, 160);
+            }
+        }, true);
+
+        ['runas:sync', 'runas:update', 'runas:recorte', 'rw:stats-updated', 'rw:stats-actualizadas'].forEach((eventName) => {
+            window.addEventListener(eventName, (ev) => {
+                ingestStatsPayload(ev);
+                syncStatsBar();
+
+                const drawer = byId(IDS.runasDrawer);
+                if (drawer && drawer.classList.contains('open')) {
+                    window.setTimeout(syncRightDrawerNow, 80);
+                }
+
+                window.setTimeout(syncStatsBar, 60);
+                window.setTimeout(syncStatsBar, 180);
+                window.setTimeout(applyCollectionMobileCleanup, 120);
+            }, true);
+        });
+    }
+
+    function patchFetchForStats() {
+        if (window.fetch && !window.fetch.__rwMobileStatsPatched) {
+            const originalFetch = window.fetch;
+
+            window.fetch = function () {
+                return originalFetch.apply(this, arguments).then((response) => {
+                    try {
+                        const url = String(arguments[0] && (arguments[0].url || arguments[0]) || '');
+                        if (/tirar_runa|runa-sync|guardar|tienda|comprar/i.test(url)) {
+                            response.clone().json().then((data) => {
+                                ingestStatsPayload(data);
+                                syncStatsBar();
+                                window.setTimeout(syncStatsBar, 80);
+                            }).catch(() => {});
+                        }
+                    } catch (e) {}
+                    return response;
+                });
+            };
+
+            window.fetch.__rwMobileStatsPatched = true;
+        }
+    }
+
+    function boot() {
+        if (!isMobile()) return;
+
+        createOverlay();
+        createTopbar();
+        createNavDrawer();
+        createRightDrawer();
+        createStatsBar();
+
+        bindEvents();
+        patchFetchForStats();
+        patchStatsPainters();
+        observeStatsDisplays();
+        observeCollectionLight();
+
+        updateActiveNav();
+        updateRightDrawerMode();
+        applyCollectionMobileCleanup();
+        syncStatsBar();
+
+        if (!statsTimer) {
+            statsTimer = window.setInterval(() => {
+                if (isMobile()) syncStatsBar();
+            }, 500);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
+
+    window.addEventListener('resize', () => {
+        if (isMobile()) {
+            boot();
+            syncStatsBar();
+            applyCollectionMobileCleanup();
+        }
     });
 
-    // swipe desde los bordes para abrir drawers (gesto clasico en apps)
-    //   borde izq  -> abre nav drawer
-    //   borde der  -> abre runas drawer
-    // detecto touchstart en los primeros/ultimos 25px para no disparar con
-    // scrolls normales por el medio. el swipe tiene que ser de al menos 50px
-    // tambien, asi no se abre por error con un tap largo
-    let tx0 = 0;
-    document.addEventListener('touchstart', e => { tx0 = e.touches[0].clientX; }, { passive: true });
-    document.addEventListener('touchend', e => {
-        const dx = e.changedTouches[0].clientX - tx0;
-        if (Math.abs(dx) < 50) return;
-        // swipe hacia la derecha desde borde izq -> abrir menu
-        if (dx > 50  && tx0 < 25) abrirDrawer('mobile-nav-drawer');
-        // swipe hacia la izq desde borde der -> abrir runas
-        if (dx < -50 && tx0 > window.innerWidth - 25) abrirDrawer('mobile-runas-drawer');
-    }, { passive: true });
-
+    window.RW_MOBILE_SYNC_NOW = function () {
+        syncStatsBar();
+        syncRightDrawerNow();
+        applyCollectionMobileCleanup();
+        updateActiveNav();
+        updateRightDrawerMode();
+    };
 })();
-
-
-// ideas futuras / TODO:
-//   - swipe vertical desde abajo para abrir la stats bar ampliada con mas info
-//   - haptic feedback (navigator.vibrate) al abrir drawer y al tirar runa
-//   - modo landscape: ahora mismo funciona pero los drawers quedan chiquitos,
-//     podria aprovechar mejor el espacio horizontal
-//   - cambiar el polling de 800ms por un custom event desde ui.js cuando
-//     algo cambie. cuando tenga tiempo
-//   - detectar rotacion / resize a desktop y volver al layout original sin
-//     necesidad de recargar la pagina

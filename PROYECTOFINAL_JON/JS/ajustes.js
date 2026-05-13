@@ -38,42 +38,55 @@ function cerrarModal() {
 
 // confirmar el borrado: valida que el jugador escribio "estoy seguro" y
 // si todo ok, borra el progreso en el server + resetea preferencias locales
+function RW_borrarDatosLocalesRuneWorld() {
+    try {
+        localStorage.clear();
+    } catch (e) {
+        console.warn("[RW reset] No se pudo limpiar localStorage:", e);
+    }
+
+    try {
+        sessionStorage.clear();
+    } catch (e) {
+        console.warn("[RW reset] No se pudo limpiar sessionStorage:", e);
+    }
+}
+
 function confirmarBorrado() {
-    const textoConfirm = document.getElementById("input-confirmacion").value.trim().toLowerCase();
+    const inputConfirmacion = document.getElementById("input-confirmacion");
+    const msgConfirmacion = document.getElementById("msg-confirmacion");
+
+    if (!inputConfirmacion || !msgConfirmacion) return;
+
+    const textoConfirm = inputConfirmacion.value.trim().toLowerCase();
+
     if (textoConfirm !== "estoy seguro") {
-        document.getElementById("msg-confirmacion").textContent = "Escribe exactamente: estoy seguro";
+        msgConfirmacion.textContent = "Escribe exactamente: estoy seguro";
         return;
     }
 
-    // CLAVE: parar runa-sync ANTES de mandar el reset.
-    // si no, los clicks que tenia buffereados o una request en vuelo
-    // se aplican sobre la cuenta recien borrada y "vuelven" coins/stats.
-    // reset() incrementa epoch (invalida respuestas en vuelo), vacia el
-    // buffer y para el heartbeat. desde aqui hasta el reload no se
-    // procesa ningun click ni beacon
     if (window.runaSync && typeof window.runaSync.reset === "function") {
         window.runaSync.reset();
     }
 
-    fetch("PHP/borrar_progreso.php", { method: "POST" })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            // reseteo las preferencias del navegador tambien. ahora mismo la
-            // unica es rw_anim_boton (particulas on/off). si anado mas toggles
-            // en el futuro, aqui es donde tengo que limpiarlos todos.
-            // idea: mover a una funcion resetearPreferencias() si crece mucho
-            localStorage.removeItem("rw_anim_boton");
-            location.reload();
+    fetch("PHP/borrar_progreso.php", {
+        method: "POST",
+        credentials: "same-origin"
+    })
+    .then(function (r) {
+        return r.json();
+    })
+    .then(function (data) {
+        if (data && data.ok) {
+            RW_borrarDatosLocalesRuneWorld();
+            window.location.reload();
         } else {
-            document.getElementById("msg-confirmacion").textContent = "Error al borrar.";
+            msgConfirmacion.textContent = (data && data.error) ? data.error : "Error al borrar.";
         }
     })
-    .catch(err => {
-        // si la red falla a media, igual el reset() ya dejo el cliente
-        // "halted". forzamos reload para que el jugador no se quede atascado
-        console.warn("[borrar] fallo red, recargando", err);
-        location.reload();
+    .catch(function (err) {
+        console.warn("[borrar] fallo red:", err);
+        msgConfirmacion.textContent = "Error de conexión al borrar.";
     });
 }
 
@@ -275,16 +288,22 @@ function configurarProduccion(tipo) {
 // panel desplegable para contactar al admin. abre/cierra animado con CSS,
 // las clases .abierto estan en style.css
 function toggleContacto() {
-    const btn       = document.getElementById("contacto-toggle");
+    const btn = document.getElementById("contacto-toggle");
     const contenido = document.getElementById("contacto-contenido");
+    if (!btn || !contenido) return;
+
     btn.classList.toggle("abierto");
     contenido.classList.toggle("abierto");
 }
 
 // contador de caracteres en vivo del textarea de contacto (max 500)
-document.getElementById("msg-contenido").addEventListener("input", function() {
-    document.getElementById("contador-chars").textContent = this.value.length + " / 500";
-});
+const rwMsgContenidoEl = document.getElementById("msg-contenido");
+if (rwMsgContenidoEl) {
+    rwMsgContenidoEl.addEventListener("input", function() {
+        const contador = document.getElementById("contador-chars");
+        if (contador) contador.textContent = this.value.length + " / 500";
+    });
+}
 
 // cuando el jugador elige un archivo, enseño el nombre del archivo en el label
 // (por defecto el input file nativo se ve feo, asi queda custom)
@@ -361,12 +380,393 @@ fetch("PHP/enviar_mensaje.php", { method: "POST", body: formData })
 }
 
 
-// ideas futuras / TODO de este archivo:
-//   - pedir contrasena actual antes de cambiar la nueva (seguridad)
-//   - boton de "exportar mis datos" (tipo RGPD, por si algun profe lo pide)
-//   - boton de "cerrar sesion en todos los dispositivos"
-//   - mas toggles de rendimiento en ajustes, cada uno con su localStorage key
-//     (desactivar neon, desactivar intro, modo compacto, etc). si son muchos
-//     meterlos en una funcion resetearPreferencias() para limpiar todo de golpe
-//     al borrar progreso, en vez de ir removiendo clave a clave
-//   - previsualizar imagen antes de enviar en contactar admin
+
+// ─────────────────────────────────────────────────────────────
+// Eliminar cuenta: modal + animación final tipo agujero negro
+// ─────────────────────────────────────────────────────────────
+(function () {
+    "use strict";
+
+    const CONFIRMACION_ELIMINAR = "eliminar mi cuenta";
+
+    function qs(sel) {
+        return document.querySelector(sel);
+    }
+
+    function crearEstilosEliminarCuenta() {
+        if (document.getElementById("rw-delete-account-style")) return;
+
+        const style = document.createElement("style");
+        style.id = "rw-delete-account-style";
+        style.textContent = `
+            .rw-delete-account-zone {
+                width: 100%;
+                max-width: 720px;
+                margin: 28px auto 0;
+                padding: 26px 0 0;
+                border-top: 1px solid rgba(255, 40, 80, 0.28);
+                text-align: center;
+            }
+
+            .rw-delete-account-zone .ajuste-label {
+                color: #ffd700;
+                text-align: center;
+                letter-spacing: 0.28em;
+                margin-bottom: 10px;
+            }
+
+            .rw-delete-account-note {
+                max-width: 620px;
+                margin: 8px auto 18px;
+                color: rgba(220, 224, 245, 0.68);
+                font-size: 12px;
+                line-height: 1.6;
+                letter-spacing: 0.06em;
+                text-align: center;
+            }
+
+            .rw-delete-account-btn {
+                width: min(420px, 100%);
+                min-height: 56px;
+                display: inline-flex !important;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto;
+                padding: 0 28px !important;
+
+                border: 1px solid rgba(255, 40, 80, 0.88) !important;
+                color: #ff315c !important;
+                background: rgba(255, 40, 80, 0.035) !important;
+
+                font-family: 'Oswald', sans-serif;
+                font-size: 0.9rem;
+                letter-spacing: 0.26em;
+                text-transform: uppercase;
+
+                box-shadow:
+                    0 0 22px rgba(255, 40, 80, 0.16),
+                    inset 0 0 18px rgba(255, 40, 80, 0.035);
+            }
+
+            .rw-delete-account-btn:hover {
+                background: rgba(255, 40, 80, 0.10) !important;
+                box-shadow:
+                    0 0 30px rgba(255, 40, 80, 0.30),
+                    inset 0 0 22px rgba(255, 40, 80, 0.055);
+            }
+
+            #modal-eliminar-cuenta {
+                position: fixed;
+                inset: 0;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                background:
+                    radial-gradient(circle at center, rgba(255, 40, 80, 0.12), rgba(0, 0, 0, 0.88) 58%),
+                    rgba(0,0,0,0.82);
+                z-index: 99980;
+                padding: 24px;
+            }
+
+            #modal-eliminar-cuenta.visible {
+                display: flex;
+            }
+
+            .rw-delete-modal-box {
+                width: min(620px, 92vw);
+                min-height: 420px;
+
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+
+                background: linear-gradient(180deg, rgba(15, 16, 26, 0.98), rgba(7, 7, 13, 0.98));
+                border: 1px solid rgba(255, 40, 80, 0.72);
+                border-radius: 10px;
+
+                box-shadow:
+                    0 0 42px rgba(255, 40, 80, 0.22),
+                    inset 0 0 32px rgba(255, 255, 255, 0.025);
+
+                padding: 42px 44px;
+                color: white;
+                text-align: center;
+            }
+
+            .rw-delete-modal-box h3 {
+                margin: 0 0 24px;
+                color: #ff315c;
+
+                font-family: 'Oswald', sans-serif;
+                font-size: clamp(1.45rem, 3vw, 2rem);
+                font-weight: 700;
+                letter-spacing: 0.28em;
+                text-transform: uppercase;
+                text-align: center;
+            }
+
+            .rw-delete-modal-box p {
+                max-width: 500px;
+                color: rgba(225, 228, 245, 0.74);
+                line-height: 1.65;
+                margin: 8px auto;
+                text-align: center;
+            }
+
+            .rw-delete-modal-box strong {
+                color: #fff;
+                font-weight: 700;
+            }
+
+            #input-eliminar-cuenta {
+                width: min(440px, 100%);
+                margin: 22px auto 10px;
+                padding: 15px 16px;
+
+                background: rgba(0,0,0,0.62);
+                border: 1px solid rgba(255, 40, 80, 0.72);
+                color: #fff;
+                outline: none;
+
+                font-family: 'Oswald', sans-serif;
+                font-size: 0.9rem;
+                letter-spacing: 0.12em;
+                text-align: center;
+            }
+
+            #input-eliminar-cuenta:focus {
+                border-color: rgba(255, 40, 80, 1);
+                box-shadow: 0 0 18px rgba(255, 40, 80, 0.22);
+            }
+
+            #msg-eliminar-cuenta {
+                min-height: 20px;
+                margin: 4px 0 0;
+                color: #ff6685;
+                font-size: 12px;
+                letter-spacing: 0.08em;
+                text-align: center;
+            }
+
+            .rw-delete-modal-actions {
+                width: min(440px, 100%);
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 14px;
+                margin-top: 28px;
+            }
+
+            .rw-delete-modal-actions button {
+                min-height: 50px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+
+                font-family: 'Oswald', sans-serif;
+                font-size: 0.78rem;
+                letter-spacing: 0.22em;
+                text-transform: uppercase;
+            }
+
+            .rw-delete-modal-actions .btn-cancelar {
+                border: 1px solid rgba(255, 215, 0, 0.34);
+                color: rgba(220, 224, 245, 0.72);
+                background: rgba(255, 255, 255, 0.025);
+            }
+
+            .rw-delete-modal-actions .btn-confirmar-borrar {
+                border: 1px solid rgba(255, 40, 80, 0.88);
+                color: #ff315c;
+                background: rgba(255, 40, 80, 0.045);
+                box-shadow: 0 0 18px rgba(255, 40, 80, 0.14);
+            }
+
+            @media (max-width: 768px) {
+                .rw-delete-account-zone {
+                    max-width: calc(100vw - 28px);
+                    margin-top: 24px;
+                    padding-top: 22px;
+                }
+
+                .rw-delete-account-btn {
+                    width: min(100%, 360px);
+                    min-height: 54px;
+                    font-size: 0.78rem;
+                    letter-spacing: 0.22em;
+                }
+
+                #modal-eliminar-cuenta {
+                    padding: 18px;
+                }
+
+                .rw-delete-modal-box {
+                    width: min(520px, 94vw);
+                    min-height: 390px;
+                    padding: 34px 22px;
+                    border-radius: 8px;
+                }
+
+                .rw-delete-modal-box h3 {
+                    font-size: 1.35rem;
+                    letter-spacing: 0.24em;
+                    margin-bottom: 20px;
+                }
+
+                .rw-delete-modal-box p {
+                    font-size: 0.9rem;
+                    line-height: 1.55;
+                }
+
+                #input-eliminar-cuenta {
+                    width: 100%;
+                    padding: 14px 12px;
+                    font-size: 0.82rem;
+                }
+
+                .rw-delete-modal-actions {
+                    width: 100%;
+                    grid-template-columns: 1fr;
+                    gap: 12px;
+                    margin-top: 24px;
+                }
+
+                .rw-delete-modal-actions button {
+                    width: 100%;
+                    min-height: 48px;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function crearBotonEliminarCuenta() {
+        const seccion = document.getElementById("seccion-ajustes");
+        if (!seccion || document.getElementById("rw-delete-account-zone")) return;
+
+        const zone = document.createElement("div");
+        zone.id = "rw-delete-account-zone";
+        zone.className = "rw-delete-account-zone";
+        zone.innerHTML = `
+            <div class="ajuste-label">Eliminar cuenta</div>
+            <p class="rw-delete-account-note">
+                Elimina tu usuario y todo su progreso de forma permanente. Esta acción no se puede deshacer.
+            </p>
+            <button type="button" class="ajuste-btn danger rw-delete-account-btn" onclick="abrirModalEliminarCuenta()">
+                ✕ Eliminar cuenta
+            </button>
+        `;
+
+        const borrarBtn = seccion.querySelector("button[onclick='abrirModal()']");
+        if (borrarBtn && borrarBtn.parentNode === seccion) {
+            seccion.insertBefore(zone, borrarBtn.nextSibling);
+        } else {
+            seccion.appendChild(zone);
+        }
+    }
+
+    function crearModalEliminarCuenta() {
+        if (document.getElementById("modal-eliminar-cuenta")) return;
+
+        const modal = document.createElement("div");
+        modal.id = "modal-eliminar-cuenta";
+        modal.innerHTML = `
+            <div class="rw-delete-modal-box">
+                <h3>Eliminar cuenta</h3>
+                <p>
+                    Esta acción eliminará tu cuenta, tu jugador, tus runas, tus mejoras y tus estadísticas.
+                    No podrás recuperar estos datos.
+                </p>
+                <p>
+                    Escribe <strong>${CONFIRMACION_ELIMINAR}</strong> para confirmar:
+                </p>
+                <input type="text" id="input-eliminar-cuenta" placeholder="${CONFIRMACION_ELIMINAR}" autocomplete="off">
+                <p id="msg-eliminar-cuenta"></p>
+                <div class="rw-delete-modal-actions">
+                    <button type="button" class="btn-cancelar" onclick="cerrarModalEliminarCuenta()">Cancelar</button>
+                    <button type="button" class="btn-confirmar-borrar" onclick="confirmarEliminarCuenta()">Eliminar cuenta</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    window.abrirModalEliminarCuenta = function () {
+        const modal = document.getElementById("modal-eliminar-cuenta");
+        const input = document.getElementById("input-eliminar-cuenta");
+        const msg = document.getElementById("msg-eliminar-cuenta");
+
+        if (input) input.value = "";
+        if (msg) msg.textContent = "";
+        if (modal) modal.classList.add("visible");
+    };
+
+    window.cerrarModalEliminarCuenta = function () {
+        const modal = document.getElementById("modal-eliminar-cuenta");
+        if (modal) modal.classList.remove("visible");
+    };
+
+    window.confirmarEliminarCuenta = function () {
+        const input = document.getElementById("input-eliminar-cuenta");
+        const msg = document.getElementById("msg-eliminar-cuenta");
+
+        if (!input || !msg) return;
+
+        const texto = input.value.trim().toLowerCase();
+
+        if (texto !== CONFIRMACION_ELIMINAR) {
+            msg.textContent = "Escribe exactamente: " + CONFIRMACION_ELIMINAR;
+            return;
+        }
+
+        msg.textContent = "Eliminando cuenta...";
+
+        if (window.runaSync && typeof window.runaSync.reset === "function") {
+            window.runaSync.reset();
+        }
+
+        fetch("PHP/eliminar_cuenta.php", {
+            method: "POST",
+            credentials: "same-origin"
+        })
+        .then(function (r) {
+            return r.json();
+        })
+        .then(function (data) {
+            if (!data || !data.ok) {
+                msg.textContent = (data && data.error) ? data.error : "Error al eliminar la cuenta.";
+                return;
+            }
+
+            RW_borrarDatosLocalesRuneWorld();
+            cerrarModalEliminarCuenta();
+
+            if (typeof window.RW_iniciarAnimacionEliminarCuenta === "function") {
+                window.RW_iniciarAnimacionEliminarCuenta({
+                    next: "../index.php",
+                    warpUrl: "ANIMACIONES_HTML/borrado_cuenta_animacion.html",
+                    phaseDuration: 5600
+                });
+            } else {
+                window.location.href = "ANIMACIONES_HTML/borrado_cuenta_animacion.html?next=" + encodeURIComponent("../index.php");
+            }
+        })
+        .catch(function (err) {
+            console.warn("[eliminar cuenta] fallo:", err);
+            msg.textContent = "Error de conexión al eliminar la cuenta.";
+        });
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+        crearEstilosEliminarCuenta();
+        crearBotonEliminarCuenta();
+        crearModalEliminarCuenta();
+    });
+
+    if (document.readyState !== "loading") {
+        crearEstilosEliminarCuenta();
+        crearBotonEliminarCuenta();
+        crearModalEliminarCuenta();
+    }
+})();

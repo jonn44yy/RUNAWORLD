@@ -54,6 +54,49 @@
 // si RW_INIT no existe (no deberia pasar nunca en prod), defaults a {} y
 // todos los parseFloat devuelven NaN --> los defaults posteriores entran
 window.RW_UI_VERSION = '8.0';
+
+// ── RW V115 — fix visual panel runas/estadisticas ─────────────────────
+// 1) Evita que el dropdown de probabilidades se corte por overflow/altura.
+// 2) Permite crear el desglose de estadisticas aunque PHP no lo haya pintado.
+(function RW_inyectarFixesVisualesV115() {
+    if (document.getElementById('rw-fixes-v115')) return;
+    var st = document.createElement('style');
+    st.id = 'rw-fixes-v115';
+    st.textContent = `
+        #panel-mis-runas,
+        #panel-mis-runas .grupo-runas,
+        #panel-mis-runas .runa-card,
+        #panel-mis-runas .runa-card-btn,
+        #panel-mis-runas .runa-card-btn.expandida {
+            overflow: visible !important;
+        }
+
+        #panel-mis-runas .runa-card-btn.expandida {
+            height: auto !important;
+            min-height: 52px !important;
+            z-index: 20 !important;
+        }
+
+        #panel-mis-runas .runa-card-btn.expandida .runa-card-prob {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            overflow: visible !important;
+            max-height: 140px !important;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+        }
+
+        #stats-desglose-vivo .stats-fila {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+    `;
+    document.head.appendChild(st);
+})();
+
 const _i = window.RW_INIT || {};
 let coins                   = parseFloat(_i.coins)                   || 0;
 let points                  = parseFloat(_i.points)                  || 0;
@@ -136,10 +179,10 @@ function RW_actualizarBonusColeccionVisual() {
         var sub = box.querySelector('.coleccion-bonus-sub');
         if (tipo === 'basica_corrupta') {
             if (label) label.textContent = activo ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada';
-            if (sub) sub.textContent = activo ? 'x2 suerte y +2 bulk activos' : 'Completa las runas basicas corruptas';
+            if (sub) sub.textContent = activo ? 'x2 suerte y +2 bulk activos' : '';
         } else {
             if (label) label.textContent = activo ? 'Basica normal reclamada' : 'Basica normal bloqueada';
-            if (sub) sub.textContent = activo ? 'x1.5 suerte activo' : 'Completa las runas basicas normales';
+            if (sub) sub.textContent = activo ? 'x1.5 suerte activo' : '';
         }
     });
 }window.RW_actualizarBonusColeccionVisual = RW_actualizarBonusColeccionVisual;
@@ -462,8 +505,10 @@ function toggleRunaProb(card) {
     // cierro todas (incluida esta si estaba abierta)
     document.querySelectorAll(".runa-card-btn").forEach(c => {
         c.classList.remove("expandida");
-        c.querySelector(".runa-card-prob").style.maxHeight = "0";
-        c.querySelector(".runa-card-flecha").textContent = "▾";
+        var pCierre = c.querySelector(".runa-card-prob");
+        if (pCierre) pCierre.style.maxHeight = "0";
+        var fCierre = c.querySelector(".runa-card-flecha");
+        if (fCierre) fCierre.textContent = "▾";
     });
 
     if (!abierto) {
@@ -474,8 +519,11 @@ function toggleRunaProb(card) {
         if (luckEl) luckEl.textContent = formatProb(Math.min(100, p * (parseFloat(luck_multiplier) || 1)));
 
         card.classList.add("expandida");
-        prob.style.maxHeight = prob.scrollHeight + "px";
-        card.querySelector(".runa-card-flecha").textContent = "▴";
+        prob.style.display = "block";
+        prob.style.overflow = "visible";
+        prob.style.maxHeight = Math.max(120, prob.scrollHeight + 24) + "px";
+        var flecha = card.querySelector(".runa-card-flecha");
+        if (flecha) flecha.textContent = "▴";
     }
 }
 
@@ -620,7 +668,7 @@ function getProbLuckStr(runaId) {
 //     mientras el jugador trastea con ajustes)
 //   - en movil --> scroll del centro al top para que no quede a medio camino
 function mostrarSeccion(id, btn) {
-    document.body.classList.remove("rw-sec-tirada", "rw-sec-tienda", "rw-sec-coleccion", "rw-sec-estadisticas", "rw-sec-ajustes");
+    document.body.classList.remove("rw-sec-tirada", "rw-sec-tienda", "rw-sec-coleccion", "rw-sec-estadisticas", "rw-sec-engranajes", "rw-sec-ajustes");
     document.body.classList.add("rw-sec-" + id);
     document.querySelectorAll(".seccion").forEach(s => s.classList.remove("activa"));
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
@@ -685,7 +733,326 @@ function refrescarEstadisticas() {
     setTxt("stats-points-actual", formatNum(points));
     setTxt("stats-points-ps",    "+" + formatNum(points_ps) + "/s");
     setTxt("stats-bulk",         (bulk_runas || 1) + " runa" + (bulk_runas > 1 ? "s" : ""));
+
+    // RW V114 — tambien refresca los historicos si ya existen en memoria.
+    if (window.RW_STATS_HISTORICAS) {
+        RW_pintarEstadisticasHistoricas();
+    }
+    if (typeof RW_pintarDesgloseStatsVivoDesdePanel === 'function') {
+        RW_pintarDesgloseStatsVivoDesdePanel();
+    }
 }
+
+// ── RW V114 — estadisticas historicas en vivo ─────────────────────────
+// Antes estas cifras venian pintadas por PHP y solo cambiaban al recargar.
+// Ahora se inicializan desde el DOM/RW_INIT y se incrementan con cada runa
+// recibida por el evento rw:stats-actualizadas que dispara tirada.js.
+function RW_parseEnteroStats(v) {
+    if (v === undefined || v === null) return 0;
+    var txt = String(v).replace(/<[^>]*>/g, '').replace(/[^0-9.,-]/g, '');
+    if (!txt) return 0;
+    txt = txt.replace(/[.,]/g, '');
+    var n = parseInt(txt, 10);
+    return isNaN(n) ? 0 : n;
+}
+
+function RW_normalizarGrupoStats(v) {
+    return String(v || 'Sin grupo')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function RW_normalizarRarezaStats(v) {
+    return String(v || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '_');
+}
+
+function RW_asegurarStatsHistoricas() {
+    if (!window.RW_STATS_HISTORICAS) {
+        var totalEl = document.getElementById('stats-total-runas-obtenidas');
+        window.RW_STATS_HISTORICAS = {
+            total_runas: RW_parseEnteroStats(
+                (window.RW_INIT && window.RW_INIT.stats_total_runas !== undefined)
+                    ? window.RW_INIT.stats_total_runas
+                    : (totalEl ? totalEl.textContent : 0)
+            ),
+            total_tiradas: RW_parseEnteroStats(window.RW_INIT ? window.RW_INIT.total_tiradas : 0),
+            grupos: {}
+        };
+    }
+
+    document.querySelectorAll('[data-stat-rareza-valor]').forEach(function (el) {
+        var grupo = RW_normalizarGrupoStats(el.dataset.statGrupo || 'Sin grupo');
+        var rareza = RW_normalizarRarezaStats(el.dataset.statRareza || '');
+        if (!rareza) return;
+        if (!window.RW_STATS_HISTORICAS.grupos[grupo]) window.RW_STATS_HISTORICAS.grupos[grupo] = {};
+        if (window.RW_STATS_HISTORICAS.grupos[grupo][rareza] === undefined) {
+            window.RW_STATS_HISTORICAS.grupos[grupo][rareza] = RW_parseEnteroStats(el.textContent);
+        }
+    });
+
+    return window.RW_STATS_HISTORICAS;
+}
+
+function RW_pintarEstadisticasHistoricas() {
+    var st = RW_asegurarStatsHistoricas();
+
+    var totalEl = document.getElementById('stats-total-runas-obtenidas');
+    if (totalEl) totalEl.textContent = Number(st.total_runas || 0).toLocaleString();
+
+    var tiradasEl = document.getElementById('stats-total-tiradas');
+    if (tiradasEl) {
+        var totalTiradas = RW_parseEnteroStats(
+            (window.RW_INIT && window.RW_INIT.total_tiradas !== undefined)
+                ? window.RW_INIT.total_tiradas
+                : st.total_tiradas
+        );
+        st.total_tiradas = totalTiradas;
+        tiradasEl.textContent = Number(totalTiradas || 0).toLocaleString();
+    }
+
+    document.querySelectorAll('[data-stat-rareza-valor]').forEach(function (el) {
+        var grupo = RW_normalizarGrupoStats(el.dataset.statGrupo || 'Sin grupo');
+        var rareza = RW_normalizarRarezaStats(el.dataset.statRareza || '');
+        if (!rareza) return;
+        if (st.grupos[grupo] && st.grupos[grupo][rareza] !== undefined) {
+            el.textContent = Number(st.grupos[grupo][rareza] || 0).toLocaleString();
+        }
+    });
+}
+
+
+// ── RW V115 — desglose vivo de estadisticas desde el panel de runas ───
+// Si PHP no pinta $stats_grupos al cargar, antes se quedaba el mensaje
+// "Todavia no has conseguido ninguna runa" aunque el panel lateral sí tuviera runas.
+// Este bloque reconstruye el desglose desde las cards reales del DOM.
+function RW_nombreGrupoStatsVivo(slug) {
+    slug = String(slug || '').toLowerCase();
+    if (slug === 'basicas') return 'Runas básicas';
+    if (slug === 'corruptas') return 'Runas corruptas';
+    return slug ? slug.replace(/_/g, ' ') : 'Runas';
+}
+
+function RW_nombreRarezaStatsVivo(rareza) {
+    rareza = String(rareza || '').toLowerCase();
+    return rareza.replace(/_/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); });
+}
+
+function RW_detectarRarezaCardStats(card) {
+    var orden = ['eterna','divina','mitica','legendaria','epica','rara','poco_comun','comun'];
+    for (var i = 0; i < orden.length; i++) {
+        if (card.classList.contains(orden[i])) return orden[i];
+    }
+    return card.dataset.rareza || '';
+}
+
+function RW_leerStatsDesdePanelRunas() {
+    var orden = ['eterna','divina','mitica','legendaria','epica','rara','poco_comun','comun'];
+    var grupos = {};
+    var total = 0;
+
+    document.querySelectorAll('.runa-card-btn[data-id]').forEach(function (card) {
+        var cantidad = RW_parseEnteroStats(card.dataset.cantidad || '0');
+        if (cantidad <= 0) return;
+
+        var grupo = card.dataset.runaGrupo || 'basicas';
+        var rareza = RW_detectarRarezaCardStats(card);
+        if (!rareza) return;
+
+        if (!grupos[grupo]) grupos[grupo] = {};
+        grupos[grupo][rareza] = (grupos[grupo][rareza] || 0) + cantidad;
+        total += cantidad;
+    });
+
+    return { total: total, grupos: grupos, orden: orden };
+}
+
+function RW_quitarMensajeStatsVacio() {
+    var seccion = document.getElementById('seccion-estadisticas');
+    if (!seccion) return;
+
+    Array.prototype.slice.call(seccion.querySelectorAll('.stats-bloque p')).forEach(function (p) {
+        var txt = String(p.textContent || '').toLowerCase();
+        if (txt.indexOf('todavia no has conseguido ninguna runa') !== -1 || txt.indexOf('todavía no has conseguido ninguna runa') !== -1) {
+            var bloque = p.closest('.stats-bloque');
+            if (bloque) bloque.style.display = 'none';
+        }
+    });
+}
+
+function RW_pintarDesgloseStatsVivoDesdePanel() {
+    var seccion = document.getElementById('seccion-estadisticas');
+    if (!seccion) return;
+
+    var data = RW_leerStatsDesdePanelRunas();
+    if (!data || data.total <= 0) return;
+
+    RW_quitarMensajeStatsVacio();
+
+    var st = RW_asegurarStatsHistoricas();
+    st.total_runas = Math.max(RW_parseEnteroStats(st.total_runas), data.total);
+
+    var totalEl = document.getElementById('stats-total-runas-obtenidas');
+    if (totalEl) totalEl.textContent = Number(st.total_runas || data.total || 0).toLocaleString();
+
+    // RW V116 — si juego.php ya ha pintado el desglose con data-stat-rareza-valor,
+    // NO creamos un segundo bloque. Actualizamos el existente y borramos cualquier
+    // bloque vivo antiguo que haya quedado de la v115.
+    var filasPHP = Array.prototype.slice.call(seccion.querySelectorAll('[data-stat-rareza-valor]'));
+    if (filasPHP.length > 0) {
+        var bloqueVivoViejo = document.getElementById('stats-desglose-vivo');
+        if (bloqueVivoViejo) bloqueVivoViejo.remove();
+
+        filasPHP.forEach(function (el) {
+            var grupoNorm = RW_normalizarGrupoStats(el.dataset.statGrupo || '');
+            var rarezaNorm = RW_normalizarRarezaStats(el.dataset.statRareza || '');
+            var valor = null;
+
+            Object.keys(data.grupos).forEach(function (grupoSlug) {
+                if (valor !== null) return;
+                var g1 = RW_normalizarGrupoStats(grupoSlug);
+                var g2 = RW_normalizarGrupoStats(RW_nombreGrupoStatsVivo(grupoSlug));
+                if (grupoNorm === g1 || grupoNorm === g2) {
+                    if (data.grupos[grupoSlug][rarezaNorm] !== undefined) {
+                        valor = data.grupos[grupoSlug][rarezaNorm];
+                    }
+                }
+            });
+
+            if (valor !== null) {
+                el.textContent = Number(valor || 0).toLocaleString();
+            }
+        });
+
+        return;
+    }
+
+    // Solo llegamos aquí si PHP NO pintó ningún desglose. Entonces sí creamos
+    // un bloque generado por JS para evitar el mensaje falso de "no tienes runas".
+    var bloque = document.getElementById('stats-desglose-vivo');
+    if (!bloque) {
+        bloque = document.createElement('div');
+        bloque.id = 'stats-desglose-vivo';
+        var prox = seccion.querySelector('.stats-proximamente');
+        if (prox && prox.parentNode) prox.parentNode.insertBefore(bloque, prox);
+        else seccion.appendChild(bloque);
+    }
+
+    bloque.innerHTML = '';
+
+    Object.keys(data.grupos).forEach(function (grupoSlug) {
+        var rarezas = data.grupos[grupoSlug];
+        var bloqueGrupo = document.createElement('div');
+        bloqueGrupo.className = 'stats-bloque';
+
+        var titulo = document.createElement('div');
+        titulo.className = 'stats-bloque-titulo';
+        titulo.textContent = RW_nombreGrupoStatsVivo(grupoSlug);
+        bloqueGrupo.appendChild(titulo);
+
+        var tabla = document.createElement('div');
+        tabla.className = 'stats-tabla';
+
+        data.orden.forEach(function (rareza) {
+            if (!rarezas[rareza]) return;
+            var fila = document.createElement('div');
+            fila.className = 'stats-fila';
+
+            var label = document.createElement('span');
+            label.className = 'stats-label stats-label-rareza rareza-' + rareza;
+            label.textContent = RW_nombreRarezaStatsVivo(rareza);
+
+            var val = document.createElement('span');
+            val.className = 'stats-valor';
+            val.setAttribute('data-stat-rareza-valor', '');
+            val.setAttribute('data-stat-grupo', RW_nombreGrupoStatsVivo(grupoSlug));
+            val.setAttribute('data-stat-rareza', rareza);
+            val.textContent = Number(rarezas[rareza] || 0).toLocaleString();
+
+            fila.appendChild(label);
+            fila.appendChild(val);
+            tabla.appendChild(fila);
+        });
+
+        bloqueGrupo.appendChild(tabla);
+        bloque.appendChild(bloqueGrupo);
+    });
+}
+
+function RW_sumarEstadisticasPorRunas(runasGanadas) {
+    if (!Array.isArray(runasGanadas) || runasGanadas.length === 0) return;
+
+    var st = RW_asegurarStatsHistoricas();
+
+    runasGanadas.forEach(function (r) {
+        if (!r) return;
+        var cantidad = RW_parseEnteroStats(r.cantidad || 1) || 1;
+        var rareza = RW_normalizarRarezaStats(r.rareza || '');
+        var grupoRaw = r.grupo_nombre || r.nombre_grupo || r.grupo || r.group_name || r.collection_name || '';
+
+        // Si el pack no manda grupo, lo buscamos en los botones ya pintados
+        // de coleccion/panel lateral usando el id de runa.
+        if (!grupoRaw && r.id !== undefined && r.id !== null) {
+            var ref = document.querySelector('[data-id="' + String(r.id) + '"][data-grupo]');
+            if (ref && ref.dataset) grupoRaw = ref.dataset.grupo || '';
+        }
+
+        var grupo = grupoRaw ? RW_normalizarGrupoStats(grupoRaw) : '';
+
+        st.total_runas += cantidad;
+
+        // Si el server manda grupo, actualizamos la fila exacta grupo+rareza.
+        // Si no lo manda, no inventamos grupo para evitar sumar en una tabla incorrecta.
+        if (grupo && rareza) {
+            if (!st.grupos[grupo]) st.grupos[grupo] = {};
+            st.grupos[grupo][rareza] = (RW_parseEnteroStats(st.grupos[grupo][rareza]) || 0) + cantidad;
+        }
+    });
+
+    RW_pintarEstadisticasHistoricas();
+}
+
+function RW_aplicarEventoStatsActualizadas(e) {
+    var d = (e && e.detail) || {};
+    var data = d.respuesta_original || d;
+
+    if (window.RW_INIT && d.stats && d.stats.total_tiradas !== undefined) {
+        window.RW_INIT.total_tiradas = RW_parseEnteroStats(d.stats.total_tiradas);
+    }
+
+    if (data && Array.isArray(data.runas_ganadas) && data.runas_ganadas.length > 0) {
+        RW_sumarEstadisticasPorRunas(data.runas_ganadas);
+    } else {
+        RW_pintarEstadisticasHistoricas();
+    }
+
+    refrescarEstadisticas();
+}
+
+document.addEventListener('rw:stats-actualizadas', RW_aplicarEventoStatsActualizadas);
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        RW_asegurarStatsHistoricas();
+        RW_pintarEstadisticasHistoricas();
+        RW_pintarDesgloseStatsVivoDesdePanel();
+    });
+} else {
+    RW_asegurarStatsHistoricas();
+    RW_pintarEstadisticasHistoricas();
+    RW_pintarDesgloseStatsVivoDesdePanel();
+}
+
+window.RW_pintarEstadisticasHistoricas = RW_pintarEstadisticasHistoricas;
+window.RW_pintarDesgloseStatsVivoDesdePanel = RW_pintarDesgloseStatsVivoDesdePanel;
+window.RW_sumarEstadisticasPorRunas = RW_sumarEstadisticasPorRunas;
+window.refrescarEstadisticas = refrescarEstadisticas;
 
 
 // colRaf y colRunaActual viven en coleccion.js, aqui solo se mencionan
@@ -802,12 +1169,13 @@ function setPointsPs(v) {
                 points_ps_base_antes: points_ps_base
             });
         }
-        points_ps_base = n;
+        points_ps_base = Math.max(parseFloat(points_ps_base) || 0, n);
+        
         if (typeof aplicarBoosts === "function") {
             aplicarBoosts();
         } else {
-            points_ps = n;
-            window.points_ps = n;
+            points_ps = Math.max(parseFloat(points_ps) || 0, points_ps_base);
+            window.points_ps = points_ps;
             actualizarPantalla();
         }
         if (window.RW_DEBUG_ECONOMIA) {
