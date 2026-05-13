@@ -633,6 +633,106 @@ $conexion->close();
            ahora la presentacion va en index.php (homepage publica). las
            clases .jondrar-modal-*, .welcome-text, .neon-hr, .info-section,
            .info-list, .btn-access ya no se usan en ningun sitio */
+    
+        /* ================================================================
+           ZONA ENGRANAJES — pantalla de construcción
+           Objetivo final:
+           - usar todo el espacio libre desde el sidebar izquierdo hasta el panel derecho
+           - quedar siempre por debajo del título RunaWorld
+           - no crear scroll vertical
+           - mantener visible el panel derecho y ocultar solo boosts flotantes mientras se está en Engranajes
+           - descargar el iframe al salir de Engranajes
+           ================================================================ */
+        html.rw-modo-engranajes-html,
+        body.rw-modo-engranajes {
+            overflow: hidden !important;
+            height: 100dvh !important;
+        }
+
+        /* En Engranajes el panel derecho vuelve a estar visible.
+           La zona de construcción termina justo antes de este panel. */
+        body.rw-modo-engranajes #panel-derecho {
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        body.rw-modo-engranajes #zona-boosts,
+        body.rw-modo-engranajes #runa-flotante {
+            display: none !important;
+        }
+
+        body.rw-modo-engranajes #centro {
+            overflow: visible !important;
+        }
+
+        .seccion-engranajes-full {
+            display: none;
+        }
+
+        #seccion-engranajes.seccion-engranajes-full.activa {
+            display: block !important;
+            position: fixed !important;
+
+            /* Empieza justo al terminar el menú izquierdo y acaba antes del panel derecho. */
+            left: var(--sidebar-w, 220px) !important;
+            right: var(--panel-derecho-w, 300px) !important;
+
+            /* No invade el título. Sube o baja este número si quieres más/menos aire. */
+            top: clamp(142px, 17vh, 176px) !important;
+            bottom: 0 !important;
+
+            width: auto !important;
+            max-width: none !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 0 !important;
+
+            z-index: 140 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            background:
+                radial-gradient(ellipse 70% 60% at 50% 45%, rgba(255, 184, 96, 0.045), transparent 68%),
+                #050506;
+        }
+
+        #seccion-engranajes .engranajes-shell {
+            position: absolute !important;
+            inset: 0 !important;
+            width: auto !important;
+            height: auto !important;
+            max-width: none !important;
+            max-height: none !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            aspect-ratio: auto !important;
+            overflow: hidden !important;
+            border-radius: 0 !important;
+            border: 0 !important;
+            background: #040200;
+            box-shadow: none !important;
+        }
+
+        #seccion-engranajes .engranajes-iframe {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            border: 0 !important;
+            display: block !important;
+            background: #040200;
+        }
+
+        @media (max-width: 1024px) {
+            #seccion-engranajes.seccion-engranajes-full.activa {
+                left: 0 !important;
+                top: clamp(118px, 15vh, 158px) !important;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -830,20 +930,23 @@ $conexion->close();
         <div class="sidebar-divider"></div>
 
         <nav class="nav-menu">
-            <button class="nav-btn active" onclick="mostrarSeccion('tirada', this)">
+            <button class="nav-btn active" onclick="rwMostrarSeccion('tirada', this)">
                 <span class="nav-icon">⬡</span> Tirar Runa
             </button>
-            <button class="nav-btn" onclick="mostrarSeccion('tienda', this)">
+            <button class="nav-btn" onclick="rwMostrarSeccion('tienda', this)">
                 <span class="nav-icon">◈</span> Tienda
             </button>
-            <button class="nav-btn" onclick="mostrarSeccion('coleccion', this)">
+            <button class="nav-btn" onclick="rwMostrarSeccion('coleccion', this)">
                 <span class="nav-icon">◎</span> Coleccion
             </button>
-            <button class="nav-btn" onclick="mostrarSeccion('estadisticas', this)">
+            <button class="nav-btn" onclick="rwMostrarSeccion('estadisticas', this)">
                 <span class="nav-icon">✦</span> Estadisticas
             </button>
+            <button class="nav-btn" onclick="rwMostrarSeccion('engranajes', this)">
+                <span class="nav-icon">⚙</span> Engranajes
+            </button>
             <div class="sidebar-divider"></div>
-            <button class="nav-btn" onclick="mostrarSeccion('ajustes', this)">
+            <button class="nav-btn" onclick="rwMostrarSeccion('ajustes', this)">
                 <span class="nav-icon">⚙</span> Ajustes
             </button>
             <div class="sidebar-divider"></div>
@@ -995,7 +1098,7 @@ $conexion->close();
                 <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= !empty($colecciones_estado['basica_normal']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_normal" title="La coleccion basica normal multiplica la suerte por x1.5">
                     <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Basica normal reclamada' : 'Basica normal bloqueada' ?></span>
                     <strong>x1.5 suerte</strong>
-                    <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : 'Completa las runas basicas normales' ?></span>
+                    <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : '' ?></span>
                 </div>
                 <div class="coleccion-bonus-suerte-v74 coleccion-bonus-mobile <?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_corrupta" title="La coleccion basica corrupta da x2 suerte y +2 bulk">
                     <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada' ?></span>
@@ -1125,7 +1228,7 @@ $conexion->close();
                     <div class="coleccion-bonus-suerte-v74 coleccion-bonus-desktop <?= !empty($colecciones_estado['basica_normal']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_normal" title="La coleccion basica normal multiplica la suerte por x1.5">
                         <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Basica normal reclamada' : 'Basica normal bloqueada' ?></span>
                         <strong>x1.5 suerte</strong>
-                        <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : 'Completa las runas basicas normales' ?></span>
+                        <span class="coleccion-bonus-sub"><?= !empty($colecciones_estado['basica_normal']['completa']) ? 'Bonus permanente activo' : '' ?></span>
                     </div>
                     <div class="coleccion-bonus-suerte-v74 coleccion-bonus-corrupta <?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'activo' : 'bloqueado' ?>" data-bonus-coleccion="basica_corrupta" title="La coleccion basica corrupta da x2 suerte y +2 bulk">
                         <span class="coleccion-bonus-label"><?= !empty($colecciones_estado['basica_corrupta']['completa']) ? 'Basica corrupta reclamada' : 'Basica corrupta bloqueada' ?></span>
@@ -1202,7 +1305,11 @@ $conexion->close();
                 <div class="stats-tabla">
                     <div class="stats-fila stats-fila-destacada">
                         <span class="stats-label">Total runas obtenidas</span>
-                        <span class="stats-valor"><?= number_format($stats_total_runas) ?></span>
+                        <span class="stats-valor" id="stats-total-runas-obtenidas" data-stat-total-runas><?= number_format($stats_total_runas) ?></span>
+                    </div>
+                    <div class="stats-fila">
+                        <span class="stats-label">Total tiradas realizadas</span>
+                        <span class="stats-valor" id="stats-total-tiradas" data-stat-total-tiradas><?= number_format($total_tiradas) ?></span>
                     </div>
                 </div>
             </div>
@@ -1228,7 +1335,7 @@ $conexion->close();
                             ?>
                                 <div class="stats-fila">
                                     <span class="stats-label stats-label-rareza rareza-<?= $rareza_clave ?>"><?= $nombre_rareza ?></span>
-                                    <span class="stats-valor"><?= number_format($cantidad_rareza) ?></span>
+                                    <span class="stats-valor" data-stat-rareza-valor data-stat-grupo="<?= htmlspecialchars($nombre_grupo) ?>" data-stat-rareza="<?= $rareza_clave ?>"><?= number_format($cantidad_rareza) ?></span>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -1248,6 +1355,21 @@ $conexion->close();
                 <p class="stats-proximamente-txt">
                     Proximamente. Aqui iran los logros desbloqueables.
                 </p>
+            </div>
+        </div>
+
+
+        <!-- menu 5: engranajes / zona en construcción -->
+        <div id="seccion-engranajes" class="seccion seccion-engranajes-full" aria-label="Zona Engranajes en construcción">
+            <div class="engranajes-shell">
+                <iframe
+                    id="engranajes-iframe"
+                    class="engranajes-iframe"
+                    src="about:blank"
+                    data-src="ANIMACIONES_HTML/engranajes.html"
+                    title="Engranajes - zona en construcción"
+                    loading="lazy">
+                </iframe>
             </div>
         </div>
 
@@ -1554,6 +1676,8 @@ window.RW_INIT = {
 
     bulk_total:     <?= $bulk_total ?>,
     total_tiradas:  <?= (int)$total_tiradas ?>,
+    stats_total_runas: <?= (int)$stats_total_runas ?>,
+    stats_grupos: <?= json_encode($stats_grupos) ?>,
     user_id:        <?= (int)$id_usuario ?>,
     probMap:        <?= json_encode($prob_map) ?>,
 
@@ -1646,8 +1770,47 @@ function toggleAnimBoton(cb) {
 <script src="JS/runa-sync.js"></script>
 <script src="JS/tirada.js"></script>
 <script src="JS/tienda.js"></script>
-<script src="JS/ajustes.js"></script>
+<script src="JS/ajustes.js?v=delete-account-blackhole-1"></script>
 <script src="JS/mobile.js"></script>
+
+<script>
+(function () {
+    const ENGRANAJES_SRC = "ANIMACIONES_HTML/engranajes.html";
+
+    window.rwGestionarEngranajes = function rwGestionarEngranajes(seccion) {
+        const esEngranajes = seccion === "engranajes";
+        const iframe = document.getElementById("engranajes-iframe");
+
+        document.body.classList.toggle("rw-modo-engranajes", esEngranajes);
+        document.documentElement.classList.toggle("rw-modo-engranajes-html", esEngranajes);
+
+        if (!iframe) return;
+
+        if (esEngranajes) {
+            if (iframe.getAttribute("src") !== ENGRANAJES_SRC) {
+                iframe.setAttribute("src", ENGRANAJES_SRC);
+            }
+        } else {
+            if (iframe.getAttribute("src") !== "about:blank") {
+                iframe.setAttribute("src", "about:blank");
+            }
+        }
+    };
+
+    window.rwMostrarSeccion = function rwMostrarSeccion(seccion, boton) {
+        if (typeof window.mostrarSeccion === "function") {
+            window.mostrarSeccion(seccion, boton);
+        }
+
+        window.rwGestionarEngranajes(seccion);
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+        window.rwGestionarEngranajes("tirada");
+    });
+})();
+</script>
+
 
 <!-- ================================================================
      ideas futuras / TODO / cosas que olvide

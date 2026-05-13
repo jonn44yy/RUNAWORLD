@@ -21,6 +21,73 @@ require_once "PHP/conexion.php";
 $logueado = isset($_SESSION["idUsuario"]);
 $username = $logueado ? ($_SESSION["username"] ?? null) : null;
 
+$admin_request_feedback = $_SESSION["admin_request_feedback"] ?? null;
+unset($_SESSION["admin_request_feedback"]);
+
+// ── solicitud publica para ser admin ─────────────────────────
+// Se envia al mismo sistema de mensajes que usa Ajustes, pero sin depender
+// de cookies/localStorage para contador ni bloqueo. Si el visitante no esta
+// logueado, se le pide iniciar sesion porque la tabla mensajes depende de usuario_id.
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["rw_admin_request"])) {
+    if (!$logueado) {
+        $_SESSION["admin_request_feedback"] = [
+            "tipo" => "error",
+            "texto" => "Inicia sesion para enviar una solicitud de admin."
+        ];
+        header("Location: index.php#solicitar-admin");
+        exit;
+    }
+
+    $mensaje_admin = trim((string)($_POST["admin_request_message"] ?? ""));
+
+    if ($mensaje_admin === "") {
+        $_SESSION["admin_request_feedback"] = [
+            "tipo" => "error",
+            "texto" => "Escribe un mensaje antes de enviar la solicitud."
+        ];
+        header("Location: index.php#solicitar-admin");
+        exit;
+    }
+
+    $solicitante = $username ?: ("Usuario #" . (int)$_SESSION["idUsuario"]);
+    $contenido_admin =
+        "Solicitud para ser admin de: " . $solicitante . "\n\n" .
+        "Mensaje: " . $mensaje_admin;
+
+    try {
+        $tipo_mensaje = "ideas";
+        $asunto_admin = "Solicitud para ser admin";
+
+        $stmt = $conexion->prepare("
+            INSERT INTO mensajes (usuario_id, tipo, asunto, contenido, archivo, leido, fecha)
+            VALUES (?, ?, ?, ?, NULL, 0, NOW())
+        ");
+        $stmt->bind_param(
+            "isss",
+            $_SESSION["idUsuario"],
+            $tipo_mensaje,
+            $asunto_admin,
+            $contenido_admin
+        );
+        $stmt->execute();
+        $stmt->close();
+
+        $_SESSION["admin_request_feedback"] = [
+            "tipo" => "ok",
+            "texto" => "Solicitud enviada. La revisare desde el panel de administracion."
+        ];
+    } catch (Exception $e) {
+        $_SESSION["admin_request_feedback"] = [
+            "tipo" => "error",
+            "texto" => "No se pudo enviar la solicitud ahora mismo."
+        ];
+    }
+
+    header("Location: index.php#solicitar-admin");
+    exit;
+}
+
+
 // ── ranking publico: top 10 jugadores por puntos ─────────────
 // solo expongo username + points. si quisieras anadir mas info (suerte,
 // total runas, eternas) sumas columnas aqui. filtro points > 0 para no
@@ -719,6 +786,93 @@ a:focus-visible, button:focus-visible { outline:2px solid var(--gold-bright); ou
 .version-entry { scroll-margin-top:2rem; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; } #bg-eterno { display:none !important; } }
 
+
+/* ─── SOLICITUD ADMIN ─────────────────────────────────────── */
+
+.admin-request-box {
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    background:
+        radial-gradient(circle at top right, rgba(212, 175, 55, 0.08), transparent 42%),
+        rgba(10, 10, 10, 0.56);
+    padding: clamp(1.3rem, 3vw, 2rem);
+    margin-top: 2.2rem;
+}
+
+.admin-request-box p {
+    color: var(--text-dim);
+    margin-bottom: 1.2rem;
+}
+
+.admin-request-form {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.4rem;
+}
+
+.admin-request-form textarea {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    border: 1px solid rgba(212, 175, 55, 0.28);
+    background: rgba(0, 0, 0, 0.38);
+    color: var(--text);
+    padding: 1rem 1.1rem;
+    font-family: 'EB Garamond', Georgia, serif;
+    font-size: 1rem;
+    line-height: 1.55;
+    outline: none;
+}
+
+.admin-request-form textarea:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 18px rgba(212, 175, 55, 0.14);
+}
+
+.admin-request-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.admin-request-feedback {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    border: 1px solid rgba(212, 175, 55, 0.24);
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.2rem;
+}
+
+.admin-request-feedback.ok {
+    color: var(--gold-bright);
+    border-color: rgba(212, 175, 55, 0.42);
+    background: rgba(212, 175, 55, 0.06);
+}
+
+.admin-request-feedback.error {
+    color: #ff6b7c;
+    border-color: rgba(255, 80, 100, 0.38);
+    background: rgba(255, 40, 70, 0.06);
+}
+
+.admin-request-lock {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--line);
+    padding-top: 1.2rem;
+    margin-top: 1.2rem;
+}
+
+@media (max-width: 720px) {
+    .admin-request-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+
 /* ─── RANKING ─────────────────────────────────────────────── */
 
 .ranking {
@@ -916,7 +1070,7 @@ footer {
     }
 
     .hero-scroll-cue {
-        bottom: 1.6rem;
+        bottom: 6.2rem;
         width: 46px;
         height: 46px;
     }
@@ -1039,7 +1193,7 @@ footer {
 <div id="bg-eterno-veil" aria-hidden="true"></div>
 <!-- ─── HERO ─────────────────────────────────────────────── -->
 <header class="hero" id="top">
-    <a href="#version-v023" class="hero-version" aria-label="Ir a las notas del parche de versiones">VERSIÓN 0.2.3</a>
+    <a href="#version-v03" class="hero-version" aria-label="Ir a las notas del parche de versiones">VERSIÓN 0.3</a>
     <h1 id="hero-h1">
         <span class="letra" style="animation-delay:0.03s">R</span><span class="letra" style="animation-delay:0.06s">U</span><span class="letra" style="animation-delay:0.09s">N</span><span class="letra" style="animation-delay:0.12s">A</span><span class="letra" style="animation-delay:0.15s">W</span><span class="letra" style="animation-delay:0.18s">O</span><span class="letra" style="animation-delay:0.21s">R</span><span class="letra" style="animation-delay:0.24s">L</span><span class="letra" style="animation-delay:0.27s">D</span>
     </h1>
@@ -1129,6 +1283,7 @@ footer {
     <div class="version-shell">
         <nav class="version-side-nav" aria-label="Navegación de versiones">
             <div class="version-side-nav-title">Versiones</div>
+            <a href="#version-v03">0.3V</a>
             <a href="#version-v023">0.2.3V</a>
             <a href="#version-v022">0.2.2V</a>
             <a href="#version-v021">0.2.1V</a>
@@ -1136,6 +1291,38 @@ footer {
             <a href="#version-v01">0.1V</a>
         </nav>
         <div class="version-list">
+    <article class="version-entry" id="version-v03">
+        <h2 class="seccion-h fade-up delay-1">0.3V · Engranajes, móvil, admin y calidad visual</h2>
+        <p class="version-note fade-up delay-1">Parche centrado en interfaz móvil, colección, ajustes, admin y preparación de nuevos sistemas</p>
+        <div class="seccion-grid">
+            <div class="seccion-texto fade-up delay-2">
+                <div class="cambios-titulo">Cambios jugables e interfaz</div>
+                <ul class="cambios">
+                    <li>Añadida la nueva sección Engranajes, actualmente en construcción para futuros sistemas del juego.</li>
+                    <li>Mejorada la interfaz móvil y tablet para evitar paneles fuera de sitio y solapamientos visuales.</li>
+                    <li>Rediseñada la colección en móvil: preview arriba, botones debajo y lista de runas con scroll propio.</li>
+                    <li>Aumentado el tamaño del preview/canvas de runas en colección para que se vea mejor en móvil y tablet.</li>
+                    <li>Corregidos solapamientos entre canvas, botones de animación, lista de runas y barra inferior.</li>
+                    <li>Corregida la visualización de bonus de colección normal/corrupta para que no aparezcan mezclados.</li>
+                    <li>Eliminados títulos duplicados en paneles móviles como Mis Runas y Colección.</li>
+                    <li>Mejorado el panel Mis Runas en móvil y ajustado el estilo de Runas Básicas para acercarlo a la versión web.</li>
+                </ul>
+            </div>
+            <div class="seccion-texto fade-up delay-3">
+                <div class="cambios-titulo proximo">Ajustes, admin y rendimiento</div>
+                <ul class="cambios proximo">
+                    <li>Optimizada la animación de entrada intro.html para reducir filtros pesados y mejorar rendimiento en móvil/PC.</li>
+                    <li>Añadida opción en Ajustes para activar o desactivar la animación de entrada después de verla por primera vez.</li>
+                    <li>Mejorado el aspecto visual de Ajustes y de los controles relacionados con animaciones.</li>
+                    <li>Mejorado el botón y modal de Eliminar cuenta para que sean más coherentes con Borrar progreso.</li>
+                    <li>Preparada la animación especial de eliminación de cuenta con agujero negro como flujo visual interno.</li>
+                    <li>Añadidas mejoras al panel de administración y al flujo de mensajes para revisar solicitudes y cambios del proyecto.</li>
+                    <li>Añadido formulario público para solicitar ser admin desde el index, conectado al sistema de mensajes del panel admin.</li>
+                </ul>
+            </div>
+        </div>
+    </article>
+
     <article class="version-entry" id="version-v023">
         <h2 class="seccion-h fade-up delay-1">0.2.3V · Runas corruptas, colección y economía visual</h2>
         <p class="version-note fade-up delay-1">Parche centrado en variantes corruptas, colección, móvil, boosts y coherencia visual</p>
@@ -1298,6 +1485,44 @@ footer {
         <?php endif; ?>
     </div>
 </section>
+
+
+<!-- ─── SOLICITUD ADMIN ───────────────────────────────────── -->
+<section class="seccion" id="solicitar-admin">
+    <div class="seccion-titulo fade-up">ADMIN</div>
+    <h2 class="seccion-h fade-up delay-1">Solicitar acceso al panel</h2>
+    <div class="admin-request-box fade-up delay-2">
+        <?php if ($admin_request_feedback): ?>
+            <div class="admin-request-feedback <?= htmlspecialchars($admin_request_feedback["tipo"]) ?>">
+                <?= htmlspecialchars($admin_request_feedback["texto"]) ?>
+            </div>
+        <?php endif; ?>
+
+        <p>
+            Si quieres ayudar a revisar mensajes, probar cambios o colaborar con la administración de RunaWorld,
+            puedes enviar una solicitud directamente al panel de administración.
+        </p>
+
+        <?php if ($logueado): ?>
+            <form class="admin-request-form" method="post" action="index.php#solicitar-admin">
+                <input type="hidden" name="rw_admin_request" value="1">
+                <textarea name="admin_request_message" required placeholder="Explica por que quieres ser admin, que podrias revisar o como ayudarias al proyecto."></textarea>
+                <div class="admin-request-actions">
+                    <button type="submit" class="btn btn-primary">Enviar solicitud</button>
+                </div>
+            </form>
+        <?php else: ?>
+            <div class="admin-request-lock">
+                Necesitas iniciar sesión para enviar una solicitud de admin.
+            </div>
+            <div class="admin-request-actions" style="margin-top:1rem;">
+                <a href="login.php" class="btn btn-primary">Iniciar sesión</a>
+                <a href="registro.php" class="btn btn-secondary">Crear cuenta</a>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
 
 <!-- ─── CRÉDITOS ──────────────────────────────────────────── -->
 <section class="creditos" id="creditos">
