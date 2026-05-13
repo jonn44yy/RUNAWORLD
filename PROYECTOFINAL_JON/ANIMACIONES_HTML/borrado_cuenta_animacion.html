@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Borrando cuenta...</title>
+<style>
+* { box-sizing: border-box; }
+
+html,
+body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: #fff;
+}
+
+#bg,
+#speed {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#hole-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+}
+
+#hole,
+#ring,
+#ring2,
+#lens {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+#hole {
+    width: 18vmin;
+    height: 18vmin;
+    border-radius: 50%;
+    opacity: 0.95;
+    background:
+        radial-gradient(circle at center, #000 0 30%, rgba(0,0,0,0.98) 35%, rgba(0,0,0,0.96) 42%, transparent 56%),
+        radial-gradient(circle at 52% 46%, rgba(255,255,255,0.14), transparent 34%);
+    box-shadow:
+        0 0 22px rgba(255,255,255,0.26),
+        0 0 90px rgba(128, 96, 255, 0.28),
+        0 0 130px rgba(64, 130, 255, 0.14),
+        inset 0 0 45px rgba(0,0,0,0.95);
+}
+
+#ring {
+    width: 34vmin;
+    height: 12vmin;
+    border-radius: 50%;
+    opacity: 0.78;
+    border-top: 4px solid rgba(171, 122, 255, 0.46);
+    border-bottom: 4px solid rgba(255,255,255,0.1);
+    filter: blur(0.6px);
+}
+
+#ring2 {
+    width: 48vmin;
+    height: 16vmin;
+    border-radius: 50%;
+    opacity: 0.42;
+    border-top: 2px solid rgba(104, 202, 255, 0.18);
+    border-bottom: 2px solid rgba(255,255,255,0.06);
+    filter: blur(1.2px);
+}
+
+#lens {
+    width: 44vmin;
+    height: 44vmin;
+    border-radius: 50%;
+    opacity: 0.32;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.045), rgba(255,255,255,0.02) 28%, transparent 62%);
+}
+
+#final-black {
+    position: fixed;
+    inset: 0;
+    z-index: 7;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="speed"></canvas>
+
+<div id="hole-wrap">
+    <div id="ring"></div>
+    <div id="ring2"></div>
+    <div id="lens"></div>
+    <div id="hole"></div>
+</div>
+
+<div id="final-black"></div>
+
+<script>
+(function () {
+    "use strict";
+
+    var params = new URLSearchParams(location.search);
+    var next = params.get("next") || "../index.php";
+
+    var bg = document.getElementById("bg");
+    var speed = document.getElementById("speed");
+    var hole = document.getElementById("hole");
+    var ring = document.getElementById("ring");
+    var ring2 = document.getElementById("ring2");
+    var lens = document.getElementById("lens");
+    var finalBlack = document.getElementById("final-black");
+
+    var bgCtx = bg.getContext("2d");
+    var speedCtx = speed.getContext("2d");
+
+    var DPR = Math.min(window.devicePixelRatio || 1, 2);
+    var width = 0;
+    var height = 0;
+    var cx = 0;
+    var cy = 0;
+    var start = performance.now();
+    var streaks = [];
+
+    var tWarpEnd = 5200;
+    var tFinalEnd = 8000;
+
+    function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+    }
+
+    function easeInCubic(t) {
+        return t * t * t;
+    }
+
+    function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function setCanvasSize(canvas, ctx) {
+        canvas.width = Math.round(width * DPR);
+        canvas.height = Math.round(height * DPR);
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        cx = width * 0.5;
+        cy = height * 0.5;
+
+        setCanvasSize(bg, bgCtx);
+        setCanvasSize(speed, speedCtx);
+        buildStreaks();
+    }
+
+    function makeStreak(offset) {
+        return {
+            angle: Math.random() * Math.PI * 2,
+            z: offset,
+            width: 0.7 + Math.random() * 2.1,
+            brightness: 0.25 + Math.random() * 0.8,
+            bias: 0.7 + Math.random() * 0.9
+        };
+    }
+
+    function buildStreaks() {
+        streaks = [];
+        var count = Math.round((width + height) / 10);
+        for (var i = 0; i < count; i++) {
+            streaks.push(makeStreak(Math.random()));
+        }
+    }
+
+    function drawBackground(warpT, finalT) {
+        bgCtx.clearRect(0, 0, width, height);
+
+        var gradient = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.82);
+        gradient.addColorStop(0, "rgba(58,34,108," + (0.18 + warpT * 0.10) + ")");
+        gradient.addColorStop(0.26, "rgba(12,14,26,0.28)");
+        gradient.addColorStop(0.65, "rgba(4,5,10,0.86)");
+        gradient.addColorStop(1, "rgba(0,0,0,1)");
+        bgCtx.fillStyle = gradient;
+        bgCtx.fillRect(0, 0, width, height);
+        bgCtx.globalAlpha = 1 - finalT * 0.9;
+    }
+
+    function drawSpeedParticles(warpT, finalT) {
+        speedCtx.clearRect(0, 0, width, height);
+
+        for (var i = 0; i < streaks.length; i++) {
+            var s = streaks[i];
+
+            s.z += (0.004 + warpT * 0.017 + finalT * 0.023) * s.bias;
+
+            if (s.z > 1.12) {
+                streaks[i] = makeStreak(0.02 + Math.random() * 0.08);
+                continue;
+            }
+
+            var r = Math.pow(s.z, 1.55) * Math.max(width, height) * (0.7 + warpT * 0.18 + finalT * 0.28);
+            var x = cx + Math.cos(s.angle) * r;
+            var y = cy + Math.sin(s.angle) * r;
+            var len = 8 + Math.pow(s.z, 2.4) * (160 + warpT * 260 + finalT * 340);
+            var alpha = clamp(s.brightness * (warpT * 0.95 + finalT * 1.2), 0, 1);
+
+            speedCtx.save();
+            speedCtx.translate(x, y);
+            speedCtx.rotate(s.angle + Math.PI / 2);
+            speedCtx.globalAlpha = alpha;
+
+            var g = speedCtx.createLinearGradient(0, 0, 0, -len);
+            g.addColorStop(0, "rgba(255,255,255,0)");
+            g.addColorStop(0.18, "rgba(255,255,255,0.96)");
+            g.addColorStop(1, "rgba(255,255,255,0)");
+
+            speedCtx.fillStyle = g;
+            speedCtx.fillRect(-s.width * 0.5, -len, s.width, len);
+            speedCtx.restore();
+        }
+
+        speedCtx.globalAlpha = 1;
+    }
+
+    function updateHole(time, warpT, finalT) {
+        var w = easeInOutCubic(warpT);
+        var f = easeInCubic(finalT);
+        var scale = 0.95 + w * 0.38 + f * 12.5;
+
+        hole.style.transform = "translate(-50%, -50%) scale(" + scale.toFixed(4) + ")";
+        ring.style.transform = "translate(-50%, -50%) rotate(" + (time * 0.028) + "deg) scale(" + (scale * 1.75).toFixed(4) + ")";
+        ring2.style.transform = "translate(-50%, -50%) rotate(" + (-time * 0.017) + "deg) scale(" + (scale * 1.98).toFixed(4) + ")";
+        lens.style.transform = "translate(-50%, -50%) scale(" + (scale * 1.68).toFixed(4) + ")";
+
+        finalBlack.style.opacity = String(f * 0.96);
+    }
+
+    function loop(now) {
+        var elapsed = now - start;
+        var warpT = clamp(elapsed / tWarpEnd, 0, 1);
+        var finalT = clamp((elapsed - tWarpEnd) / (tFinalEnd - tWarpEnd), 0, 1);
+
+        drawBackground(warpT, finalT);
+        drawSpeedParticles(warpT, finalT);
+        updateHole(elapsed, warpT, finalT);
+
+        if (elapsed < tFinalEnd) {
+            requestAnimationFrame(loop);
+        } else {
+            window.location.replace(next);
+        }
+    }
+
+    window.addEventListener("resize", resize, { passive: true });
+
+    resize();
+    requestAnimationFrame(function (ts) {
+        start = ts;
+        loop(ts);
+    });
+})();
+</script>
+</body>
+</html>

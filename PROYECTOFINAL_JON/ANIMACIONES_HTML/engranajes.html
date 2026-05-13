@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Rueda del Tiempo</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bronze:       #E89B5C;
+    --bronze-light: #FFD89B;
+    --bronze-dim:   #8A5A2C;
+    --bronze-dark:  #5A3818;
+    --bronze-deep:  #3A2010;
+    --cream:        #FFE9C2;
+    --glow:         #FFB860;
+    --rune-off:     #C8773D;
+    --rune-on:      #FFF0C0;
+    --gold-bright:  #FFE060;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
+    background: #040200;
+}
+
+/* ── BACKGROUND ─────────────────────────────────────────────────────────────── */
+#bg {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse 90% 80% at 50% 50%,
+        #0e0602 0%, #060300 55%, #020100 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+/* Static background canvas: stars + nebula dust, drawn once */
+#bg-canvas {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+/* Vignette for depth */
+#vignette {
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(ellipse 65% 55% at 50% 50%,
+            transparent 30%, rgba(2,1,0,0.6) 72%, rgba(1,0,0,0.88) 100%),
+        radial-gradient(ellipse 100% 38% at 50% 0%,
+            rgba(5,2,0,0.75) 0%, transparent 100%),
+        radial-gradient(ellipse 100% 38% at 50% 100%,
+            rgba(5,2,0,0.75) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 2;
+}
+/* Frame gear keyframes — CSS only */
+@keyframes frame-gear-cw  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+@keyframes frame-gear-ccw { from { transform: rotate(0deg); }   to { transform: rotate(-360deg); } }
+
+/* Subtle noise grain overlay */
+#grain {
+    position: fixed; inset: 0;
+    opacity: 0.045;
+    pointer-events: none;
+    z-index: 3;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+}
+
+/* ── FRAME / MARCO ───────────────────────────────────────────────────────────── */
+#frame-outer {
+    position: fixed;
+    inset: clamp(8px, 1.3vmin, 18px);
+    pointer-events: none;
+    z-index: 50;
+    overflow: hidden;
+}
+
+#frame-outer svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    transform: none;
+    transform-origin: center center;
+}
+
+#frame-gears {
+    display: none;
+}
+
+/* ── TITLE ───────────────────────────────────────────────────────────────────── */
+.title {
+    position: fixed;
+    top: clamp(18px, 4.8vmin, 42px);
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--cream);
+    font-size: clamp(11px, 2.0vmin, 23px);
+    letter-spacing: 0.42em;
+    font-weight: 400;
+    text-shadow:
+        0 0 16px rgba(255,184,96,0.95),
+        0 0 38px rgba(255,184,96,0.4),
+        0 0 75px rgba(255,140,40,0.18);
+    text-transform: uppercase;
+    z-index: 100;
+    white-space: nowrap;
+    will-change: opacity;
+}
+
+/* ── STAGE ───────────────────────────────────────────────────────────────────── */
+.stage {
+    position: relative;
+    width: min(860px, 78vmin);
+    height: min(860px, 78vmin);
+    z-index: 10;
+    margin-top: clamp(18px, 4.4vmin, 46px);
+}
+
+#rune {
+    width: 100%; height: 100%;
+    overflow: visible;
+    will-change: transform, opacity;
+}
+
+/* ── CSS CLOCK HAND ANIMATIONS (key for performance) ────────────────────────── */
+
+/* Minute hand: smooth continuous rotation, one full turn = 4s */
+@keyframes spin-minute {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Hour hand: step animation — 12 steps × 30° each, one step per minute-revolution */
+/* Each step: 4s (= 1 minute-revolution), so full 360° = 48s */
+@keyframes tick-hour {
+    0%      { transform: rotate(0deg); }
+    8.33%   { transform: rotate(0deg); }
+    8.34%   { transform: rotate(30deg); }
+    16.66%  { transform: rotate(30deg); }
+    16.67%  { transform: rotate(60deg); }
+    24.99%  { transform: rotate(60deg); }
+    25.00%  { transform: rotate(90deg); }
+    33.32%  { transform: rotate(90deg); }
+    33.33%  { transform: rotate(120deg); }
+    41.65%  { transform: rotate(120deg); }
+    41.66%  { transform: rotate(150deg); }
+    49.98%  { transform: rotate(150deg); }
+    49.99%  { transform: rotate(180deg); }
+    58.31%  { transform: rotate(180deg); }
+    58.32%  { transform: rotate(210deg); }
+    66.64%  { transform: rotate(210deg); }
+    66.65%  { transform: rotate(240deg); }
+    74.97%  { transform: rotate(240deg); }
+    74.98%  { transform: rotate(270deg); }
+    83.30%  { transform: rotate(270deg); }
+    83.31%  { transform: rotate(300deg); }
+    91.63%  { transform: rotate(300deg); }
+    91.64%  { transform: rotate(330deg); }
+    99.96%  { transform: rotate(330deg); }
+    99.97%  { transform: rotate(360deg); }
+    100%    { transform: rotate(360deg); }
+}
+
+/* Main gear slow rotation */
+@keyframes spin-gear1 {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Side gears counter-rotate faster */
+@keyframes spin-gear-cw {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+@keyframes spin-gear-ccw {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+}
+
+/* Outer ring slow drift */
+@keyframes spin-outer {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Secondary perpetual-motion ring */
+@keyframes spin-perpetual {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+}
+
+/* Rune glow pulse */
+@keyframes rune-pulse {
+    0%, 100% { opacity: 0.72; }
+    50%       { opacity: 1; }
+}
+
+.rune-lit {
+    fill: var(--rune-on) !important;
+    animation: rune-pulse 1.1s ease-in-out infinite;
+}
+
+/* Core pulse */
+@keyframes core-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.45; }
+    50%       { transform: scale(1.22); opacity: 0.75; }
+}
+
+/* Fade in for whole wheel */
+@keyframes wheel-in {
+    from { opacity: 0; transform: rotate(-12deg) scale(0.88); }
+    to   { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+
+/* Extra gear speeds */
+@keyframes spin-gear-cw-fast {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+@keyframes spin-gear-ccw-fast {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+}
+@keyframes spin-gear-cw-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+/* Hour hand tip glow — breathes at the tip of the small hand */
+@keyframes tip-glow {
+    0%, 100% { opacity: 0.55; r: 6; }
+    50%       { opacity: 1.0;  r: 9; }
+}
+@keyframes tip-halo {
+    0%, 100% { opacity: 0.18; r: 14; }
+    50%       { opacity: 0.42; r: 20; }
+}
+
+/* Shockwave ring via CSS */
+@keyframes shockwave {
+    0%   { r: 20;  stroke-opacity: 0.85; stroke-width: 10; }
+    100% { r: 520; stroke-opacity: 0;    stroke-width: 1; }
+}
+
+
+
+/* ── CONSTRUCTION / COMING SOON STATE ─────────────────────────────────────── */
+@keyframes construction-orbit-cw {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+@keyframes construction-orbit-ccw {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+}
+@keyframes construction-float {
+    0%,100% { transform: translateY(0px) rotate(0deg); opacity: .68; }
+    50%     { transform: translateY(-10px) rotate(8deg); opacity: 1; }
+}
+@keyframes blueprint-draw {
+    0%   { stroke-dashoffset: 220; opacity: .08; }
+    45%  { opacity: .38; }
+    100% { stroke-dashoffset: 0; opacity: .13; }
+}
+@keyframes forge-spark {
+    0%, 100% { opacity: .18; transform: scale(.92); }
+    50%      { opacity: .92; transform: scale(1.18); }
+}
+@keyframes seal-breathe {
+    0%,100% { opacity: .32; }
+    50%     { opacity: .72; }
+}
+@keyframes text-glow-soft {
+    0%,100% { opacity: .78; text-shadow: 0 0 8px rgba(255,184,96,.45); }
+    50%     { opacity: 1;   text-shadow: 0 0 18px rgba(255,216,155,.8); }
+}
+.construction-plaque {
+    position: fixed;
+    left: 50%;
+    bottom: clamp(10px, 1.8vmin, 22px);
+    transform: translateX(-50%);
+    z-index: 100;
+    color: var(--cream);
+    text-align: center;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-size: clamp(7px, 1.15vmin, 12px);
+    line-height: 1.35;
+    padding: 6px 18px 8px;
+    border: 1px solid rgba(232,155,92,.45);
+    border-left-color: rgba(255,216,155,.72);
+    border-right-color: rgba(255,216,155,.72);
+    background: linear-gradient(90deg, rgba(15,6,1,.05), rgba(44,20,4,.48), rgba(15,6,1,.05));
+    box-shadow: 0 0 22px rgba(255,139,38,.12), inset 0 0 18px rgba(255,184,96,.08);
+    pointer-events: none;
+    white-space: normal;
+    width: min(760px, 58%);
+    animation: text-glow-soft 4.8s ease-in-out infinite;
+}
+.construction-plaque .small {
+    display: block;
+    margin-top: 2px;
+    color: rgba(255,216,155,.72);
+    letter-spacing: .34em;
+    font-size: .72em;
+}
+.construction-blueprint path,
+.construction-blueprint circle {
+    stroke-dasharray: 20 12;
+    animation: blueprint-draw 5.8s ease-in-out infinite alternate;
+}
+.construction-orbit-cw  { animation: construction-orbit-cw 34s linear infinite; transform-origin:500px 500px; }
+.construction-orbit-ccw { animation: construction-orbit-ccw 46s linear infinite; transform-origin:500px 500px; }
+.construction-floating-piece { animation: construction-float 4.4s ease-in-out infinite; transform-box: fill-box; transform-origin:center; }
+.construction-spark { animation: forge-spark 2.1s ease-in-out infinite; transform-box: fill-box; transform-origin:center; }
+.construction-seal { animation: seal-breathe 3.6s ease-in-out infinite; }
+@media (max-width: 700px) {
+    .construction-plaque {
+        bottom: 18px;
+        width: min(92vw, 520px);
+        white-space: normal;
+        letter-spacing: .12em;
+        padding-inline: 14px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .construction-orbit-cw,
+    .construction-orbit-ccw,
+    .construction-floating-piece,
+    .construction-spark,
+    .construction-seal,
+    .construction-plaque,
+    .construction-blueprint path,
+    .construction-blueprint circle {
+        animation: none !important;
+    }
+}
+
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+<canvas id="bg-canvas"></canvas>
+<div id="vignette"></div>
+<div id="grain"></div>
+<canvas id="waves" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
+
+<!-- ORNATE FRAME SVG -->
+<div id="frame-outer">
+<svg viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+<defs>
+    <radialGradient id="cornerGrad" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#FFD89B" stop-opacity="0.7"/>
+        <stop offset="100%" stop-color="#8A5A2C" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="fgearGrad" cx="38%" cy="33%" r="62%">
+        <stop offset="0%"   stop-color="#A86830"/>
+        <stop offset="55%"  stop-color="#6A3C14"/>
+        <stop offset="100%" stop-color="#2A1006"/>
+    </radialGradient>
+    <radialGradient id="fgearSmGrad" cx="42%" cy="38%" r="58%">
+        <stop offset="0%"   stop-color="#8A5020"/>
+        <stop offset="60%"  stop-color="#4E2A0C"/>
+        <stop offset="100%" stop-color="#1C0A04"/>
+    </radialGradient>
+</defs>
+<!-- ═══════════════════════════════════════════════════════════
+     FRAME EDGE GEARS — cadenas saliendo por los bordes
+     Los centros están parcialmente fuera del viewBox (< 0 o > 1000)
+     para el efecto "asomándose" desde el borde.
+     Todo CSS puro, transform-origin en el centro de cada engranaje.
+     ═══════════════════════════════════════════════════════════ -->
+<g id="frame-gears" opacity="0.72">
+
+<!-- ── BORDE IZQUIERDO: cadena vertical ────────────────────────── -->
+<!-- Grande: sobresale ~la mitad, cx=-52 -->
+<g style="animation: frame-gear-cw 22s linear infinite; transform-origin:-52px 200px;">
+    <path id="fgl1" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="-52" cy="200" r="64" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="-52" cy="200" r="60" fill="#100604"/>
+    <circle cx="-52" cy="200" r="60" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="-52" cy="200" r="46" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.4"/>
+    <!-- 4 spoke lines -->
+    <line x1="-52" y1="154" x2="-52" y2="246" stroke="#3A1808" stroke-width="2" opacity="0.5"/>
+    <line x1="-98" y1="200" x2="-6" y2="200" stroke="#3A1808" stroke-width="2" opacity="0.5"/>
+    <circle cx="-52" cy="200" r="10" fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="-52" cy="200" r="4"  fill="#C87838"/>
+</g>
+<!-- Mediano: debajo, meshing -->
+<g style="animation: frame-gear-ccw 14s linear infinite; transform-origin:-38px 340px;">
+    <path id="fgl2" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="-38" cy="340" r="46" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="-38" cy="340" r="42" fill="#0C0402"/>
+    <circle cx="-38" cy="340" r="42" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="-38" cy="340" r="7"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="-38" cy="340" r="3"  fill="#B06830"/>
+</g>
+<!-- Pequeño: más abajo -->
+<g style="animation: frame-gear-cw 9s linear infinite; transform-origin:-48px 450px;">
+    <path id="fgl3" d="" fill="url(#fgearSmGrad)" stroke="#160802" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="-48" cy="450" r="34" fill="none" stroke="#160802" stroke-width="1.4"/>
+    <circle cx="-48" cy="450" r="30" fill="#0A0302"/>
+    <circle cx="-48" cy="450" r="5"  fill="#140604" stroke="#6A3010" stroke-width="0.7"/>
+    <circle cx="-48" cy="450" r="2"  fill="#A06030"/>
+</g>
+<!-- Grande inferior lado izq -->
+<g style="animation: frame-gear-ccw 25s linear infinite; transform-origin:-55px 650px;">
+    <path id="fgl4" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="-55" cy="650" r="62" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="-55" cy="650" r="58" fill="#100604"/>
+    <circle cx="-55" cy="650" r="58" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.45"/>
+    <circle cx="-55" cy="650" r="44" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.35"/>
+    <line x1="-55" y1="608" x2="-55" y2="692" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="-97" y1="650" x2="-13" y2="650" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="-55" cy="650" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="-55" cy="650" r="4"  fill="#C87838"/>
+</g>
+
+<!-- ── BORDE DERECHO: cadena vertical ───────────────────────────── -->
+<g style="animation: frame-gear-ccw 20s linear infinite; transform-origin:1052px 180px;">
+    <path id="fgr1" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="1052" cy="180" r="64" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="1052" cy="180" r="60" fill="#100604"/>
+    <circle cx="1052" cy="180" r="60" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="1052" cy="180" r="46" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.4"/>
+    <line x1="1052" y1="136" x2="1052" y2="224" stroke="#3A1808" stroke-width="2" opacity="0.5"/>
+    <line x1="1006" y1="180" x2="1098" y2="180" stroke="#3A1808" stroke-width="2" opacity="0.5"/>
+    <circle cx="1052" cy="180" r="10" fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="1052" cy="180" r="4"  fill="#C87838"/>
+</g>
+<g style="animation: frame-gear-cw 13s linear infinite; transform-origin:1042px 320px;">
+    <path id="fgr2" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="1042" cy="320" r="46" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="1042" cy="320" r="42" fill="#0C0402"/>
+    <circle cx="1042" cy="320" r="42" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="1042" cy="320" r="7"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="1042" cy="320" r="3"  fill="#B06830"/>
+</g>
+<g style="animation: frame-gear-ccw 8s linear infinite; transform-origin:1048px 430px;">
+    <path id="fgr3" d="" fill="url(#fgearSmGrad)" stroke="#160802" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="1048" cy="430" r="34" fill="none" stroke="#160802" stroke-width="1.4"/>
+    <circle cx="1048" cy="430" r="30" fill="#0A0302"/>
+    <circle cx="1048" cy="430" r="5"  fill="#140604" stroke="#6A3010" stroke-width="0.7"/>
+    <circle cx="1048" cy="430" r="2"  fill="#A06030"/>
+</g>
+<g style="animation: frame-gear-cw 18s linear infinite; transform-origin:1055px 620px;">
+    <path id="fgr4" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="1055" cy="620" r="58" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="1055" cy="620" r="54" fill="#100604"/>
+    <circle cx="1055" cy="620" r="54" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.45"/>
+    <circle cx="1055" cy="620" r="40" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.35"/>
+    <line x1="1055" y1="580" x2="1055" y2="660" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="1015" y1="620" x2="1095" y2="620" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="1055" cy="620" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="1055" cy="620" r="4"  fill="#C87838"/>
+</g>
+
+<!-- ── BORDE SUPERIOR: cadena horizontal ────────────────────────── -->
+<g style="animation: frame-gear-cw 16s linear infinite; transform-origin:200px -48px;">
+    <path id="fgt1" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="200" cy="-48" r="60" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="200" cy="-48" r="56" fill="#100604"/>
+    <circle cx="200" cy="-48" r="56" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="200" cy="-48" r="42" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.38"/>
+    <line x1="158" y1="-48" x2="242" y2="-48" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="200" y1="-90" x2="200" y2="-6" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="200" cy="-48" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="200" cy="-48" r="4"  fill="#C87838"/>
+</g>
+<g style="animation: frame-gear-ccw 11s linear infinite; transform-origin:340px -36px;">
+    <path id="fgt2" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="340" cy="-36" r="42" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="340" cy="-36" r="38" fill="#0C0402"/>
+    <circle cx="340" cy="-36" r="38" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="340" cy="-36" r="6"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="340" cy="-36" r="2.5" fill="#B06830"/>
+</g>
+<g style="animation: frame-gear-cw 17s linear infinite; transform-origin:800px -52px;">
+    <path id="fgt3" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="800" cy="-52" r="60" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="800" cy="-52" r="56" fill="#100604"/>
+    <circle cx="800" cy="-52" r="56" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="800" cy="-52" r="42" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.38"/>
+    <line x1="758" y1="-52" x2="842" y2="-52" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="800" y1="-94" x2="800" y2="-10" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="800" cy="-52" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="800" cy="-52" r="4"  fill="#C87838"/>
+</g>
+<g style="animation: frame-gear-ccw 9s linear infinite; transform-origin:660px -40px;">
+    <path id="fgt4" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="660" cy="-40" r="38" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="660" cy="-40" r="34" fill="#0C0402"/>
+    <circle cx="660" cy="-40" r="34" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="660" cy="-40" r="5"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="660" cy="-40" r="2"  fill="#B06830"/>
+</g>
+
+<!-- ── BORDE INFERIOR: cadena horizontal ────────────────────────── -->
+<g style="animation: frame-gear-ccw 19s linear infinite; transform-origin:250px 1052px;">
+    <path id="fgb1" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="250" cy="1052" r="60" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="250" cy="1052" r="56" fill="#100604"/>
+    <circle cx="250" cy="1052" r="56" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="250" cy="1052" r="42" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.38"/>
+    <line x1="208" y1="1052" x2="292" y2="1052" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="250" y1="1010" x2="250" y2="1094" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="250" cy="1052" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="250" cy="1052" r="4"  fill="#C87838"/>
+</g>
+<g style="animation: frame-gear-cw 12s linear infinite; transform-origin:390px 1040px;">
+    <path id="fgb2" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="390" cy="1040" r="42" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="390" cy="1040" r="38" fill="#0C0402"/>
+    <circle cx="390" cy="1040" r="38" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="390" cy="1040" r="6"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="390" cy="1040" r="2.5" fill="#B06830"/>
+</g>
+<g style="animation: frame-gear-ccw 15s linear infinite; transform-origin:750px 1048px;">
+    <path id="fgb3" d="" fill="url(#fgearGrad)" stroke="#1C0A04" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="750" cy="1048" r="58" fill="none" stroke="#1C0A04" stroke-width="2"/>
+    <circle cx="750" cy="1048" r="54" fill="#100604"/>
+    <circle cx="750" cy="1048" r="54" fill="none" stroke="#7A4820" stroke-width="0.7" opacity="0.5"/>
+    <circle cx="750" cy="1048" r="40" fill="none" stroke="#4A2810" stroke-width="0.5" opacity="0.35"/>
+    <line x1="710" y1="1048" x2="790" y2="1048" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <line x1="750" y1="1008" x2="750" y2="1088" stroke="#3A1808" stroke-width="2" opacity="0.45"/>
+    <circle cx="750" cy="1048" r="9"  fill="#1a0804" stroke="#8A5020" stroke-width="1"/>
+    <circle cx="750" cy="1048" r="4"  fill="#C87838"/>
+</g>
+<g style="animation: frame-gear-cw 8s linear infinite; transform-origin:610px 1038px;">
+    <path id="fgb4" d="" fill="url(#fgearSmGrad)" stroke="#180802" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="610" cy="1038" r="36" fill="none" stroke="#180802" stroke-width="1.6"/>
+    <circle cx="610" cy="1038" r="32" fill="#0C0402"/>
+    <circle cx="610" cy="1038" r="32" fill="none" stroke="#603010" stroke-width="0.6" opacity="0.45"/>
+    <circle cx="610" cy="1038" r="5"  fill="#160804" stroke="#7A3C14" stroke-width="0.8"/>
+    <circle cx="610" cy="1038" r="2"  fill="#B06830"/>
+</g>
+
+</g><!-- /frame-gears -->
+<!-- Top-left -->
+<g opacity="0.7">
+<path d="M 20 20 L 180 20 M 20 20 L 20 180" fill="none" stroke="#C87838" stroke-width="1.5"/>
+<path d="M 20 20 L 120 20 M 20 20 L 20 120" fill="none" stroke="#FFD89B" stroke-width="0.6" opacity="0.6"/>
+<circle cx="20" cy="20" r="7" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.2"/>
+<circle cx="20" cy="20" r="3" fill="#FFB860"/>
+<circle cx="180" cy="20" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="180" cy="20" r="1.5" fill="#E89B5C"/>
+<circle cx="20" cy="180" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="20" cy="180" r="1.5" fill="#E89B5C"/>
+<!-- Diagonal engraving -->
+<path d="M 30 30 L 155 30 M 30 30 L 30 155" fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.5"/>
+<path d="M 55 20 L 55 35 M 90 20 L 90 30 M 130 20 L 130 30" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+<path d="M 20 55 L 35 55 M 20 90 L 30 90 M 20 130 L 30 130" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+</g>
+<!-- Top-right -->
+<g opacity="0.7">
+<path d="M 980 20 L 820 20 M 980 20 L 980 180" fill="none" stroke="#C87838" stroke-width="1.5"/>
+<path d="M 980 20 L 880 20 M 980 20 L 980 120" fill="none" stroke="#FFD89B" stroke-width="0.6" opacity="0.6"/>
+<circle cx="980" cy="20" r="7" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.2"/>
+<circle cx="980" cy="20" r="3" fill="#FFB860"/>
+<circle cx="820" cy="20" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="820" cy="20" r="1.5" fill="#E89B5C"/>
+<circle cx="980" cy="180" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="980" cy="180" r="1.5" fill="#E89B5C"/>
+<path d="M 970 30 L 845 30 M 970 30 L 970 155" fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.5"/>
+<path d="M 945 20 L 945 35 M 910 20 L 910 30 M 870 20 L 870 30" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+<path d="M 980 55 L 965 55 M 980 90 L 970 90 M 980 130 L 970 130" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+</g>
+<!-- Bottom-left -->
+<g opacity="0.7">
+<path d="M 20 980 L 180 980 M 20 980 L 20 820" fill="none" stroke="#C87838" stroke-width="1.5"/>
+<path d="M 20 980 L 120 980 M 20 980 L 20 880" fill="none" stroke="#FFD89B" stroke-width="0.6" opacity="0.6"/>
+<circle cx="20" cy="980" r="7" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.2"/>
+<circle cx="20" cy="980" r="3" fill="#FFB860"/>
+<circle cx="180" cy="980" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="180" cy="980" r="1.5" fill="#E89B5C"/>
+<circle cx="20" cy="820" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="20" cy="820" r="1.5" fill="#E89B5C"/>
+<path d="M 30 970 L 155 970 M 30 970 L 30 845" fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.5"/>
+<path d="M 55 980 L 55 965 M 90 980 L 90 970 M 130 980 L 130 970" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+<path d="M 20 945 L 35 945 M 20 910 L 30 910 M 20 870 L 30 870" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+</g>
+<!-- Bottom-right -->
+<g opacity="0.7">
+<path d="M 980 980 L 820 980 M 980 980 L 980 820" fill="none" stroke="#C87838" stroke-width="1.5"/>
+<path d="M 980 980 L 880 980 M 980 980 L 980 880" fill="none" stroke="#FFD89B" stroke-width="0.6" opacity="0.6"/>
+<circle cx="980" cy="980" r="7" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.2"/>
+<circle cx="980" cy="980" r="3" fill="#FFB860"/>
+<circle cx="820" cy="980" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="820" cy="980" r="1.5" fill="#E89B5C"/>
+<circle cx="980" cy="820" r="4" fill="#1a0e07" stroke="#C87838" stroke-width="1"/>
+<circle cx="980" cy="820" r="1.5" fill="#E89B5C"/>
+<path d="M 970 970 L 845 970 M 970 970 L 970 845" fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.5"/>
+<path d="M 945 980 L 945 965 M 910 980 L 910 970 M 870 980 L 870 970" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+<path d="M 980 945 L 965 945 M 980 910 L 970 910 M 980 870 L 970 870" fill="none" stroke="#C87838" stroke-width="1" opacity="0.6"/>
+</g>
+<!-- Border lines -->
+<rect x="12" y="12" width="976" height="976" fill="none" stroke="#5A3010" stroke-width="0.8" opacity="0.4"/>
+<rect x="8" y="8" width="984" height="984" fill="none" stroke="#3A1C08" stroke-width="1.2" opacity="0.5"/>
+<!-- Title decorative underline -->
+<line x1="340" y1="85" x2="660" y2="85" stroke="#C87838" stroke-width="0.8" opacity="0.55"/>
+<line x1="380" y1="90" x2="620" y2="90" stroke="#8A5A2C" stroke-width="0.4" opacity="0.4"/>
+<circle cx="340" cy="85" r="3" fill="#E89B5C" opacity="0.6"/>
+<circle cx="660" cy="85" r="3" fill="#E89B5C" opacity="0.6"/>
+</svg>
+</div>
+
+<h1 class="title" id="title">Rueda del tiempo</h1>
+<div class="construction-plaque">El tiempo aún no ha forjado esta zona<span class="small">Forjando acceso · sincronizando era</span></div>
+
+<div class="stage">
+<svg id="rune" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+<defs>
+    <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"   stop-color="#FFE9C2" stop-opacity="0.9"/>
+        <stop offset="40%"  stop-color="#FFB860" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#E89B5C" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Main gear gradient -->
+    <radialGradient id="gearGrad" cx="38%" cy="32%" r="62%">
+        <stop offset="0%"   stop-color="#D08840"/>
+        <stop offset="50%"  stop-color="#9A5A28"/>
+        <stop offset="100%" stop-color="#4A2808"/>
+    </radialGradient>
+    <!-- Side gears gradient -->
+    <radialGradient id="sideGearGrad" cx="42%" cy="38%" r="58%">
+        <stop offset="0%"   stop-color="#B87030"/>
+        <stop offset="55%"  stop-color="#7A4218"/>
+        <stop offset="100%" stop-color="#3A1C08"/>
+    </radialGradient>
+    <!-- Engraved inner clock face -->
+    <radialGradient id="faceGrad" cx="50%" cy="40%" r="55%">
+        <stop offset="0%"   stop-color="#1c0e06"/>
+        <stop offset="60%"  stop-color="#120904"/>
+        <stop offset="100%" stop-color="#080402"/>
+    </radialGradient>
+
+    <!-- Mini gear gradient (slightly darker/cooler) -->
+    <radialGradient id="miniGearGrad" cx="40%" cy="35%" r="60%">
+        <stop offset="0%"   stop-color="#A06028"/>
+        <stop offset="55%"  stop-color="#6A3C14"/>
+        <stop offset="100%" stop-color="#2E1408"/>
+    </radialGradient>
+
+    <!-- Soft metal filter — used sparingly only on static elements -->
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="2" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Hour hand filter — static, not recalculated in JS -->
+    <filter id="handGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="3" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <!-- Shockwave ring (CSS animated) -->
+    <circle id="shock-tpl" cx="500" cy="500" r="0" fill="none" stroke="#FFB860" stroke-width="8" stroke-opacity="0"/>
+
+    <g id="diamondOrn">
+        <path d="M 0 -5 L 3.5 0 L 0 5 L -3.5 0 Z" fill="#FFD89B"/>
+    </g>
+    <g id="cardinalOrn">
+        <path d="M 0 -9 L 5 0 L 0 9 L -5 0 Z" fill="none" stroke="#FFD89B" stroke-width="1.3"/>
+        <circle cx="0" cy="0" r="2" fill="#FFD89B"/>
+    </g>
+    <g id="timeArrowGlyph">
+        <path d="M -8 0 L 4 0" fill="none" stroke="#FFD89B" stroke-width="1.15" stroke-linecap="round"/>
+        <path d="M 1 -4 L 7 0 L 1 4" fill="none" stroke="#FFD89B" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="-9.5" cy="0" r="1.25" fill="#E89B5C" opacity="0.9"/>
+    </g>
+    <g id="hourglassGlyph">
+        <path d="M -5 -6 L 5 -6 L -2 -1 L 2 1 L -5 6 L 5 6" fill="none" stroke="#E89B5C" stroke-width="1" stroke-linejoin="round" opacity="0.9"/>
+        <path d="M -1.5 -2.2 L 1.5 -2.2 L 0 0 Z" fill="#FFD89B" opacity="0.9"/>
+        <path d="M -1.5 2.2 L 1.5 2.2 L 0 0 Z" fill="#C87838" opacity="0.7"/>
+    </g>
+</defs>
+
+<!-- ROOT group — CSS animated in/out, no JS opacity spam -->
+<g id="root" style="animation: wheel-in 1.2s cubic-bezier(0.16,1,0.3,1) both; transform-origin: 500px 500px;">
+
+    <!-- OUTER RING (CSS spin, no JS) -->
+    <g id="outer-ring" style="animation: spin-outer 65s linear infinite; transform-origin: 500px 500px;">
+        <circle cx="500" cy="500" r="485" fill="none" stroke="#E89B5C" stroke-width="0.6" stroke-dasharray="2 16" opacity="0.55"/>
+        <circle cx="500" cy="500" r="465" fill="none" stroke="#FFD89B" stroke-width="0.35" opacity="0.3"/>
+        <circle cx="500" cy="500" r="447" fill="none" stroke="#E89B5C" stroke-width="1.3" opacity="0.5"/>
+        <circle cx="500" cy="500" r="440" fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.45"/>
+        <g id="ticks-group"></g>
+        <g id="cardinal-group"></g>
+        <g id="ornaments-group"></g>
+        <g id="corner-group"></g>
+    </g>
+
+
+    <!-- CONSTRUCTION SEAL: incomplete temporal blueprint + floating missing parts -->
+    <g id="construction-state" style="animation: wheel-in 1.6s .25s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+        <!-- Incomplete outer build rings: these make the wheel look unfinished/on-going. -->
+        <g class="construction-orbit-ccw" opacity="0.72">
+            <circle cx="500" cy="500" r="432" fill="none" stroke="#FFD89B" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="128 42 34 95 210 70" opacity="0.38"/>
+            <circle cx="500" cy="500" r="422" fill="none" stroke="#C87838" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="70 120 220 68 32 110" opacity="0.32"/>
+        </g>
+        <g class="construction-orbit-cw" opacity="0.62">
+            <circle cx="500" cy="500" r="377" fill="none" stroke="#8A5A2C" stroke-width="1" stroke-linecap="round" stroke-dasharray="24 18 92 44 14 110" opacity="0.55"/>
+            <circle cx="500" cy="500" r="360" fill="none" stroke="#FFD89B" stroke-width=".7" stroke-linecap="round" stroke-dasharray="8 28 56 90" opacity="0.25"/>
+        </g>
+
+        <!-- Blueprint / construction-plan lines. No blur, only stroke-dash animation. -->
+        <g class="construction-blueprint" opacity="0.75">
+            <path d="M 246 246 L 754 754" fill="none" stroke="#FFD89B" stroke-width=".65" opacity=".25"/>
+            <path d="M 754 246 L 246 754" fill="none" stroke="#C87838" stroke-width=".55" opacity=".18"/>
+            <path d="M 320 500 H 680" fill="none" stroke="#FFD89B" stroke-width=".5" opacity=".2"/>
+            <path d="M 500 320 V 680" fill="none" stroke="#FFD89B" stroke-width=".5" opacity=".18"/>
+            <circle cx="500" cy="500" r="292" fill="none" stroke="#C87838" stroke-width=".6" opacity=".18"/>
+        </g>
+
+        <!-- Circular seal/chain, intentionally broken so it reads as locked but unfinished. -->
+        <g class="construction-seal" opacity="0.78">
+            <circle cx="500" cy="500" r="333" fill="none" stroke="#5A3818" stroke-width="6" stroke-linecap="round" stroke-dasharray="34 18" opacity=".32"/>
+            <circle cx="500" cy="500" r="333" fill="none" stroke="#FFD89B" stroke-width=".85" stroke-linecap="round" stroke-dasharray="34 18" opacity=".23"/>
+            <path d="M 472 706 L 528 706 L 528 748 L 472 748 Z" fill="#080402" stroke="#C87838" stroke-width="2" opacity=".78"/>
+            <path d="M 486 706 C 486 682 514 682 514 706" fill="none" stroke="#FFD89B" stroke-width="2.1" opacity=".72"/>
+            <circle cx="500" cy="728" r="5" fill="#FFB860" opacity=".85"/>
+        </g>
+
+        <!-- Floating missing clockwork fragments. They orbit slowly and imply assembly. -->
+        <g class="construction-orbit-cw">
+            <g class="construction-floating-piece" style="animation-delay:.1s;">
+                <path d="M 500 75 L 516 101 L 500 118 L 484 101 Z" fill="#120904" stroke="#FFD89B" stroke-width="1.3" opacity=".86"/>
+                <path d="M 500 84 V 109 M 490 99 H 510" stroke="#C87838" stroke-width=".8" opacity=".65"/>
+            </g>
+            <g class="construction-floating-piece" style="animation-delay:1.2s;">
+                <path d="M 804 240 L 842 250 L 820 284 L 790 270 Z" fill="#130904" stroke="#E89B5C" stroke-width="1.2" opacity=".75"/>
+                <path d="M 802 262 H 832" stroke="#FFD89B" stroke-width=".7" opacity=".45"/>
+            </g>
+            <g class="construction-floating-piece" style="animation-delay:2s;">
+                <path d="M 160 622 L 190 608 L 204 636 L 176 652 Z" fill="#100704" stroke="#C87838" stroke-width="1.1" opacity=".72"/>
+                <circle cx="182" cy="630" r="5" fill="none" stroke="#FFD89B" stroke-width=".8" opacity=".7"/>
+            </g>
+        </g>
+        <g class="construction-orbit-ccw">
+            <g class="construction-floating-piece" style="animation-delay:.7s;">
+                <path d="M 825 610 L 860 620 L 844 651 L 810 640 Z" fill="#100604" stroke="#FFD89B" stroke-width="1.1" opacity=".68"/>
+                <path d="M 826 636 L 850 623" stroke="#C87838" stroke-width=".8" opacity=".55"/>
+            </g>
+            <g class="construction-floating-piece" style="animation-delay:1.6s;">
+                <path d="M 230 205 L 263 216 L 250 250 L 216 236 Z" fill="#120704" stroke="#E89B5C" stroke-width="1.1" opacity=".72"/>
+                <path d="M 232 225 L 256 231" stroke="#FFD89B" stroke-width=".7" opacity=".55"/>
+            </g>
+        </g>
+
+        <!-- Low-cost forge sparks around the unfinished lower lock. -->
+        <g opacity="0.75">
+            <circle class="construction-spark" cx="455" cy="744" r="2.4" fill="#FFE9C2" style="animation-delay:.1s"/>
+            <circle class="construction-spark" cx="543" cy="746" r="2.1" fill="#FFB860" style="animation-delay:.7s"/>
+            <circle class="construction-spark" cx="433" cy="704" r="1.6" fill="#FFD89B" style="animation-delay:1.3s"/>
+            <circle class="construction-spark" cx="568" cy="706" r="1.8" fill="#FFE9C2" style="animation-delay:1.8s"/>
+        </g>
+
+        <!-- In-world label inside the SVG, useful when this is embedded without the fixed HTML plaque. -->
+        <g opacity="0.92">
+            <path d="M 250 890 H 750" stroke="#8A5A2C" stroke-width="1" opacity=".45"/>
+            <circle cx="250" cy="890" r="3" fill="#E89B5C" opacity=".55"/>
+            <circle cx="750" cy="890" r="3" fill="#E89B5C" opacity=".55"/>
+            <text x="500" y="872" text-anchor="middle" fill="#FFE9C2" font-family="Cinzel, serif" font-size="24" letter-spacing="7" opacity=".86">ZONA EN FORJA TEMPORAL</text>
+            <text x="500" y="914" text-anchor="middle" fill="#C87838" font-family="Cinzel, serif" font-size="14" letter-spacing="5" opacity=".72">SINCRONIZANDO ERA · ACCESO SELLADO</text>
+        </g>
+    </g>
+
+    <!-- PERPETUAL MOTION RING -->
+    <g id="perpetual-ring" style="animation: spin-perpetual 38s linear infinite; transform-origin:500px 500px;">
+        <circle cx="500" cy="500" r="412" fill="none" stroke="#FFD89B" stroke-width="0.55" stroke-dasharray="2 18" opacity="0.18"/>
+        <circle cx="500" cy="500" r="394" fill="none" stroke="#C87838" stroke-width="0.6" stroke-dasharray="18 14" opacity="0.22"/>
+        <g id="perpetual-arrows"></g>
+        <g id="time-glyphs"></g>
+    </g>
+
+    <!-- SACRED TRIANGLE -->
+    <g id="triangle" style="animation: wheel-in 1.8s 0.4s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+
+        <!-- ── TRIÁNGULO INVERTIDO TRASERO (nuevo) ── -->
+        <!-- Capa más oscura y grande — profundidad -->
+        <path d="M 182 762 L 818 762 L 500 188 Z"
+              fill="none" stroke="#4A2410" stroke-width="3.5" stroke-linejoin="round" opacity="0.28"/>
+        <!-- Capa principal invertida -->
+        <path d="M 200 750 L 800 750 L 500 210 Z"
+              fill="none" stroke="#C87838" stroke-width="2.8" stroke-linejoin="round" opacity="0.38"
+              filter="url(#softGlow)"/>
+        <!-- Línea interior fina -->
+        <path d="M 222 736 L 778 736 L 500 234 Z"
+              fill="none" stroke="#FFD89B" stroke-width="0.9" opacity="0.28"/>
+        <!-- Línea interior más fina punteada -->
+        <path d="M 248 720 L 752 720 L 500 258 Z"
+              fill="none" stroke="#8A5A2C" stroke-width="0.5" stroke-dasharray="5 9" opacity="0.35"/>
+        <!-- Vértices del triángulo invertido -->
+        <circle cx="200" cy="750" r="6" fill="#1a0e07" stroke="#C87838" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="200" cy="750" r="2.5" fill="#E89B5C" opacity="0.7"/>
+        <circle cx="800" cy="750" r="6" fill="#1a0e07" stroke="#C87838" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="800" cy="750" r="2.5" fill="#E89B5C" opacity="0.7"/>
+        <circle cx="500" cy="210" r="6" fill="#1a0e07" stroke="#C87838" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="500" cy="210" r="2.5" fill="#E89B5C" opacity="0.7"/>
+
+        <!-- Back inverted triangle (original, keep) -->
+        <path d="M 500 190 L 818 738 L 182 738 Z"
+              fill="none" stroke="#6A3818" stroke-width="3.2" stroke-linejoin="round" opacity="0.34"/>
+        <path d="M 500 214 L 790 715 L 210 715 Z"
+              fill="none" stroke="#FFD89B" stroke-width="0.95" stroke-dasharray="6 10" opacity="0.24"/>
+
+        <!-- Front main triangle -->
+        <path d="M 200 290 L 800 290 L 500 810 Z"
+              fill="none" stroke="#E89B5C" stroke-width="5" stroke-linejoin="round"
+              filter="url(#softGlow)"/>
+        <path d="M 222 304 L 778 304 L 500 782 Z"
+              fill="none" stroke="#FFD89B" stroke-width="1.3" opacity="0.65"/>
+        <path d="M 248 318 L 752 318 L 500 753 Z"
+              fill="none" stroke="#8A5A2C" stroke-width="0.5" opacity="0.45"/>
+
+        <!-- Simple temporal accents on the triangle edges -->
+        <path d="M 248 318 L 500 753" fill="none" stroke="#C87838" stroke-width="0.7" stroke-dasharray="4 12" opacity="0.28"/>
+        <path d="M 752 318 L 500 753" fill="none" stroke="#C87838" stroke-width="0.7" stroke-dasharray="4 12" opacity="0.28"/>
+        <path d="M 248 318 L 752 318" fill="none" stroke="#C87838" stroke-width="0.7" stroke-dasharray="4 12" opacity="0.24"/>
+
+        <circle cx="200" cy="290" r="8" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.5"/>
+        <circle cx="200" cy="290" r="3" fill="#FFB860"/>
+        <circle cx="800" cy="290" r="8" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.5"/>
+        <circle cx="800" cy="290" r="3" fill="#FFB860"/>
+        <circle cx="500" cy="810" r="8" fill="#1a0e07" stroke="#FFD89B" stroke-width="1.5"/>
+        <circle cx="500" cy="810" r="3" fill="#FFB860"/>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN GEAR (single large, CSS animated)
+         ═══════════════════════════════════════════════════════════ -->
+    <g id="gear-main-wrap" style="animation: wheel-in 1.4s 0.6s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+        <!-- Gear rotates via CSS -->
+        <g id="gear-main" style="animation: spin-gear1 28s linear infinite; transform-origin:500px 500px;">
+            <path id="gear1-path" d="" fill="url(#gearGrad)" stroke="#3A1C08" stroke-width="2.2" stroke-linejoin="round"/>
+            <!-- Structural rings (static relative to gear) -->
+            <circle cx="500" cy="500" r="222" fill="none" stroke="#3A1C08" stroke-width="2.5"/>
+            <circle cx="500" cy="500" r="217" fill="#130A04"/>
+            <circle cx="500" cy="500" r="217" fill="none" stroke="#C87838" stroke-width="0.8" opacity="0.6"/>
+            <circle cx="500" cy="500" r="208" fill="none" stroke="#8A5A2C" stroke-width="0.5" stroke-dasharray="4 6" opacity="0.4"/>
+            <g id="gear1-rivets"></g>
+            <!-- Engraving circles -->
+            <circle cx="500" cy="500" r="190" fill="none" stroke="#5A3010" stroke-width="1.2" opacity="0.5"/>
+            <circle cx="500" cy="500" r="175" fill="none" stroke="#4A2808" stroke-width="0.6" opacity="0.35"/>
+            <!-- Spoke details -->
+            <g id="gear1-spokes"></g>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         SIDE / CORNER GEARS (overflow the main wheel)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <!-- TOP gear (12 o'clock, protrudes up) -->
+    <g style="animation: wheel-in 1.6s 0.8s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 284px;">
+        <g id="gear-top" style="animation: spin-gear-ccw 9s linear infinite; transform-origin:500px 284px;">
+            <path id="gear-top-path" d="" fill="url(#sideGearGrad)" stroke="#2A1004" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="500" cy="284" r="58" fill="none" stroke="#2A1004" stroke-width="1.8"/>
+            <circle cx="500" cy="284" r="54" fill="#0D0602"/>
+            <circle cx="500" cy="284" r="54" fill="none" stroke="#A06828" stroke-width="0.6" opacity="0.55"/>
+            <circle cx="500" cy="284" r="42" fill="none" stroke="#6A3810" stroke-width="0.5" opacity="0.4"/>
+            <g id="gear-top-rivets"></g>
+        </g>
+    </g>
+
+    <!-- RIGHT gear (3 o'clock) -->
+    <g style="animation: wheel-in 1.6s 0.9s cubic-bezier(0.16,1,0.3,1) both; transform-origin:716px 500px;">
+        <g id="gear-right" style="animation: spin-gear-cw 11s linear infinite; transform-origin:716px 500px;">
+            <path id="gear-right-path" d="" fill="url(#sideGearGrad)" stroke="#2A1004" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="716" cy="500" r="58" fill="none" stroke="#2A1004" stroke-width="1.8"/>
+            <circle cx="716" cy="500" r="54" fill="#0D0602"/>
+            <circle cx="716" cy="500" r="54" fill="none" stroke="#A06828" stroke-width="0.6" opacity="0.55"/>
+            <circle cx="716" cy="500" r="42" fill="none" stroke="#6A3810" stroke-width="0.5" opacity="0.4"/>
+            <g id="gear-right-rivets"></g>
+        </g>
+    </g>
+
+    <!-- LEFT gear (9 o'clock) -->
+    <g style="animation: wheel-in 1.6s 1.0s cubic-bezier(0.16,1,0.3,1) both; transform-origin:284px 500px;">
+        <g id="gear-left" style="animation: spin-gear-ccw 13s linear infinite; transform-origin:284px 500px;">
+            <path id="gear-left-path" d="" fill="url(#sideGearGrad)" stroke="#2A1004" stroke-width="1.6" stroke-linejoin="round"/>
+            <circle cx="284" cy="500" r="58" fill="none" stroke="#2A1004" stroke-width="1.8"/>
+            <circle cx="284" cy="500" r="54" fill="#0D0602"/>
+            <circle cx="284" cy="500" r="54" fill="none" stroke="#A06828" stroke-width="0.6" opacity="0.55"/>
+            <circle cx="284" cy="500" r="42" fill="none" stroke="#6A3810" stroke-width="0.5" opacity="0.4"/>
+            <g id="gear-left-rivets"></g>
+        </g>
+    </g>
+
+    <!-- BOTTOM-LEFT gear (diagonal) -->
+    <g style="animation: wheel-in 1.7s 1.1s cubic-bezier(0.16,1,0.3,1) both; transform-origin:346px 716px;">
+        <g id="gear-bl" style="animation: spin-gear-cw 14s linear infinite; transform-origin:346px 716px;">
+            <path id="gear-bl-path" d="" fill="url(#sideGearGrad)" stroke="#2A1004" stroke-width="1.4" stroke-linejoin="round"/>
+            <circle cx="346" cy="716" r="44" fill="none" stroke="#2A1004" stroke-width="1.5"/>
+            <circle cx="346" cy="716" r="40" fill="#0A0403"/>
+            <circle cx="346" cy="716" r="40" fill="none" stroke="#8A5820" stroke-width="0.5" opacity="0.5"/>
+            <g id="gear-bl-rivets"></g>
+        </g>
+    </g>
+
+    <!-- BOTTOM-RIGHT gear (diagonal) -->
+    <g style="animation: wheel-in 1.7s 1.2s cubic-bezier(0.16,1,0.3,1) both; transform-origin:654px 716px;">
+        <g id="gear-br" style="animation: spin-gear-ccw 12s linear infinite; transform-origin:654px 716px;">
+            <path id="gear-br-path" d="" fill="url(#sideGearGrad)" stroke="#2A1004" stroke-width="1.4" stroke-linejoin="round"/>
+            <circle cx="654" cy="716" r="44" fill="none" stroke="#2A1004" stroke-width="1.5"/>
+            <circle cx="654" cy="716" r="40" fill="#0A0403"/>
+            <circle cx="654" cy="716" r="40" fill="none" stroke="#8A5820" stroke-width="0.5" opacity="0.5"/>
+            <g id="gear-br-rivets"></g>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         DIAGONAL TOP-LEFT gear (NW, small)
+         ═══════════════════════════════════════════════════════════ -->
+    <g style="animation: wheel-in 1.8s 1.3s cubic-bezier(0.16,1,0.3,1) both; transform-origin:346px 284px;">
+        <g id="gear-tl" style="animation: spin-gear-cw-fast 7s linear infinite; transform-origin:346px 284px;">
+            <path id="gear-tl-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="346" cy="284" r="36" fill="none" stroke="#1E0C04" stroke-width="1.4"/>
+            <circle cx="346" cy="284" r="32" fill="#090402"/>
+            <circle cx="346" cy="284" r="32" fill="none" stroke="#8A5420" stroke-width="0.5" opacity="0.5"/>
+            <g id="gear-tl-rivets"></g>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         DIAGONAL TOP-RIGHT gear (NE, small)
+         ═══════════════════════════════════════════════════════════ -->
+    <g style="animation: wheel-in 1.8s 1.4s cubic-bezier(0.16,1,0.3,1) both; transform-origin:654px 284px;">
+        <g id="gear-tr" style="animation: spin-gear-ccw-fast 8s linear infinite; transform-origin:654px 284px;">
+            <path id="gear-tr-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.2" stroke-linejoin="round"/>
+            <circle cx="654" cy="284" r="36" fill="none" stroke="#1E0C04" stroke-width="1.4"/>
+            <circle cx="654" cy="284" r="32" fill="#090402"/>
+            <circle cx="654" cy="284" r="32" fill="none" stroke="#8A5420" stroke-width="0.5" opacity="0.5"/>
+            <g id="gear-tr-rivets"></g>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         INTERMEDIATE RING — 4 medium gears between center & sides
+         At 45°/135°/225°/315° but inward, meshing the main gear
+         ═══════════════════════════════════════════════════════════ -->
+
+    <!-- Inter NE — r=48, center at ~(640,360) -->
+    <g style="animation: wheel-in 1.9s 0.95s cubic-bezier(0.16,1,0.3,1) both; transform-origin:635px 365px;">
+        <g id="gear-ine" style="animation: spin-gear-ccw-fast 6s linear infinite; transform-origin:635px 365px;">
+            <path id="gear-ine-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.1" stroke-linejoin="round"/>
+            <circle cx="635" cy="365" r="36" fill="none" stroke="#1E0C04" stroke-width="1.3"/>
+            <circle cx="635" cy="365" r="32" fill="#080302"/>
+            <circle cx="635" cy="365" r="32" fill="none" stroke="#7A4C1C" stroke-width="0.5" opacity="0.45"/>
+            <g id="gear-ine-rivets"></g>
+        </g>
+    </g>
+
+    <!-- Inter NW — at (~365, 365) -->
+    <g style="animation: wheel-in 1.9s 1.05s cubic-bezier(0.16,1,0.3,1) both; transform-origin:365px 365px;">
+        <g id="gear-inw" style="animation: spin-gear-cw-fast 5s linear infinite; transform-origin:365px 365px;">
+            <path id="gear-inw-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.1" stroke-linejoin="round"/>
+            <circle cx="365" cy="365" r="36" fill="none" stroke="#1E0C04" stroke-width="1.3"/>
+            <circle cx="365" cy="365" r="32" fill="#080302"/>
+            <circle cx="365" cy="365" r="32" fill="none" stroke="#7A4C1C" stroke-width="0.5" opacity="0.45"/>
+            <g id="gear-inw-rivets"></g>
+        </g>
+    </g>
+
+    <!-- Inter SW — at (~365, 635) -->
+    <g style="animation: wheel-in 1.9s 1.15s cubic-bezier(0.16,1,0.3,1) both; transform-origin:365px 635px;">
+        <g id="gear-isw" style="animation: spin-gear-ccw-fast 6.5s linear infinite; transform-origin:365px 635px;">
+            <path id="gear-isw-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.1" stroke-linejoin="round"/>
+            <circle cx="365" cy="635" r="36" fill="none" stroke="#1E0C04" stroke-width="1.3"/>
+            <circle cx="365" cy="635" r="32" fill="#080302"/>
+            <circle cx="365" cy="635" r="32" fill="none" stroke="#7A4C1C" stroke-width="0.5" opacity="0.45"/>
+            <g id="gear-isw-rivets"></g>
+        </g>
+    </g>
+
+    <!-- Inter SE — at (~635, 635) -->
+    <g style="animation: wheel-in 1.9s 1.25s cubic-bezier(0.16,1,0.3,1) both; transform-origin:635px 635px;">
+        <g id="gear-ise" style="animation: spin-gear-cw-fast 5.5s linear infinite; transform-origin:635px 635px;">
+            <path id="gear-ise-path" d="" fill="url(#miniGearGrad)" stroke="#1E0C04" stroke-width="1.1" stroke-linejoin="round"/>
+            <circle cx="635" cy="635" r="36" fill="none" stroke="#1E0C04" stroke-width="1.3"/>
+            <circle cx="635" cy="635" r="32" fill="#080302"/>
+            <circle cx="635" cy="635" r="32" fill="none" stroke="#7A4C1C" stroke-width="0.5" opacity="0.45"/>
+            <g id="gear-ise-rivets"></g>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         INNER RING GEAR — small toothed ring inside the main gear,
+         counter-rotating — gives a "nested clockwork" feel
+         ═══════════════════════════════════════════════════════════ -->
+    <g style="animation: wheel-in 2.1s 1.5s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+        <g id="gear-inner-ring" style="animation: spin-gear-ccw-fast 18s linear infinite; transform-origin:500px 500px;">
+            <path id="gear-inner-ring-path" d="" fill="none" stroke="#C87838" stroke-width="1.5" stroke-linejoin="round" opacity="0.55"/>
+        </g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         CLOCK FACE (inside the main gear)
+         ═══════════════════════════════════════════════════════════ -->
+    <g id="clock-face" style="animation: wheel-in 2s 1.4s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+        <circle cx="500" cy="500" r="200" fill="url(#faceGrad)"/>
+        <!-- Etched concentric rings -->
+        <circle cx="500" cy="500" r="198" fill="none" stroke="#4A2808" stroke-width="1" opacity="0.7"/>
+        <circle cx="500" cy="500" r="188" fill="none" stroke="#5A3010" stroke-width="0.6" opacity="0.5"/>
+        <circle cx="500" cy="500" r="175" fill="none" stroke="#3A1C08" stroke-width="0.4" stroke-dasharray="6 8" opacity="0.4"/>
+        <!-- Rune ring: slightly larger area -->
+        <circle cx="500" cy="500" r="155" fill="none" stroke="#6A3810" stroke-width="0.5" opacity="0.35"/>
+        <!-- Hour tick markers (closer to edge) -->
+        <g id="hour-markers"></g>
+        <!-- Runes -->
+        <g id="runes-group"></g>
+        <g id="rune-glow-group"></g>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         CLOCK HANDS — CSS animated, zero JS overhead per frame
+         ═══════════════════════════════════════════════════════════ -->
+    <g id="hands-group" style="animation: wheel-in 2s 1.8s cubic-bezier(0.16,1,0.3,1) both; transform-origin:500px 500px;">
+
+        <!-- HOUR HAND: thick, tick-step via CSS steps() -->
+        <g id="hour-hand" style="transform-origin:500px 500px; animation: tick-hour 48s steps(1,end) infinite;">
+            <!-- Ornate hour hand body -->
+            <rect x="496" y="390" width="8" height="118"
+                  rx="2" fill="#FFE9C2" filter="url(#handGlow)"/>
+            <!-- Decorative tip -->
+            <polygon points="500,382 505,400 500,408 495,400"
+                     fill="#FFE060" filter="url(#handGlow)"/>
+            <!-- Cross-guard detail -->
+            <rect x="490" y="438" width="20" height="4" rx="1.5"
+                  fill="#E8C060" opacity="0.8"/>
+            <rect x="493" y="432" width="14" height="3" rx="1"
+                  fill="#FFD89B" opacity="0.6"/>
+            <!-- TIP GLOW — viaja con la aguja pequeña, centrado en la punta (y≈382) -->
+            <!-- Halo exterior -->
+            <circle cx="500" cy="382" r="14"
+                    fill="#FFB840" opacity="0.18"
+                    style="animation: tip-halo 2.2s ease-in-out infinite;"/>
+            <!-- Núcleo brillante -->
+            <circle cx="500" cy="382" r="6"
+                    fill="#FFF4C0" opacity="0.55"
+                    style="animation: tip-glow 2.2s ease-in-out infinite;"/>
+            <!-- Destello estático pequeño -->
+            <circle cx="500" cy="382" r="2.5" fill="#FFFFFF" opacity="0.9"/>
+        </g>
+
+        <!-- MINUTE HAND: thin, smooth continuous CSS spin -->
+        <g id="minute-hand" style="transform-origin:500px 500px; animation: spin-minute 4s linear infinite;">
+            <!-- Thin elegant minute hand -->
+            <rect x="498.5" y="350" width="3" height="158"
+                  rx="1.5" fill="#FFD89B" opacity="0.92" filter="url(#handGlow)"/>
+            <!-- Tapered tip -->
+            <polygon points="500,342 502.5,358 500,365 497.5,358"
+                     fill="#FFE9C2" filter="url(#handGlow)"/>
+            <!-- Balance tail (below center) -->
+            <rect x="498.5" y="508" width="3" height="22"
+                  rx="1.5" fill="#C87838" opacity="0.6"/>
+        </g>
+
+        <!-- Center pivot (always on top) -->
+        <circle cx="500" cy="500" r="14" fill="#FFB860" filter="url(#handGlow)"/>
+        <circle cx="500" cy="500" r="10" fill="#3A1C08"/>
+        <circle cx="500" cy="500" r="6" fill="#C87838"/>
+        <circle cx="500" cy="500" r="3" fill="#FFE9C2"/>
+    </g>
+
+    <!-- CORE PULSE (CSS animated) -->
+    <circle id="core-pulse" cx="500" cy="500" r="16"
+            fill="#FFE9C2" opacity="0"
+            style="transform-origin:500px 500px; animation: core-pulse 2s ease-in-out infinite; animation-delay:2s;"/>
+
+    <!-- Shockwave rings container (JS appends circles here) -->
+    <g id="shock-container"></g>
+
+</g><!-- /root -->
+</svg>
+</div>
+
+<script>
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const CX_SVG = 500, CY_SVG = 500;
+const RUNES = ['ᚠ','ᚢ','ᚦ','ᚨ','ᚱ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛁ','ᛃ'];
+
+// ─── GEAR PATH BUILDER ───────────────────────────────────────────────────────
+function makeGearPath(cx, cy, outerR, innerR, teeth, toothW) {
+    const pts = [];
+    const step = (Math.PI * 2) / teeth;
+    const tw = toothW || 0.38;
+    for (let i = 0; i < teeth; i++) {
+        const t1 = i * step;
+        const t2 = i * step + step * 0.06;
+        const t3 = i * step + step * tw;
+        const t4 = i * step + step * (tw + 0.06);
+        pts.push([cx + Math.cos(t1) * innerR, cy + Math.sin(t1) * innerR]);
+        pts.push([cx + Math.cos(t2) * outerR, cy + Math.sin(t2) * outerR]);
+        pts.push([cx + Math.cos(t3) * outerR, cy + Math.sin(t3) * outerR]);
+        pts.push([cx + Math.cos(t4) * innerR, cy + Math.sin(t4) * innerR]);
+    }
+    return 'M ' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L ') + ' Z';
+}
+
+// Build gear paths (static, once)
+document.getElementById('gear1-path').setAttribute('d', makeGearPath(500,500,272,228,20,0.36));
+document.getElementById('gear-top-path').setAttribute('d', makeGearPath(500,284,78,60,10,0.38));
+document.getElementById('gear-right-path').setAttribute('d', makeGearPath(716,500,78,60,10,0.38));
+document.getElementById('gear-left-path').setAttribute('d', makeGearPath(284,500,78,60,10,0.38));
+document.getElementById('gear-bl-path').setAttribute('d', makeGearPath(346,716,60,46,8,0.40));
+document.getElementById('gear-br-path').setAttribute('d', makeGearPath(654,716,60,46,8,0.40));
+
+// ─── SPOKES for main gear ────────────────────────────────────────────────────
+const spokesG = document.getElementById('gear1-spokes');
+for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const spoke = document.createElementNS(SVG_NS, 'line');
+    spoke.setAttribute('x1', (500 + Math.cos(a) * 40).toFixed(1));
+    spoke.setAttribute('y1', (500 + Math.sin(a) * 40).toFixed(1));
+    spoke.setAttribute('x2', (500 + Math.cos(a) * 185).toFixed(1));
+    spoke.setAttribute('y2', (500 + Math.sin(a) * 185).toFixed(1));
+    spoke.setAttribute('stroke', '#5A3010');
+    spoke.setAttribute('stroke-width', '2.5');
+    spoke.setAttribute('opacity', '0.45');
+    spokesG.appendChild(spoke);
+}
+// Hub
+const hub = document.createElementNS(SVG_NS, 'circle');
+hub.setAttribute('cx','500'); hub.setAttribute('cy','500');
+hub.setAttribute('r','40'); hub.setAttribute('fill','#1a0a04');
+hub.setAttribute('stroke','#7A4820'); hub.setAttribute('stroke-width','1.5');
+spokesG.appendChild(hub);
+const hubr = document.createElementNS(SVG_NS, 'circle');
+hubr.setAttribute('cx','500'); hubr.setAttribute('cy','500');
+hubr.setAttribute('r','28'); hubr.setAttribute('fill','#0D0602');
+hubr.setAttribute('stroke','#C87838'); hubr.setAttribute('stroke-width','0.8'); hubr.setAttribute('opacity','0.6');
+spokesG.appendChild(hubr);
+
+// Rivets helper
+function addRivets(groupId, count, cx, cy, radius, r1, r2, fillA, fillB) {
+    const g = document.getElementById(groupId);
+    if (!g) return;
+    for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        const x = (cx + Math.cos(a) * radius).toFixed(1);
+        const y = (cy + Math.sin(a) * radius).toFixed(1);
+        const c1 = document.createElementNS(SVG_NS, 'circle');
+        c1.setAttribute('cx', x); c1.setAttribute('cy', y);
+        c1.setAttribute('r', r1); c1.setAttribute('fill', fillA);
+        g.appendChild(c1);
+        const c2 = document.createElementNS(SVG_NS, 'circle');
+        c2.setAttribute('cx', x); c2.setAttribute('cy', y);
+        c2.setAttribute('r', r2); c2.setAttribute('fill', fillB);
+        g.appendChild(c2);
+    }
+}
+addRivets('gear1-rivets',    10, 500, 500, 240, 4.5, 1.8, '#3A1C08', '#E8A050');
+addRivets('gear-top-rivets',  6, 500, 284,  62, 3.0, 1.2, '#2A1004', '#C88030');
+addRivets('gear-right-rivets',6, 716, 500,  62, 3.0, 1.2, '#2A1004', '#C88030');
+addRivets('gear-left-rivets', 6, 284, 500,  62, 3.0, 1.2, '#2A1004', '#C88030');
+addRivets('gear-bl-rivets',   5, 346, 716,  48, 2.5, 1.0, '#2A1004', '#B07028');
+addRivets('gear-br-rivets',   5, 654, 716,  48, 2.5, 1.0, '#2A1004', '#B07028');
+
+// New gears — paths (built once, static)
+document.getElementById('gear-tl-path').setAttribute('d', makeGearPath(346,284,50,36,8,0.40));
+document.getElementById('gear-tr-path').setAttribute('d', makeGearPath(654,284,50,36,8,0.40));
+document.getElementById('gear-ine-path').setAttribute('d', makeGearPath(635,365,50,36,9,0.38));
+document.getElementById('gear-inw-path').setAttribute('d', makeGearPath(365,365,50,36,9,0.38));
+document.getElementById('gear-isw-path').setAttribute('d', makeGearPath(365,635,50,36,9,0.38));
+document.getElementById('gear-ise-path').setAttribute('d', makeGearPath(635,635,50,36,9,0.38));
+// Inner ring gear — toothed ring facing inward (outerR < innerR trick: just a ring outline gear)
+document.getElementById('gear-inner-ring-path').setAttribute('d', makeGearPath(500,500,168,160,24,0.38));
+
+addRivets('gear-tl-rivets',   4, 346, 284,  26, 2.0, 0.8, '#1E0C04', '#A07028');
+addRivets('gear-tr-rivets',   4, 654, 284,  26, 2.0, 0.8, '#1E0C04', '#A07028');
+addRivets('gear-ine-rivets',  4, 635, 365,  26, 2.0, 0.8, '#1E0C04', '#906020');
+addRivets('gear-inw-rivets',  4, 365, 365,  26, 2.0, 0.8, '#1E0C04', '#906020');
+addRivets('gear-isw-rivets',  4, 365, 635,  26, 2.0, 0.8, '#1E0C04', '#906020');
+addRivets('gear-ise-rivets',  4, 635, 635,  26, 2.0, 0.8, '#1E0C04', '#906020');
+
+// ─── OUTER RING DECORATIONS (static, built once) ─────────────────────────────
+const ticksGroup = document.getElementById('ticks-group');
+for (let i = 0; i < 24; i++) {
+    const isCard = i % 6 === 0;
+    const tick = document.createElementNS(SVG_NS, 'rect');
+    tick.setAttribute('x', isCard ? 498.5 : 499.2);
+    tick.setAttribute('y', 22);
+    tick.setAttribute('width', isCard ? 3 : 1.6);
+    tick.setAttribute('height', isCard ? 16 : 10);
+    tick.setAttribute('fill', '#E89B5C');
+    tick.setAttribute('opacity', isCard ? 0.95 : 0.5);
+    tick.setAttribute('transform', `rotate(${(i/24)*360} 500 500)`);
+    ticksGroup.appendChild(tick);
+}
+
+const cardinalGroup = document.getElementById('cardinal-group');
+[0,90,180,270].forEach(deg => {
+    const u = document.createElementNS(SVG_NS, 'use');
+    u.setAttribute('href', '#cardinalOrn');
+    u.setAttribute('transform', `rotate(${deg} 500 500) translate(500 58)`);
+    cardinalGroup.appendChild(u);
+});
+
+const ornGroup = document.getElementById('ornaments-group');
+for (let i = 0; i < 12; i++) {
+    const u = document.createElementNS(SVG_NS, 'use');
+    u.setAttribute('href', '#diamondOrn');
+    u.setAttribute('transform', `rotate(${i*30+15} 500 500) translate(500 88)`);
+    ornGroup.appendChild(u);
+}
+
+const cornerGroup = document.getElementById('corner-group');
+[45,135,225,315].forEach(deg => {
+    const a = (deg - 90) * Math.PI / 180;
+    const x = (500 + Math.cos(a) * 435).toFixed(1);
+    const y = (500 + Math.sin(a) * 435).toFixed(1);
+    const c = document.createElementNS(SVG_NS, 'circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y);
+    c.setAttribute('r', 6); c.setAttribute('fill', '#1a0e07');
+    c.setAttribute('stroke', '#FFD89B'); c.setAttribute('stroke-width', 1.5);
+    cornerGroup.appendChild(c);
+    const cc = document.createElementNS(SVG_NS, 'circle');
+    cc.setAttribute('cx', x); cc.setAttribute('cy', y);
+    cc.setAttribute('r', 2); cc.setAttribute('fill', '#FFB860');
+    cornerGroup.appendChild(cc);
+});
+
+
+// ─── PERPETUAL-TIME DECORATIONS (static, built once) ───────────────────────
+const perpetualArrows = document.getElementById('perpetual-arrows');
+for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    const x = 500 + Math.cos(a) * 403;
+    const y = 500 + Math.sin(a) * 403;
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(i / 8) * 360 + 90})`);
+    const u = document.createElementNS(SVG_NS, 'use');
+    u.setAttribute('href', '#timeArrowGlyph');
+    g.appendChild(u);
+    perpetualArrows.appendChild(g);
+}
+
+const timeGlyphs = document.getElementById('time-glyphs');
+[0, 90, 180, 270].forEach(deg => {
+    const a = (deg - 90) * Math.PI / 180;
+    const x = 500 + Math.cos(a) * 370;
+    const y = 500 + Math.sin(a) * 370;
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg})`);
+    const u = document.createElementNS(SVG_NS, 'use');
+    u.setAttribute('href', '#hourglassGlyph');
+    g.appendChild(u);
+    timeGlyphs.appendChild(g);
+});
+
+// ─── HOUR TICK MARKERS inside clock ─────────────────────────────────────────
+const markEl = document.getElementById('hour-markers');
+for (let i = 0; i < 60; i++) {
+    const angle = (i/60)*Math.PI*2 - Math.PI/2;
+    const isHour = i % 5 === 0;
+    const inner = isHour ? 160 : 168;
+    const outer = 178;
+    const x1 = (500 + Math.cos(angle)*inner).toFixed(1);
+    const y1 = (500 + Math.sin(angle)*inner).toFixed(1);
+    const x2 = (500 + Math.cos(angle)*outer).toFixed(1);
+    const y2 = (500 + Math.sin(angle)*outer).toFixed(1);
+    const ln = document.createElementNS(SVG_NS, 'line');
+    ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
+    ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+    ln.setAttribute('stroke', '#E89B5C');
+    ln.setAttribute('stroke-width', isHour ? 1.8 : 0.7);
+    ln.setAttribute('opacity', isHour ? 0.9 : 0.4);
+    markEl.appendChild(ln);
+}
+
+// ─── RUNES SETUP ─────────────────────────────────────────────────────────────
+const RUNE_R = 130;
+const runesGroup    = document.getElementById('runes-group');
+const runeGlowGroup = document.getElementById('rune-glow-group');
+const runeEls       = [];
+const runeGlowEls   = [];
+
+for (let i = 0; i < 12; i++) {
+    const angle = (i/12)*Math.PI*2 - Math.PI/2;
+    const x = (500 + Math.cos(angle)*RUNE_R).toFixed(1);
+    const y = (500 + Math.sin(angle)*RUNE_R).toFixed(1);
+
+    const txt = document.createElementNS(SVG_NS, 'text');
+    txt.setAttribute('x', x); txt.setAttribute('y', y);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('dominant-baseline', 'central');
+    txt.setAttribute('font-size', '28');
+    txt.setAttribute('font-family', 'serif');
+    txt.setAttribute('fill', '#C8773D');
+    txt.setAttribute('opacity', '0.75');
+    txt.setAttribute('user-select', 'none');
+    txt.textContent = RUNES[i];
+    runesGroup.appendChild(txt);
+    runeEls.push(txt);
+
+    // Glow copy
+    const glow = document.createElementNS(SVG_NS, 'text');
+    glow.setAttribute('x', x); glow.setAttribute('y', y);
+    glow.setAttribute('text-anchor', 'middle');
+    glow.setAttribute('dominant-baseline', 'central');
+    glow.setAttribute('font-size', '28');
+    glow.setAttribute('font-family', 'serif');
+    glow.setAttribute('fill', '#FFF8C0');
+    glow.setAttribute('opacity', '0');
+    glow.setAttribute('user-select', 'none');
+    glow.textContent = RUNES[i];
+    runeGlowGroup.appendChild(glow);
+    runeGlowEls.push(glow);
+}
+
+// ─── RUNE LIGHTING (synced to the HOUR hand / aguja pequeña) ───────────────
+let litRuneIdx = -1;
+const HOUR_PERIOD_MS = 48000; // matches CSS hour hand animation duration
+const HOUR_STEP_MS   = HOUR_PERIOD_MS / 12;
+
+function updateRuneLighting(now) {
+    const hourIdx = Math.floor((now % HOUR_PERIOD_MS) / HOUR_STEP_MS) % 12;
+
+    if (hourIdx !== litRuneIdx) {
+        if (litRuneIdx >= 0) {
+            runeEls[litRuneIdx].setAttribute('fill', '#C8773D');
+            runeEls[litRuneIdx].setAttribute('opacity', '0.75');
+            runeGlowEls[litRuneIdx].setAttribute('opacity', '0');
+        }
+
+        litRuneIdx = hourIdx;
+
+        // Small pulse on each hour jump; slightly stronger when the cycle resets.
+        triggerShockwave(hourIdx === 0 ? 0.9 : 0.45);
+    }
+
+    if (litRuneIdx >= 0) {
+        runeEls[litRuneIdx].setAttribute('fill', '#FFF0C0');
+        runeEls[litRuneIdx].setAttribute('opacity', '1');
+        const gOp = (0.58 + Math.sin(now / 240) * 0.18).toFixed(3);
+        runeGlowEls[litRuneIdx].setAttribute('opacity', gOp);
+    }
+}
+
+// ─── CANVAS (waves only — no particles drain) ────────────────────────────────
+const canvas = document.getElementById('waves');
+const wctx   = canvas.getContext('2d');
+let W, H, CX, CY;
+const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+
+function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    CX = W / 2; CY = H / 2;
+    canvas.width  = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize, { passive: true });
+
+// ─── SHOCKWAVE (lightweight canvas rings) ────────────────────────────────────
+const waves = [];
+function triggerShockwave(strength) {
+    waves.push({ start: performance.now(), duration: 2200, strength: strength || 1 });
+}
+
+// Initial shockwave after reveal
+setTimeout(() => triggerShockwave(1.3), 2200);
+
+function drawCanvas(now) {
+    wctx.clearRect(0, 0, W, H);
+    if (waves.length === 0) return;
+
+    const maxR = Math.max(W, H) * 0.92;
+    wctx.save();
+    for (let i = waves.length - 1; i >= 0; i--) {
+        const w = waves[i];
+        const p = (now - w.start) / w.duration;
+        if (p >= 1) { waves.splice(i, 1); continue; }
+        const radius = (1 - Math.pow(1 - p, 2.4)) * maxR * w.strength;
+        const alpha  = Math.pow(1 - p, 1.9) * 0.6 * w.strength;
+        const lw     = (1 - p) * 7 + 1;
+
+        wctx.shadowColor = '#FFB860';
+        wctx.shadowBlur  = 24;
+        wctx.strokeStyle = `rgba(255,184,96,${alpha.toFixed(3)})`;
+        wctx.lineWidth   = lw;
+        wctx.beginPath();
+        wctx.arc(CX, CY, Math.max(1, radius), 0, Math.PI * 2);
+        wctx.stroke();
+
+        wctx.shadowBlur  = 10;
+        wctx.strokeStyle = `rgba(255,233,194,${(alpha * 0.4).toFixed(3)})`;
+        wctx.lineWidth   = lw * 0.4;
+        wctx.beginPath();
+        wctx.arc(CX, CY, Math.max(1, radius * 0.91), 0, Math.PI * 2);
+        wctx.stroke();
+    }
+    wctx.shadowBlur = 0;
+    wctx.restore();
+}
+
+// ─── GOLDEN PARTICLE SYSTEM (lightweight, canvas-only) ───────────────────────
+const IS_MOBILE = window.matchMedia('(max-width: 768px)').matches;
+const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MAX_P = REDUCE_MOTION ? 16 : (IS_MOBILE ? 24 : 40);
+const particles = [];
+
+function spawnP() {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 40 + Math.random() * 200;
+    particles.push({
+        x: CX + Math.cos(angle) * dist,
+        y: CY + Math.sin(angle) * dist,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: -(0.18 + Math.random() * 0.45),
+        size: 0.7 + Math.random() * 1.8,
+        life: 2.0 + Math.random() * 2.5,
+        maxLife: 0,
+        hue: 38 + Math.random() * 18,
+    });
+    particles[particles.length-1].maxLife = particles[particles.length-1].life;
+}
+for (let i = 0; i < MAX_P; i++) spawnP();
+
+function drawParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        p.x += p.vx; p.y += p.vy;
+        if (p.life <= 0) { particles.splice(i, 1); spawnP(); continue; }
+        const lr = p.life / p.maxLife;
+        const alpha = Math.min(lr * 3, 1) * Math.min((1 - lr) * 3.5, 1) * 0.65;
+        if (alpha < 0.01) continue;
+        wctx.beginPath();
+        wctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        wctx.fillStyle = `hsla(${p.hue},90%,75%,${alpha.toFixed(3)})`;
+        wctx.fill();
+    }
+}
+
+// ─── MAIN LOOP (minimal JS work) ─────────────────────────────────────────────
+let lastNow = performance.now();
+
+function frame(now) {
+    const dt = Math.min((now - lastNow) / 1000, 0.05);
+    lastNow = now;
+
+    // Only JS work: rune lighting (cheap attribute sets) + canvas
+    updateRuneLighting(now);
+
+    wctx.clearRect(0, 0, W, H);
+    drawParticles(dt);
+    drawCanvas(now);
+
+    requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+// ─── BACKGROUND CANVAS (drawn once, no loop) ────────────────────────────────
+(function drawBackground() {
+    const bc  = document.getElementById('bg-canvas');
+    const bw  = window.innerWidth;
+    const bh  = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    bc.width  = Math.round(bw * dpr);
+    bc.height = Math.round(bh * dpr);
+    bc.style.width  = bw + 'px';
+    bc.style.height = bh + 'px';
+    const ctx = bc.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const cx = bw / 2, cy = bh / 2;
+
+    // Nebula clouds — layered amber/rust halos
+    [[cx, cy, 0.55, [[0,'rgba(80,35,6,0.22)'],[0.35,'rgba(50,20,4,0.14)'],[0.7,'rgba(20,7,1,0.06)'],[1,'rgba(0,0,0,0)']]],
+     [cx*0.3, cy*0.4, 0.4, [[0,'rgba(60,18,4,0.12)'],[0.5,'rgba(30,8,1,0.05)'],[1,'rgba(0,0,0,0)']]],
+     [cx*1.7, cy*1.6, 0.38,[[0,'rgba(70,25,5,0.10)'],[0.5,'rgba(35,12,2,0.04)'],[1,'rgba(0,0,0,0)']]]
+    ].forEach(([nx,ny,nr,stops]) => {
+        const g = ctx.createRadialGradient(nx,ny,0,nx,ny,Math.max(bw,bh)*nr);
+        stops.forEach(([o,c]) => g.addColorStop(o,c));
+        ctx.fillStyle = g; ctx.fillRect(0,0,bw,bh);
+    });
+
+    // Stars — seeded RNG for repeatability
+    let s = 42;
+    const rng = () => { s=(s*1664525+1013904223)&0xffffffff; return (s>>>0)/0xffffffff; };
+    [[260,0.55,0.35],[80,1.0,0.55],[22,1.7,0.75]].forEach(([count,sz,baseA]) => {
+        for (let i=0; i<count; i++) {
+            const sx=rng()*bw, sy=rng()*bh;
+            const dx=sx-cx,dy=sy-cy;
+            if (Math.sqrt(dx*dx+dy*dy)/Math.max(bw,bh)<0.08 && rng()<0.7) continue;
+            const hue=28+rng()*24, alpha=baseA*(0.5+rng()*0.5), r=sz*(0.7+rng()*0.6);
+            ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2);
+            ctx.fillStyle=`hsla(${hue},70%,85%,${alpha.toFixed(3)})`; ctx.fill();
+            if (sz>1.5) { // cross flare on bright stars
+                ctx.strokeStyle=`hsla(${hue},60%,90%,${(alpha*0.35).toFixed(3)})`;
+                ctx.lineWidth=0.5;
+                ctx.beginPath();
+                ctx.moveTo(sx-r*3,sy);ctx.lineTo(sx+r*3,sy);
+                ctx.moveTo(sx,sy-r*3);ctx.lineTo(sx,sy+r*3);
+                ctx.stroke();
+            }
+        }
+    });
+
+    // Faint amber "time horizon" band across center
+    const band = ctx.createLinearGradient(0, cy-2, 0, cy+2);
+    band.addColorStop(0,'rgba(0,0,0,0)'); band.addColorStop(0.5,'rgba(120,55,8,0.055)'); band.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=band; ctx.fillRect(0, cy-55, bw, 110);
+})();
+
+// ─── FRAME GEAR PATHS (built once, static) ───────────────────────────────────
+// The makeGearPath function is defined in the main script above — same SVG doc.
+document.getElementById('fgl1').setAttribute('d', makeGearPath(-52,  200, 82, 66, 12, 0.37));
+document.getElementById('fgl2').setAttribute('d', makeGearPath(-38,  340, 60, 46,  9, 0.38));
+document.getElementById('fgl3').setAttribute('d', makeGearPath(-48,  450, 46, 34,  7, 0.40));
+document.getElementById('fgl4').setAttribute('d', makeGearPath(-55,  650, 78, 60, 11, 0.37));
+document.getElementById('fgr1').setAttribute('d', makeGearPath(1052, 180, 82, 66, 12, 0.37));
+document.getElementById('fgr2').setAttribute('d', makeGearPath(1042, 320, 60, 46,  9, 0.38));
+document.getElementById('fgr3').setAttribute('d', makeGearPath(1048, 430, 46, 34,  7, 0.40));
+document.getElementById('fgr4').setAttribute('d', makeGearPath(1055, 620, 76, 58, 11, 0.37));
+document.getElementById('fgt1').setAttribute('d', makeGearPath( 200, -48, 78, 62, 11, 0.37));
+document.getElementById('fgt2').setAttribute('d', makeGearPath( 340, -36, 56, 42,  8, 0.39));
+document.getElementById('fgt3').setAttribute('d', makeGearPath( 800, -52, 78, 62, 11, 0.37));
+document.getElementById('fgt4').setAttribute('d', makeGearPath( 660, -40, 52, 38,  8, 0.39));
+document.getElementById('fgb1').setAttribute('d', makeGearPath( 250,1052, 78, 62, 11, 0.37));
+document.getElementById('fgb2').setAttribute('d', makeGearPath( 390,1040, 56, 42,  8, 0.39));
+document.getElementById('fgb3').setAttribute('d', makeGearPath( 750,1048, 76, 58, 11, 0.37));
+document.getElementById('fgb4').setAttribute('d', makeGearPath( 610,1038, 50, 36,  7, 0.40));
+</script>
+</body>
+</html>

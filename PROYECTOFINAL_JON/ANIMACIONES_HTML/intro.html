@@ -2,141 +2,246 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;700&family=Crimson+Pro:ital,wght@1,300&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; overflow:hidden; }
-
-:root {
-    --gold:         #ffd700;
-    --gold-glow:    rgba(255,215,0,0.6);
-    --silver-dim:   rgba(200,200,220,0.5);
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+}
+
+:root {
+    --gold: #ffd700;
+    --gold-soft: rgba(255, 215, 0, 0.42);
+    --gold-dim: rgba(255, 215, 0, 0.16);
+    --silver-dim: rgba(215, 215, 235, 0.58);
+    --bg: #08090d;
+}
+
+/* Documento aislado para que el iframe no fuerce repaints innecesarios fuera. */
+body {
+    contain: layout paint style;
+}
+
+/* Capa full-screen. Solo anima opacity: barato para GPU. */
 #intro-overlay {
     position: fixed;
     inset: 0;
-    background: #08090d;
+    background:
+        radial-gradient(circle at center, rgba(255,215,0,0.055) 0%, rgba(8,9,13,0) 42%),
+        var(--bg);
     z-index: 99999;
     display: flex;
     justify-content: center;
     align-items: center;
-    animation: introFade 3.5s ease forwards;
+    overflow: hidden;
     pointer-events: none;
+    isolation: isolate;
+    animation: introOverlayFade 3.2s ease forwards;
+    will-change: opacity;
 }
 
-@keyframes introFade {
-    0%   { opacity: 1; }
-    60%  { opacity: 1; }
+@keyframes introOverlayFade {
+    0%, 68% { opacity: 1; }
     100% { opacity: 0; }
 }
 
-#intro-content {
-    text-align: center;
-    animation: introContent 3.5s ease forwards;
+/* Glow estático y barato: radial-gradient en vez de filter/drop-shadow sobre SVG. */
+#intro-glow {
+    position: absolute;
+    width: min(58vw, 58vh);
+    height: min(58vw, 58vh);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle,
+            rgba(255,215,0,0.22) 0%,
+            rgba(255,215,0,0.10) 28%,
+            rgba(255,215,0,0.035) 52%,
+            rgba(255,215,0,0) 72%);
+    opacity: 0;
+    transform: translateZ(0) scale(0.94);
+    animation: glowIntro 3.2s ease forwards;
+    will-change: opacity, transform;
 }
 
-@keyframes introContent {
-    0%   { opacity: 0; transform: scale(0.95); }
-    20%  { opacity: 1; transform: scale(1); }
-    70%  { opacity: 1; transform: scale(1); }
-    100% { opacity: 0; transform: scale(1.03); }
+@keyframes glowIntro {
+    0% { opacity: 0; transform: translateZ(0) scale(0.88); }
+    20%, 68% { opacity: 1; transform: translateZ(0) scale(1); }
+    100% { opacity: 0; transform: translateZ(0) scale(1.04); }
 }
 
-#intro-title {
-    font-family: 'Oswald', sans-serif;
-    font-size: clamp(3rem, 10vw, 7rem);
-    font-weight: 700;
-    letter-spacing: 14px;
-    text-transform: uppercase;
-    color: var(--gold);
-    text-shadow:
-        0 0 30px var(--gold-glow),
-        0 0 80px rgba(255,215,0,0.3),
-        0 0 150px rgba(255,215,0,0.1);
-    line-height: 1;
-}
-
-#intro-tagline {
-    font-family: 'Crimson Pro', serif;
-    font-style: italic;
-    font-weight: 300;
-    font-size: clamp(0.9rem, 2vw, 1.3rem);
-    letter-spacing: 4px;
-    color: var(--silver-dim);
-    margin-top: 16px;
-    animation: taglineAppear 3.5s ease forwards;
-}
-
-@keyframes taglineAppear {
-    0%   { opacity: 0; transform: translateY(8px); }
-    35%  { opacity: 0; transform: translateY(8px); }
-    55%  { opacity: 1; transform: translateY(0); }
-    70%  { opacity: 1; }
-    100% { opacity: 0; }
-}
-
+/* La runa ya NO usa filter: drop-shadow. Solo transform + opacity. */
 #intro-runa {
     position: absolute;
-    width: min(70vw, 70vh);
-    height: min(70vw, 70vh);
+    width: min(58vw, 58vh);
+    height: min(58vw, 58vh);
     opacity: 0;
-    filter: drop-shadow(0 0 20px rgba(255,215,0,0.9))
-            drop-shadow(0 0 60px rgba(255,215,0,0.6))
-            drop-shadow(0 0 100px rgba(255,215,0,0.3));
-    animation: runaIntro 3.5s ease forwards;
+    transform-origin: 50% 50%;
+    transform: translateZ(0) rotate(0deg) scale(0.94);
+    animation: runaIntro 3.2s ease forwards;
+    will-change: opacity, transform;
+    backface-visibility: hidden;
 }
 
 @keyframes runaIntro {
-    0%   { opacity: 0; transform: rotate(0deg)  scale(0.9); }
-    20%  { opacity: 1; transform: rotate(15deg) scale(1);   }
-    70%  { opacity: 1; transform: rotate(55deg) scale(1);   }
-    100% { opacity: 0; transform: rotate(70deg) scale(1.05);}
+    0%   { opacity: 0; transform: translateZ(0) rotate(0deg)  scale(0.92); }
+    22%  { opacity: 1; transform: translateZ(0) rotate(14deg) scale(1); }
+    68%  { opacity: 1; transform: translateZ(0) rotate(48deg) scale(1); }
+    100% { opacity: 0; transform: translateZ(0) rotate(64deg) scale(1.03); }
+}
+
+#intro-content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    opacity: 0;
+    transform: translateZ(0) scale(0.97);
+    animation: introContent 3.2s ease forwards;
+    will-change: opacity, transform;
+    backface-visibility: hidden;
+}
+
+@keyframes introContent {
+    0%   { opacity: 0; transform: translateZ(0) scale(0.96); }
+    18%  { opacity: 1; transform: translateZ(0) scale(1); }
+    68%  { opacity: 1; transform: translateZ(0) scale(1); }
+    100% { opacity: 0; transform: translateZ(0) scale(1.02); }
+}
+
+#intro-title {
+    font-family: "Oswald", "Arial Narrow", "Roboto Condensed", Arial, sans-serif;
+    font-size: clamp(2.9rem, 9.5vw, 6.6rem);
+    font-weight: 700;
+    letter-spacing: clamp(7px, 1.65vw, 14px);
+    text-transform: uppercase;
+    color: var(--gold);
+    line-height: 1;
+    /* Sombras reducidas: evita blur gigante de 150px. */
+    text-shadow:
+        0 0 12px var(--gold-soft),
+        0 0 30px var(--gold-dim);
+}
+
+#intro-tagline {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(0.86rem, 2vw, 1.2rem);
+    letter-spacing: clamp(2px, 0.8vw, 4px);
+    color: var(--silver-dim);
+    margin-top: 16px;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: taglineAppear 3.2s ease forwards;
+    will-change: opacity, transform;
+}
+
+@keyframes taglineAppear {
+    0%, 34% { opacity: 0; transform: translateY(8px); }
+    52%, 68% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(0); }
+}
+
+.rune-stroke-main {
+    stroke: var(--gold);
+    vector-effect: non-scaling-stroke;
+}
+
+.rune-stroke-soft {
+    stroke: rgba(255,215,0,0.72);
+    vector-effect: non-scaling-stroke;
+}
+
+.rune-fill {
+    fill: var(--gold);
+}
+
+/* Móvil: reduce área animada para evitar capas enormes en GPU floja. */
+@media (max-width: 768px) {
+    #intro-glow,
+    #intro-runa {
+        width: min(68vw, 44vh);
+        height: min(68vw, 44vh);
+    }
+
+    #intro-title {
+        font-size: clamp(2.55rem, 12vw, 4.6rem);
+        letter-spacing: clamp(5px, 1.2vw, 9px);
+        text-shadow:
+            0 0 9px rgba(255,215,0,0.34),
+            0 0 20px rgba(255,215,0,0.12);
+    }
+
+    #intro-tagline {
+        font-size: clamp(0.78rem, 3vw, 1rem);
+        margin-top: 12px;
+    }
+}
+
+/* Dispositivos lentos o usuarios con reducción de movimiento: casi sin animación. */
+@media (prefers-reduced-motion: reduce) {
+    #intro-overlay,
+    #intro-glow,
+    #intro-runa,
+    #intro-content,
+    #intro-tagline {
+        animation-duration: 1.2s !important;
+        animation-timing-function: ease-out !important;
+    }
+
+    #intro-runa {
+        transform: translateZ(0) rotate(0deg) scale(1) !important;
+    }
 }
 </style>
 </head>
 <body>
 
-<div id="intro-overlay">
+<div id="intro-overlay" aria-hidden="true">
+    <div id="intro-glow"></div>
+
     <svg id="intro-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="200" cy="200" r="185" fill="none" stroke="#ffd700" stroke-width="1"   opacity="0.9"/>
-        <circle cx="200" cy="200" r="145" fill="none" stroke="#ffd700" stroke-width="0.5" opacity="0.7"/>
-        <circle cx="200" cy="200" r="80"  fill="none" stroke="#ffd700" stroke-width="1"   opacity="0.8"/>
-        <g stroke="#ffd700" stroke-width="1.5" opacity="1" stroke-linecap="round">
+        <circle class="rune-stroke-main" cx="200" cy="200" r="185" fill="none" stroke-width="1" opacity="0.86"/>
+        <circle class="rune-stroke-soft" cx="200" cy="200" r="145" fill="none" stroke-width="0.75" opacity="0.62"/>
+        <circle class="rune-stroke-main" cx="200" cy="200" r="80"  fill="none" stroke-width="1" opacity="0.76"/>
+
+        <g class="rune-stroke-main" stroke-width="1.5" opacity="0.96" stroke-linecap="round">
             <line x1="200" y1="125" x2="200" y2="95"/><line x1="193" y1="110" x2="200" y2="95"/><line x1="207" y1="110" x2="200" y2="95"/>
             <line x1="200" y1="275" x2="200" y2="305"/><line x1="193" y1="290" x2="207" y2="290"/>
             <line x1="275" y1="200" x2="305" y2="200"/><line x1="290" y1="193" x2="305" y2="200"/><line x1="290" y1="207" x2="305" y2="200"/>
             <line x1="125" y1="200" x2="95"  y2="200"/><line x1="110" y1="193" x2="95"  y2="200"/><line x1="110" y1="207" x2="95"  y2="200"/>
-            <line x1="254" y1="146" x2="275" y2="125"/><line x1="258" y1="133" x2="275" y2="125"/><line x1="262" y1="146" x2="275" y2="125"/>
-            <line x1="146" y1="146" x2="125" y2="125"/><line x1="138" y1="133" x2="125" y2="125"/><line x1="138" y1="146" x2="125" y2="125"/>
-            <line x1="254" y1="254" x2="275" y2="275"/><line x1="262" y1="254" x2="275" y2="275"/><line x1="254" y1="262" x2="275" y2="275"/>
-            <line x1="146" y1="254" x2="125" y2="275"/><line x1="138" y1="254" x2="125" y2="275"/><line x1="146" y1="262" x2="125" y2="275"/>
+            <line x1="254" y1="146" x2="275" y2="125"/><line x1="146" y1="146" x2="125" y2="125"/>
+            <line x1="254" y1="254" x2="275" y2="275"/><line x1="146" y1="254" x2="125" y2="275"/>
         </g>
-        <g font-size="14" fill="#ffd700" opacity="0.9" font-family="serif" text-anchor="middle">
+
+        <!-- Menos textos rotados que la versión anterior: mismo lenguaje visual, menos nodos. -->
+        <g font-size="15" fill="#ffd700" opacity="0.9" font-family="Georgia, serif" text-anchor="middle">
             <text transform="rotate(0,200,200)   translate(200,22)">ᚠ</text>
-            <text transform="rotate(22,200,200)  translate(200,22)">ᚢ</text>
-            <text transform="rotate(44,200,200)  translate(200,22)">ᚦ</text>
-            <text transform="rotate(66,200,200)  translate(200,22)">ᚨ</text>
-            <text transform="rotate(88,200,200)  translate(200,22)">ᚱ</text>
-            <text transform="rotate(110,200,200) translate(200,22)">ᚲ</text>
-            <text transform="rotate(132,200,200) translate(200,22)">ᚷ</text>
-            <text transform="rotate(154,200,200) translate(200,22)">ᚹ</text>
-            <text transform="rotate(176,200,200) translate(200,22)">ᚺ</text>
-            <text transform="rotate(198,200,200) translate(200,22)">ᚾ</text>
-            <text transform="rotate(220,200,200) translate(200,22)">ᛁ</text>
-            <text transform="rotate(242,200,200) translate(200,22)">ᛃ</text>
-            <text transform="rotate(264,200,200) translate(200,22)">ᛇ</text>
-            <text transform="rotate(286,200,200) translate(200,22)">ᛈ</text>
-            <text transform="rotate(308,200,200) translate(200,22)">ᛉ</text>
-            <text transform="rotate(330,200,200) translate(200,22)">ᛊ</text>
+            <text transform="rotate(45,200,200)  translate(200,22)">ᚦ</text>
+            <text transform="rotate(90,200,200)  translate(200,22)">ᚱ</text>
+            <text transform="rotate(135,200,200) translate(200,22)">ᚷ</text>
+            <text transform="rotate(180,200,200) translate(200,22)">ᚺ</text>
+            <text transform="rotate(225,200,200) translate(200,22)">ᛃ</text>
+            <text transform="rotate(270,200,200) translate(200,22)">ᛇ</text>
+            <text transform="rotate(315,200,200) translate(200,22)">ᛉ</text>
         </g>
-        <g stroke="#ffd700" stroke-width="1" opacity="0.9">
+
+        <g class="rune-stroke-main" stroke-width="1" opacity="0.9">
             <line x1="200" y1="140" x2="200" y2="260"/>
             <line x1="140" y1="200" x2="260" y2="200"/>
             <circle cx="200" cy="200" r="25" fill="none"/>
-            <circle cx="200" cy="200" r="5" fill="#ffd700"/>
+            <circle class="rune-fill" cx="200" cy="200" r="5"/>
         </g>
     </svg>
+
     <div id="intro-content">
         <div id="intro-title">RunaWorld</div>
         <div id="intro-tagline">Forge your destiny, one rune at a time</div>
@@ -144,11 +249,40 @@ html, body { width:100%; height:100%; overflow:hidden; }
 </div>
 
 <script>
-// Auto-remove after animation completes
-setTimeout(() => {
-    const overlay = document.getElementById('intro-overlay');
-    if (overlay) overlay.remove();
-}, 3500);
+(function () {
+    "use strict";
+
+    var removed = false;
+    var overlay = document.getElementById("intro-overlay");
+
+    function removeIntro() {
+        if (removed) return;
+        removed = true;
+
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+
+        // Si está cargado como iframe same-origin, elimina también el iframe padre.
+        // Si no se puede por permisos, no rompe nada.
+        try {
+            if (window.frameElement && window.frameElement.parentNode) {
+                window.frameElement.parentNode.removeChild(window.frameElement);
+            }
+        } catch (e) {}
+    }
+
+    if (overlay) {
+        overlay.addEventListener("animationend", function (ev) {
+            if (ev.animationName === "introOverlayFade") {
+                removeIntro();
+            }
+        }, { once: true });
+    }
+
+    // Fallback por si animationend no dispara en algún navegador móvil.
+    window.setTimeout(removeIntro, 3600);
+})();
 </script>
 </body>
 </html>
