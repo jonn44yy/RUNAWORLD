@@ -54,6 +54,13 @@ if ($filtro === "nuevos") {
         INNER JOIN usuarios u ON m.usuario_id = u.id
         WHERE m.leido = 1 ORDER BY m.fecha DESC
     ");
+} elseif ($filtro === "solicitud_admin") {
+    $stmt = $conexion->prepare("
+        SELECT m.*, u.username FROM mensajes m
+        INNER JOIN usuarios u ON m.usuario_id = u.id
+        WHERE m.asunto LIKE 'Solicitud para ser admin%'
+        ORDER BY m.leido ASC, m.fecha DESC
+    ");
 } elseif (in_array($filtro, ["ideas","errores","error_datos","no_importante"])) {
     $stmt = $conexion->prepare("
         SELECT m.*, u.username FROM mensajes m
@@ -74,18 +81,53 @@ $mensajes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 $conexion->close();
 
+function rw_es_solicitud_admin($mensaje) {
+    return isset($mensaje["asunto"]) && stripos($mensaje["asunto"], "Solicitud para ser admin") === 0;
+}
+
+function rw_extraer_mensaje_admin($contenido) {
+    $contenido = (string)$contenido;
+
+    if (preg_match('/Mensaje:\s*(.*)$/su', $contenido, $m)) {
+        return trim($m[1]);
+    }
+
+    return trim($contenido);
+}
+
+$solicitudes_admin = [];
+$mensajes_generales = [];
+
+foreach ($mensajes as $mensaje_item) {
+    if (rw_es_solicitud_admin($mensaje_item)) {
+        $solicitudes_admin[] = $mensaje_item;
+    } else {
+        $mensajes_generales[] = $mensaje_item;
+    }
+}
+
+if ($filtro === "solicitud_admin") {
+    $mensajes_lista = [];
+} elseif ($filtro === "todos") {
+    $mensajes_lista = $mensajes_generales;
+} else {
+    $mensajes_lista = $mensajes;
+}
+
 $etiquetas_tipo = [
     "ideas"         => "Idea",
     "errores"       => "Error",
     "error_datos"   => "Error datos",
-    "no_importante" => "Info"
+    "no_importante" => "Info",
+    "solicitud_admin" => "Solicitud admin"
 ];
 
 $colores_tipo = [
     "ideas"         => "#6a9fff",
     "errores"       => "#ff7788",
     "error_datos"   => "#ffaa00",
-    "no_importante" => "#8a96aa"
+    "no_importante" => "#8a96aa",
+    "solicitud_admin" => "#ffd700"
 ];
 ?>
 <!DOCTYPE html>
@@ -237,6 +279,86 @@ $colores_tipo = [
             flex-wrap: wrap;
         }
 
+        .admin-request-section {
+            margin-bottom: 28px;
+            padding: 18px;
+            border: 1px solid rgba(255,215,0,0.22);
+            border-left: 3px solid #ffd700;
+            border-radius: 6px;
+            background: rgba(255,215,0,0.035);
+        }
+
+        .admin-request-section-title {
+            font-family: var(--font-title);
+            font-size: 0.78rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #ffd700;
+            margin-bottom: 14px;
+        }
+
+        .admin-request-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .admin-request-card {
+            border: 1px solid rgba(255,215,0,0.20);
+            background: rgba(0,0,0,0.22);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .admin-request-head {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(255,215,0,0.12);
+        }
+
+        .admin-request-title {
+            flex: 1;
+            min-width: 220px;
+            font-family: var(--font-title);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #ffd700;
+        }
+
+        .admin-request-meta {
+            font-size: 0.75rem;
+            color: var(--silver-dim);
+        }
+
+        .admin-request-body {
+            padding: 16px;
+        }
+
+        .admin-request-body strong {
+            color: #ffd700;
+            font-family: var(--font-title);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+        }
+
+        .admin-request-message {
+            margin-top: 8px;
+            color: var(--silver);
+            line-height: 1.75;
+        }
+
+        .admin-request-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -316,18 +438,69 @@ $colores_tipo = [
             <a href="mensajes.php?filtro=errores"       class="filtro-btn <?= $filtro==='errores'       ? 'active':'' ?>" style="color:#ff7788; border-color:<?= $filtro==='errores' ? '#ff7788' : 'var(--border)' ?>">Errores</a>
             <a href="mensajes.php?filtro=error_datos"   class="filtro-btn <?= $filtro==='error_datos'   ? 'active':'' ?>" style="color:#ffaa00; border-color:<?= $filtro==='error_datos' ? '#ffaa00' : 'var(--border)' ?>">Error datos</a>
             <a href="mensajes.php?filtro=no_importante" class="filtro-btn <?= $filtro==='no_importante' ? 'active':'' ?>" style="color:#8a96aa; border-color:<?= $filtro==='no_importante' ? '#8a96aa' : 'var(--border)' ?>">Info</a>
+            <a href="mensajes.php?filtro=solicitud_admin" class="filtro-btn <?= $filtro==='solicitud_admin' ? 'active':'' ?>" style="color:#ffd700; border-color:<?= $filtro==='solicitud_admin' ? '#ffd700' : 'var(--border)' ?>">Admin</a>
         </div>
 
-        <?php if (empty($mensajes)): ?>
+        <?php if (($filtro === "todos" || $filtro === "solicitud_admin") && !empty($solicitudes_admin)): ?>
+            <section class="admin-request-section">
+                <div class="admin-request-section-title">
+                    Solicitudes para ser admin — <?= count($solicitudes_admin) ?>
+                </div>
+
+                <div class="admin-request-list">
+                    <?php foreach ($solicitudes_admin as $s):
+                        $mensaje_admin = rw_extraer_mensaje_admin($s["contenido"]);
+                    ?>
+                        <article class="admin-request-card <?= $s["leido"] ? "ticket-leido" : "ticket-nuevo" ?>">
+                            <div class="admin-request-head">
+                                <span class="ticket-id">#<?= $s["id"] ?></span>
+                                <span class="admin-request-title">
+                                    Solicitud para ser admin de: <?= htmlspecialchars($s["username"]) ?>
+                                </span>
+                                <span class="admin-request-meta">
+                                    <?= date("d/m/Y H:i", strtotime($s["fecha"])) ?>
+                                </span>
+                                <?php if (!$s["leido"]): ?>
+                                    <span class="ticket-nuevo-badge">Nuevo</span>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="admin-request-body">
+                                <strong>Mensaje:</strong>
+                                <div class="admin-request-message">
+                                    <?= nl2br(htmlspecialchars($mensaje_admin)) ?>
+                                </div>
+
+                                <div class="admin-request-actions">
+                                    <?php if (!$s["leido"]): ?>
+                                        <a href="mensajes.php?marcar_leido=<?= $s["id"] ?>&filtro=<?= $filtro ?>"
+                                           class="btn-admin btn-admin-success">Marcar como leido</a>
+                                    <?php endif; ?>
+
+                                    <a href="mensajes.php?eliminar=<?= $s["id"] ?>"
+                                       class="btn-admin btn-admin-danger"
+                                       onclick="return confirm('Eliminar esta solicitud?')">Eliminar</a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+
+
+        <?php if (empty($mensajes_lista) && !($filtro === "todos" && !empty($solicitudes_admin)) && !($filtro === "solicitud_admin" && !empty($solicitudes_admin))): ?>
             <div class="empty-state">
                 <div style="font-size:2.5rem; opacity:0.2;">✉</div>
                 <p>No hay mensajes<?= $filtro !== 'todos' ? ' en este filtro' : '' ?>.</p>
             </div>
-        <?php else: ?>
+        <?php elseif (!empty($mensajes_lista)): ?>
             <div class="ticket-lista">
-                <?php foreach ($mensajes as $m):
-                    $color = $colores_tipo[$m["tipo"]] ?? "var(--silver-dim)";
-                    $tipo_label = $etiquetas_tipo[$m["tipo"]] ?? $m["tipo"];
+                <?php foreach ($mensajes_lista as $m):
+                    $es_admin_request = rw_es_solicitud_admin($m);
+                    $color = $es_admin_request ? "#ffd700" : ($colores_tipo[$m["tipo"]] ?? "var(--silver-dim)");
+                    $tipo_label = $es_admin_request ? "Solicitud admin" : ($etiquetas_tipo[$m["tipo"]] ?? $m["tipo"]);
                 ?>
                     <div class="ticket <?= $m["leido"] ? "ticket-leido" : "ticket-nuevo" ?>">
 

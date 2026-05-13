@@ -1,146 +1,40 @@
 <?php
 session_start();
-
-if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
-    header("Location: ../index.php");
-    exit;
-}
-
+if (!isset($_SESSION["idUsuario"]) || ($_SESSION["rol"] ?? "") !== "admin") { header("Location: ../index.php"); exit; }
 require_once "../PHP/conexion.php";
 
-$grupo_id = isset($_GET["grupo_id"]) ? (int)$_GET["grupo_id"] : 0;
+$grupo_id = isset($_GET['grupo_id']) ? (int)$_GET['grupo_id'] : 0;
+$variante = strtolower(trim((string)($_GET['variante'] ?? 'normal')));
+if (!in_array($variante, ['normal','corrupta','suprema'], true)) $variante = 'normal';
 
-$errores = [];
-if (isset($_SESSION["errores"])) {
-    $errores = $_SESSION["errores"];
-    unset($_SESSION["errores"]);
-}
+$errores = $_SESSION['errores'] ?? [];
+unset($_SESSION['errores']);
 
 $stmt = $conexion->prepare("SELECT * FROM grupos_runas ORDER BY id ASC");
-$stmt->execute();
-$grupos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
-
+$stmt->execute(); $grupos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 $stmt = $conexion->prepare("SELECT slug, nombre, color FROM rarezas WHERE activa = 1 ORDER BY orden ASC");
-$stmt->execute();
-$rarezas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
-
+$stmt->execute(); $rarezas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
 $conexion->close();
+
+$titulos = ['normal'=>'Normal','corrupta'=>'Corrupta','suprema'=>'Suprema'];
+$factorTxt = ['normal'=>'x1 manual','corrupta'=>'x100 automatico desde la normal','suprema'=>'x100.000 automatico desde la normal'];
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RunaWorld — Crear Runa</title>
-    <link rel="stylesheet" href="../CSS/admin.css">
-</head>
-<body>
-<button id="admin-hamburger" onclick="toggleAdminNav()">&#9776;</button>
-<div id="admin-nav-overlay" onclick="cerrarAdminNav()"></div>
-<div id="admin-layout" class="visible">
-
-    <aside id="admin-sidebar">
-        <div id="sidebar-logo">
-            <svg id="sidebar-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" color="#3c78ff">
-                <circle cx="200" cy="200" r="185" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.9"/>
-                <circle cx="200" cy="200" r="145" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.7"/>
-                <circle cx="200" cy="200" r="80"  fill="none" stroke="currentColor" stroke-width="1"   opacity="0.8"/>
-                <g stroke="currentColor" stroke-width="2" opacity="1" stroke-linecap="round">
-                    <line x1="200" y1="125" x2="200" y2="95"/><line x1="193" y1="110" x2="200" y2="95"/><line x1="207" y1="110" x2="200" y2="95"/>
-                    <line x1="200" y1="275" x2="200" y2="305"/><line x1="193" y1="290" x2="207" y2="290"/>
-                    <line x1="275" y1="200" x2="305" y2="200"/><line x1="290" y1="193" x2="305" y2="200"/><line x1="290" y1="207" x2="305" y2="200"/>
-                    <line x1="125" y1="200" x2="95"  y2="200"/><line x1="110" y1="193" x2="95"  y2="200"/><line x1="110" y1="207" x2="95"  y2="200"/>
-                    <line x1="254" y1="146" x2="275" y2="125"/><line x1="146" y1="146" x2="125" y2="125"/>
-                    <line x1="254" y1="254" x2="275" y2="275"/><line x1="146" y1="254" x2="125" y2="275"/>
-                </g>
-                <g stroke="currentColor" stroke-width="1.5" opacity="0.9">
-                    <line x1="200" y1="140" x2="200" y2="260"/>
-                    <line x1="140" y1="200" x2="260" y2="200"/>
-                    <circle cx="200" cy="200" r="25" fill="none"/>
-                    <circle cx="200" cy="200" r="5"  fill="currentColor"/>
-                </g>
-            </svg>
-            <div id="sidebar-logo-titulo">RunaWorld</div>
-        </div>
-        <nav class="admin-nav">
-            <a href="index.php"    class="admin-nav-btn"><span class="nav-icon">⬡</span> Dashboard</a>
-            <a href="usuarios.php" class="admin-nav-btn"><span class="nav-icon">◈</span> Usuarios</a>
-            <a href="runas.php"    class="admin-nav-btn active"><span class="nav-icon">◎</span> Runas</a>
-            <a href="tienda.php"   class="admin-nav-btn"><span class="nav-icon">⟡</span> Tienda</a>
-            <a href="mensajes.php" class="admin-nav-btn"><span class="nav-icon">✉</span> Mensajes</a>
-            <a href="rarezas.php"  class="admin-nav-btn"><span class="nav-icon">✦</span> Rarezas</a>
-            <div class="admin-nav-divider"></div>
-            <a href="../PHP/logout.php" class="admin-nav-btn danger"><span class="nav-icon">→</span> Cerrar Sesion</a>
-        </nav>
-    </aside>
-
-    <main id="admin-content">
-        <div class="admin-page-titulo">Crear Runa</div>
-        <div class="admin-page-sub">Añadir una nueva runa al catalogo</div>
-        <div class="admin-separador"></div>
-
-        <a href="runas.php" class="btn-admin btn-admin-primary" style="margin-bottom:28px; display:inline-block;">← Volver a Runas</a>
-
-        <?php foreach ($errores as $e): ?>
-            <p class="admin-msg-error"><?= htmlspecialchars($e) ?></p>
-        <?php endforeach; ?>
-
-        <form method="POST" action="../PHP/runas_action.php" class="admin-form">
-            <input type="hidden" name="accion" value="crear">
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Lista (grupo)</label>
-                <select name="grupo_id" class="admin-form-select" required>
-                    <option value="">-- Selecciona una lista --</option>
-                    <?php foreach ($grupos as $g): ?>
-                        <option value="<?= $g["id"] ?>" <?= $grupo_id === $g["id"] ? "selected" : "" ?>>
-                            <?= htmlspecialchars($g["nombre"]) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Nombre</label>
-                <input type="text" name="nombre" class="admin-form-input" placeholder="Ej: Runa de Fuego" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Rareza</label>
-                <select name="rareza" class="admin-form-select" required>
-                    <option value="">-- Selecciona --</option>
-                    <?php foreach ($rarezas as $r): ?>
-                        <option value="<?= htmlspecialchars($r['slug']) ?>"
-                            style="color:<?= htmlspecialchars($r['color']) ?>">
-                            <?= htmlspecialchars($r['nombre']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Multiplicador (points/seg que aporta)</label>
-                <input type="text" name="multiplicador" class="admin-form-input input-abbr" value="1.00" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Activa</label>
-                <select name="activa" class="admin-form-select">
-                    <option value="1">Si</option>
-                    <option value="0">No</option>
-                </select>
-            </div>
-
-            <button type="submit" class="admin-form-submit">Crear runa</button>
-        </form>
-    </main>
-</div>
-<script>
-function toggleAdminNav(){var s=document.getElementById("admin-sidebar"),o=document.getElementById("admin-nav-overlay"),b=document.getElementById("admin-hamburger"),open=s.classList.toggle("open");o.classList.toggle("visible",open);b.innerHTML=open?"&#10005;":"&#9776;";}
-function cerrarAdminNav(){document.getElementById("admin-sidebar").classList.remove("open");document.getElementById("admin-nav-overlay").classList.remove("visible");document.getElementById("admin-hamburger").innerHTML="&#9776;";}
-</script>
-<script src="../JS/abbr-input.js"></script>
-</body>
-</html>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RunaWorld — Registrar Runa</title><link rel="stylesheet" href="../CSS/admin.css"><style>.form-help{font-size:.86rem;color:var(--silver-dim);font-style:italic}.preview-box{height:260px;border:1px solid var(--border);border-radius:6px;background:#050711;display:flex;align-items:center;justify-content:center;overflow:hidden}.preview-box iframe{width:100%;height:100%;border:0}.preview-empty{color:var(--silver-dim);font-style:italic}.admin-form{max-width:760px}.variant-pill{display:inline-block;padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-family:var(--font-title);letter-spacing:2px;text-transform:uppercase;color:var(--blue-bright);margin-bottom:14px}.warn-box{border:1px solid rgba(255,211,106,.3);background:rgba(255,211,106,.06);color:#ffd36a;padding:10px 12px;border-radius:5px;font-size:.9rem}</style></head><body>
+<button id="admin-hamburger" onclick="toggleAdminNav()">&#9776;</button><div id="admin-nav-overlay" onclick="cerrarAdminNav()"></div><div id="admin-layout" class="visible"><aside id="admin-sidebar"><div id="sidebar-logo"><svg id="sidebar-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" color="#3c78ff"><circle cx="200" cy="200" r="185" fill="none" stroke="currentColor"/><circle cx="200" cy="200" r="80" fill="none" stroke="currentColor"/><line x1="200" y1="120" x2="200" y2="280" stroke="currentColor"/><line x1="120" y1="200" x2="280" y2="200" stroke="currentColor"/></svg><div id="sidebar-logo-titulo">RunaWorld</div></div><nav class="admin-nav"><a href="index.php" class="admin-nav-btn"><span class="nav-icon">⬡</span> Dashboard</a><a href="usuarios.php" class="admin-nav-btn"><span class="nav-icon">◈</span> Usuarios</a><a href="runas.php" class="admin-nav-btn active"><span class="nav-icon">◎</span> Runas</a><a href="tienda.php" class="admin-nav-btn"><span class="nav-icon">⟡</span> Tienda</a><a href="mensajes.php" class="admin-nav-btn"><span class="nav-icon">✉</span> Mensajes</a><a href="rarezas.php" class="admin-nav-btn"><span class="nav-icon">✦</span> Rarezas</a><div class="admin-nav-divider"></div><a href="../PHP/logout.php" class="admin-nav-btn danger"><span class="nav-icon">→</span> Cerrar Sesion</a></nav></aside><main id="admin-content">
+<div class="admin-page-titulo">Registrar Runa</div><div class="admin-page-sub">Alta de catalogo. La variante se hereda desde la seccion seleccionada.</div><div class="admin-separador"></div><a href="runas.php" class="btn-admin btn-admin-primary" style="margin-bottom:24px">← Volver</a>
+<div class="variant-pill">Variante: <?= htmlspecialchars($titulos[$variante]) ?> · <?= htmlspecialchars($factorTxt[$variante]) ?></div>
+<?php foreach($errores as $e): ?><p class="admin-msg-error"><?= htmlspecialchars($e) ?></p><?php endforeach; ?>
+<form method="POST" action="../PHP/runas_action.php" class="admin-form" enctype="multipart/form-data" id="runaForm">
+<input type="hidden" name="accion" value="crear"><input type="hidden" name="variante" value="<?= htmlspecialchars($variante) ?>">
+<div class="admin-form-grupo"><label class="admin-form-label">Coleccion / lista</label><select name="grupo_id" class="admin-form-select" required><?php foreach($grupos as $g): ?><option value="<?= (int)$g['id'] ?>" <?= $grupo_id===(int)$g['id']?'selected':'' ?>><?= htmlspecialchars($g['nombre']) ?></option><?php endforeach; ?></select></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Nombre visible</label><input type="text" name="nombre" class="admin-form-input" placeholder="Ej: Runa de Fuego <?= $variante !== 'normal' ? $titulos[$variante] : '' ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Rareza base</label><select name="rareza" id="rareza" class="admin-form-select" required><option value="">-- Selecciona --</option><?php foreach($rarezas as $r): ?><option value="<?= htmlspecialchars($r['slug']) ?>" style="color:<?= htmlspecialchars($r['color']) ?>"><?= htmlspecialchars($r['nombre']) ?></option><?php endforeach; ?></select><div class="form-help">Para corrupta/suprema, la recompensa se calcula desde la runa normal de esta misma coleccion y rareza.</div></div>
+<?php if ($variante === 'normal'): ?><div class="admin-form-grupo"><label class="admin-form-label">Multiplicador base</label><input type="text" name="multiplicador" class="admin-form-input input-abbr" value="1" required></div><?php else: ?><input type="hidden" name="multiplicador" value="0"><div class="warn-box">El multiplicador no se escribe manualmente: se calcula automaticamente desde la version normal.</div><?php endif; ?>
+<div class="admin-form-grupo"><label class="admin-form-label">Archivo HTML ya existente</label><input type="text" name="archivo_html" id="archivo_html" class="admin-form-input" placeholder="<?= $variante === 'normal' ? 'runa_fuego.html' : 'comun_'.$variante.'.html' ?>"><div class="form-help">Se guarda en RUNAS_HTML/RUNAS/. Si subes un archivo, este campo puede quedar vacio.</div></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Subir archivo visual</label><input type="file" name="archivo_upload" id="archivo_upload" class="admin-form-input" accept=".html,.htm,.svg"></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Preview</label><div class="preview-box" id="previewBox"><span class="preview-empty">Sube o escribe un archivo para previsualizarlo.</span></div></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Marco opcional</label><input type="text" name="marco_html" class="admin-form-input" placeholder="marco_mitico.html"><input type="file" name="marco_upload" class="admin-form-input" accept=".html,.htm,.svg"><div class="form-help">Opcional. Recomendado para legendaria, mitica, divina y eterna.</div></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Background opcional</label><input type="text" name="background_html" class="admin-form-input" placeholder="background_mitico.html"><input type="file" name="background_upload" class="admin-form-input" accept=".html,.htm,.svg"></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Estado inicial</label><select name="activa" class="admin-form-select"><option value="0" selected>No, dejar en pruebas</option><option value="1">Si, activar ya</option></select></div>
+<button type="submit" class="admin-form-submit">Registrar runa</button></form></main></div>
+<script>function toggleAdminNav(){var s=document.getElementById("admin-sidebar"),o=document.getElementById("admin-nav-overlay"),b=document.getElementById("admin-hamburger"),open=s.classList.toggle("open");o.classList.toggle("visible",open);b.innerHTML=open?"&#10005;":"&#9776;";}function cerrarAdminNav(){document.getElementById("admin-sidebar").classList.remove("open");document.getElementById("admin-nav-overlay").classList.remove("visible");document.getElementById("admin-hamburger").innerHTML="&#9776;";}const input=document.getElementById('archivo_upload'),txt=document.getElementById('archivo_html'),box=document.getElementById('previewBox');function showBlob(file){const url=URL.createObjectURL(file);box.innerHTML='<iframe src="'+url+'"></iframe>';}input?.addEventListener('change',e=>{const f=e.target.files[0]; if(f) showBlob(f);});txt?.addEventListener('input',()=>{const v=txt.value.trim();box.innerHTML=v?'<iframe src="../RUNAS_HTML/RUNAS/'+encodeURIComponent(v)+'"></iframe>':'<span class="preview-empty">Sube o escribe un archivo para previsualizarlo.</span>';});</script><script src="../JS/abbr-input.js"></script></body></html>

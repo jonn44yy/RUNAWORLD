@@ -1,276 +1,183 @@
 <?php
 session_start();
-
-if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
+if (!isset($_SESSION["idUsuario"]) || ($_SESSION["rol"] ?? "") !== "admin") {
     header("Location: ../index.php");
     exit;
 }
-
 require_once "../PHP/conexion.php";
 
-$stmt = $conexion->prepare("SELECT * FROM mejoras ORDER BY tipo ASC, coste_base ASC");
+$stmt = $conexion->prepare("SELECT * FROM mejoras ORDER BY activa DESC, orden ASC, id ASC");
 $stmt->execute();
 $mejoras = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 $conexion->close();
 
-$etiquetas_tipo = [
-    "coins_seg"        => "Coins/seg",
-    "coins_seg_multi"  => "x Coins/seg",
-    "points_seg"       => "Points/seg",
-    "points_seg_multi" => "x Points/seg",
-    "bulk"             => "Bulk"
-];
-
-$colores_tipo = [
-    "coins_seg"        => "#ffd700",
-    "coins_seg_multi"  => "#ffaa00",
-    "points_seg"       => "#c8d8f0",
-    "points_seg_multi" => "#6a9fff",
-    "bulk"             => "#ff7788"
-];
-
-function fmtNum($n) {
-    if ($n >= 1e9)  return number_format($n/1e9, 2) . "B";
-    if ($n >= 1e6)  return number_format($n/1e6, 2) . "M";
-    if ($n >= 1e3)  return number_format($n/1e3, 2) . "k";
-    return number_format($n, 0);
+function fmtAdmin($n) {
+    $n = (float)$n;
+    if ($n >= 1e12) return rtrim(rtrim(number_format($n/1e12, 2), '0'), '.') . "T";
+    if ($n >= 1e9) return rtrim(rtrim(number_format($n/1e9, 2), '0'), '.') . "B";
+    if ($n >= 1e6) return rtrim(rtrim(number_format($n/1e6, 2), '0'), '.') . "M";
+    if ($n >= 1e3) return rtrim(rtrim(number_format($n/1e3, 2), '0'), '.') . "k";
+    return rtrim(rtrim(number_format($n, 4), '0'), '.');
 }
+function tipoMeta($tipo) {
+    $map = [
+        "coins_seg" => ["label" => "Coins/seg", "cat" => "normal", "color" => "#ffd700"],
+        "points_seg" => ["label" => "Points/seg", "cat" => "normal", "color" => "#d0dcf0"],
+        "suerte" => ["label" => "Suerte", "cat" => "normal", "color" => "#44ff88"],
+        "coins_seg_multi" => ["label" => "Multi coins", "cat" => "dorada", "color" => "#ffd700"],
+        "points_seg_multi" => ["label" => "Multi points", "cat" => "dorada", "color" => "#6a9fff"],
+        "bulk_normal" => ["label" => "Bulk normal", "cat" => "dorada", "color" => "#ffcc66"],
+        "bulk_extra" => ["label" => "Bulk extra", "cat" => "dorada", "color" => "#ff7788"],
+        "desbloquear_boost_leg" => ["label" => "Boost legendario", "cat" => "dorada", "color" => "#ffd700"],
+        "desbloquear_boost_div" => ["label" => "Boost divino", "cat" => "dorada", "color" => "#fffbeb"],
+        "coins_seg_multi_eterno" => ["label" => "Reactor coins", "cat" => "morada", "color" => "#c080ff"],
+        "points_seg_multi_eterno" => ["label" => "Reactor points", "cat" => "morada", "color" => "#c080ff"],
+        "bulk" => ["label" => "Bulk eterno", "cat" => "morada", "color" => "#c080ff"],
+    ];
+    return $map[$tipo] ?? ["label" => $tipo, "cat" => "desconocida", "color" => "#6a9fff"];
+}
+function condicionLabel($tipo, $valor) {
+    $valor = trim((string)$valor);
+    if ($tipo === "ninguna" || $tipo === "" || $tipo === null) return "Sin condicion";
+    if ($tipo === "tirar_runa_x") return "Tirar " . ($valor !== "" ? $valor : "X") . " runas";
+    if ($tipo === "clickar_boost_x") return "Clickar boost " . ($valor !== "" ? $valor : "X") . " veces";
+    if ($tipo === "comprar_mejora_id") return "Comprar mejora ID " . ($valor !== "" ? $valor : "?");
+    return $tipo . ($valor !== "" ? " = " . $valor : "");
+}
+function costeNivel($base, $escala, $nivel) {
+    if ($nivel <= 1) return (float)$base;
+    return (float)$base * pow((float)$escala, $nivel - 1);
+}
+$ordenCounts = [];
+foreach ($mejoras as $m) {
+    $ord = (string)($m["orden"] ?? 0);
+    $ordenCounts[$ord] = ($ordenCounts[$ord] ?? 0) + 1;
+}
+function diagnosticos($m, $ordenCounts) {
+    $d = [];
+    $meta = tipoMeta($m["tipo"] ?? "");
+    $condValidas = ["ninguna", "tirar_runa_x", "clickar_boost_x", "comprar_mejora_id"];
+    if ($meta["cat"] === "desconocida") $d[] = "Tipo desconocido para el admin.";
+    if (trim((string)($m["descripcion"] ?? "")) === "") $d[] = "Falta descripcion visible.";
+    if ((float)($m["coste_base"] ?? 0) <= 0) $d[] = "Coste base invalido.";
+    if ((float)($m["coste_escala"] ?? 0) < 1) $d[] = "Escala inferior a 1.";
+    if ((int)($m["nivel_maximo"] ?? 0) === 0) $d[] = "Nivel maximo 0: revisar si significa nivel unico o sin limite.";
+    if (!in_array(($m["condicion_tipo"] ?? "ninguna"), $condValidas, true)) $d[] = "Condicion no reconocida.";
+    if (($m["condicion_tipo"] ?? "ninguna") !== "ninguna" && trim((string)($m["condicion_valor"] ?? "")) === "") $d[] = "Condicion con valor vacio.";
+    $ord = (string)($m["orden"] ?? 0);
+    if (($ordenCounts[$ord] ?? 0) > 1) $d[] = "Orden repetido con otras mejoras.";
+    if (!(int)($m["activa"] ?? 0)) $d[] = "Mejora desactivada: no aparece en la tienda del jugador.";
+    return $d;
+}
+$grupos = [
+    "normal" => ["titulo" => "Mejoras normales", "sub" => "Economia base, generacion pasiva y suerte.", "items" => []],
+    "dorada" => ["titulo" => "Mejoras especiales", "sub" => "Bulk, multiplicadores y desbloqueos dorados.", "items" => []],
+    "morada" => ["titulo" => "Mejoras eternas", "sub" => "Reactores y mejoras de alto impacto.", "items" => []],
+    "desactivada" => ["titulo" => "Desactivadas", "sub" => "Conservadas en BD pero no disponibles.", "items" => []],
+    "desconocida" => ["titulo" => "Tipos desconocidos", "sub" => "Revisar antes de publicar.", "items" => []],
+];
+foreach ($mejoras as $m) {
+    $meta = tipoMeta($m["tipo"] ?? "");
+    $cat = !(int)($m["activa"] ?? 0) ? "desactivada" : $meta["cat"];
+    $grupos[$cat]["items"][] = $m;
+}
+include __DIR__ . "/_admin_sidebar_inline.php";
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RunaWorld — Admin Tienda</title>
-    <link rel="stylesheet" href="../CSS/admin.css">
-    <style>
-        .mejoras-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 18px;
-        }
-
-        .mejora-admin-card {
-            background: rgba(60,120,255,0.04);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            transition: all 0.2s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .mejora-admin-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--tipo-color, var(--blue)), transparent);
-        }
-
-        .mejora-admin-card:hover {
-            border-color: rgba(60,120,255,0.4);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-        }
-
-        .mejora-tipo-badge {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 2px;
-            font-family: var(--font-title);
-            font-size: 0.62rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            border: 1px solid currentColor;
-            align-self: flex-start;
-        }
-
-        .mejora-nombre {
-            font-family: var(--font-title);
-            font-size: 1.05rem;
-            letter-spacing: 2px;
-            color: var(--blue-bright);
-        }
-
-        .mejora-meta {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            font-size: 0.85rem;
-        }
-
-        .mejora-meta-item {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .mejora-meta-label {
-            font-family: var(--font-title);
-            font-size: 0.6rem;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: var(--silver-dim);
-        }
-
-        .mejora-meta-valor {
-            color: var(--silver);
-            font-family: var(--font-title);
-            font-size: 0.9rem;
-        }
-
-        .mejora-desc {
-            font-size: 0.88rem;
-            color: var(--silver-dim);
-            line-height: 1.5;
-            flex: 1;
-        }
-
-        .mejora-acciones {
-            display: flex;
-            gap: 8px;
-            margin-top: 4px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RunaWorld — Manejo de Tienda</title>
+<link rel="stylesheet" href="../CSS/admin.css">
+<?php include __DIR__ . "/_tienda_admin_styles.php"; ?>
 </head>
 <body>
-<!-- HAMBURGER -->
-<button id="admin-hamburger" onclick="toggleAdminNav()">&#9776;</button>
-<div id="admin-nav-overlay" onclick="cerrarAdminNav()"></div>
 <div id="admin-layout" class="visible">
+<?php renderAdminSidebar('tienda'); ?>
+<main id="admin-content">
+    <div class="admin-page-titulo">Manejo de Tienda</div>
+    <div class="admin-page-sub">Gestion de mejoras, balance, condiciones y estado de publicacion.</div>
+    <div class="admin-separador"></div>
 
-    <aside id="admin-sidebar">
-        <div id="sidebar-logo">
-            <svg id="sidebar-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" color="#3c78ff">
-                <circle cx="200" cy="200" r="185" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.9"/>
-                <circle cx="200" cy="200" r="145" fill="none" stroke="currentColor" stroke-width="0.7" opacity="0.7"/>
-                <circle cx="200" cy="200" r="80"  fill="none" stroke="currentColor" stroke-width="1"   opacity="0.8"/>
-                <g stroke="currentColor" stroke-width="2" opacity="1" stroke-linecap="round">
-                    <line x1="200" y1="125" x2="200" y2="95"/><line x1="193" y1="110" x2="200" y2="95"/><line x1="207" y1="110" x2="200" y2="95"/>
-                    <line x1="200" y1="275" x2="200" y2="305"/><line x1="193" y1="290" x2="207" y2="290"/>
-                    <line x1="275" y1="200" x2="305" y2="200"/><line x1="290" y1="193" x2="305" y2="200"/><line x1="290" y1="207" x2="305" y2="200"/>
-                    <line x1="125" y1="200" x2="95"  y2="200"/><line x1="110" y1="193" x2="95"  y2="200"/><line x1="110" y1="207" x2="95"  y2="200"/>
-                    <line x1="254" y1="146" x2="275" y2="125"/><line x1="146" y1="146" x2="125" y2="125"/>
-                    <line x1="254" y1="254" x2="275" y2="275"/><line x1="146" y1="254" x2="125" y2="275"/>
-                </g>
-                <g stroke="currentColor" stroke-width="1.5" opacity="0.9">
-                    <line x1="200" y1="140" x2="200" y2="260"/>
-                    <line x1="140" y1="200" x2="260" y2="200"/>
-                    <circle cx="200" cy="200" r="25" fill="none"/>
-                    <circle cx="200" cy="200" r="5"  fill="currentColor"/>
-                </g>
-                <g font-size="13" fill="currentColor" opacity="0.9" font-family="serif" text-anchor="middle">
-                    <text transform="rotate(0,200,200)   translate(200,22)">&#5792;</text>
-                    <text transform="rotate(45,200,200)  translate(200,22)">&#5794;</text>
-                    <text transform="rotate(90,200,200)  translate(200,22)">&#5798;</text>
-                    <text transform="rotate(135,200,200) translate(200,22)">&#5800;</text>
-                    <text transform="rotate(180,200,200) translate(200,22)">&#5809;</text>
-                    <text transform="rotate(225,200,200) translate(200,22)">&#5810;</text>
-                    <text transform="rotate(270,200,200) translate(200,22)">&#5815;</text>
-                    <text transform="rotate(315,200,200) translate(200,22)">&#5817;</text>
-                </g>
-            </svg>
-            <div id="sidebar-logo-titulo">RunaWorld</div>
+    <section class="admin-info-panel">
+        <div class="admin-info-head" data-toggle-section="info-tienda">
+            <div><div class="admin-info-title">Informacion general</div><div class="admin-info-sub">Resumen de campos tecnicos y como afectan al juego.</div></div>
+            <button type="button" class="admin-small-btn">Abrir</button>
         </div>
-        <nav class="admin-nav">
-            <a href="index.php"    class="admin-nav-btn"><span class="nav-icon">⬡</span> Dashboard</a>
-            <a href="usuarios.php" class="admin-nav-btn"><span class="nav-icon">◈</span> Usuarios</a>
-            <a href="runas.php"    class="admin-nav-btn"><span class="nav-icon">◎</span> Runas</a>
-            <a href="tienda.php"   class="admin-nav-btn active"><span class="nav-icon">⟡</span> Tienda</a>
-            <a href="mensajes.php" class="admin-nav-btn"><span class="nav-icon">✉</span> Mensajes</a>
-            <div class="admin-nav-divider"></div>
-            <a href="../PHP/logout.php" class="admin-nav-btn danger"><span class="nav-icon">→</span> Cerrar Sesion</a>
-        </nav>
-    </aside>
+        <div id="info-tienda" class="admin-info-body" style="display:none;">
+            <div class="admin-info-card"><h4>Coste y escala</h4><p><strong>coste_base</strong> es el precio inicial. <strong>coste_escala</strong> multiplica el coste en cada nivel.</p></div>
+            <div class="admin-info-card"><h4>Valor y nivel maximo</h4><p><strong>valor</strong> define el efecto por nivel. <strong>nivel_maximo</strong> limita la progresion. El valor 0 se marca como dato a revisar.</p></div>
+            <div class="admin-info-card"><h4>Condiciones</h4><ul><li><strong>ninguna</strong>: visible desde inicio.</li><li><strong>tirar_runa_x</strong>: tras X tiradas.</li><li><strong>comprar_mejora_id</strong>: depende de otra mejora.</li><li><strong>clickar_boost_x</strong>: depende de boosts.</li></ul></div>
+            <div class="admin-info-card"><h4>Categorias</h4><p>El admin agrupa por tipo: normales, especiales/doradas, eternas/moradas y desactivadas. No requiere migracion SQL.</p></div>
+        </div>
+    </section>
 
-    <main id="admin-content">
-        <div class="admin-page-titulo">Tienda</div>
-        <div class="admin-page-sub">Gestion de mejoras disponibles para los jugadores</div>
-        <div class="admin-separador"></div>
+    <div class="admin-toolbar">
+        <a href="crear_mejora.php" class="btn-crear" style="margin-bottom:0;">+ Crear mejora</a>
+        <button type="button" class="admin-switch-btn" id="toggle-sugerencias">Ocultar sugerencias</button>
+    </div>
 
-        <a href="crear_mejora.php" class="btn-crear">+ Crear nueva mejora</a>
-
-        <?php if (empty($mejoras)): ?>
-            <p style="color:var(--silver-dim);">No hay mejoras creadas.</p>
-        <?php else: ?>
-            <div class="mejoras-grid">
-                <?php foreach ($mejoras as $m):
-                    $color = $colores_tipo[$m["tipo"]] ?? "var(--blue)";
-                    $tipo_label = $etiquetas_tipo[$m["tipo"]] ?? $m["tipo"];
-                ?>
-                    <div class="mejora-admin-card" style="--tipo-color: <?= $color ?>;">
-                        <span class="mejora-tipo-badge" style="color:<?= $color ?>;">
-                            <?= $tipo_label ?>
-                        </span>
-                        <div class="mejora-nombre"><?= htmlspecialchars($m["nombre"]) ?></div>
-                        <div class="mejora-desc"><?= htmlspecialchars($m["descripcion"] ?? "") ?></div>
-                        <div class="mejora-meta">
-                            <div class="mejora-meta-item">
-                                <span class="mejora-meta-label">Coste base</span>
-                                <span class="mejora-meta-valor" style="color:var(--gold);">
-                                    <?= fmtNum($m["coste_base"]) ?> pts
-                                </span>
-                            </div>
-                            <div class="mejora-meta-item">
-                                <span class="mejora-meta-label">Escala</span>
-                                <span class="mejora-meta-valor">x<?= $m["coste_escala"] ?></span>
-                            </div>
-                            <div class="mejora-meta-item">
-                                <span class="mejora-meta-label">Valor</span>
-                                <span class="mejora-meta-valor" style="color:<?= $color ?>;">+<?= rtrim(rtrim(number_format($m["valor"], 4), '0'), '.') ?></span>
-                            </div>
-                            <div class="mejora-meta-item">
-                                <span class="mejora-meta-label">Nivel max</span>
-                                <span class="mejora-meta-valor"><?= $m["nivel_maximo"] ?></span>
-                            </div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="badge <?= $m['activa'] ? 'badge-si' : 'badge-no' ?>">
-                                <?= $m["activa"] ? "Activa" : "Inactiva" ?>
-                            </span>
-                        </div>
-                        <div class="mejora-acciones">
-                            <a href="editar_mejora.php?id=<?= $m["id"] ?>"
-                               class="btn-admin btn-admin-primary">Editar</a>
-                            <a href="../PHP/mejoras_action.php?accion=eliminar&id=<?= $m["id"] ?>"
-                               class="btn-admin btn-admin-danger"
-                               onclick="return confirm('Eliminar mejora <?= htmlspecialchars($m["nombre"]) ?>?')">
-                               Eliminar
-                            </a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+    <?php foreach ($grupos as $clave => $grupo): ?>
+        <?php if (empty($grupo["items"]) && $clave === "desconocida") continue; ?>
+        <section class="admin-shop-section <?= empty($grupo['items']) ? 'is-closed' : '' ?>" data-shop-section="<?= htmlspecialchars($clave) ?>">
+            <div class="admin-shop-head" data-toggle-shop="<?= htmlspecialchars($clave) ?>">
+                <div><div class="admin-shop-title"><?= htmlspecialchars($grupo["titulo"]) ?></div><div class="admin-shop-sub"><?= count($grupo["items"]) ?> mejoras · <?= htmlspecialchars($grupo["sub"]) ?></div></div>
+                <button type="button" class="admin-small-btn"><?= empty($grupo["items"]) ? "Abrir" : "Cerrar" ?></button>
             </div>
-        <?php endif; ?>
-    </main>
+            <div class="admin-shop-body">
+            <?php if (empty($grupo["items"])): ?>
+                <div class="admin-empty-box">No hay mejoras en este grupo.</div>
+            <?php else: ?>
+                <div class="admin-mejoras-grid">
+                <?php foreach ($grupo["items"] as $m):
+                    $meta = tipoMeta($m["tipo"] ?? "");
+                    $diags = diagnosticos($m, $ordenCounts);
+                    $nivelMax = (int)($m["nivel_maximo"] ?? 0);
+                    $coste2 = costeNivel($m["coste_base"], $m["coste_escala"], 2);
+                    $costeMax = $nivelMax > 0 ? costeNivel($m["coste_base"], $m["coste_escala"], $nivelMax) : null;
+                    $catVisual = !(int)$m["activa"] ? "desactivada" : $meta["cat"];
+                ?>
+                    <article class="admin-mejora-card" data-tier="<?= htmlspecialchars($catVisual) ?>" style="--tier-color: <?= htmlspecialchars($meta['color']) ?>;">
+                        <div class="admin-mejora-top"><div><div class="admin-mejora-name"><?= htmlspecialchars($m["nombre"] ?? "") ?></div><div class="admin-mejora-type"><?= htmlspecialchars($meta["label"]) ?> · <?= htmlspecialchars($m["tipo"] ?? "") ?></div></div><span class="admin-status-badge <?= (int)$m['activa'] ? 'on' : 'off' ?>"><?= (int)$m["activa"] ? "Activa" : "Inactiva" ?></span></div>
+                        <div class="admin-mejora-desc"><?= htmlspecialchars($m["descripcion"] ?: "Sin descripcion.") ?></div>
+                        <div class="admin-metric-grid">
+                            <div class="admin-metric"><span class="admin-metric-label">Coste base</span><span class="admin-metric-value" style="color:var(--gold);"><?= fmtAdmin($m["coste_base"]) ?> pts</span></div>
+                            <div class="admin-metric"><span class="admin-metric-label">Escala</span><span class="admin-metric-value">x<?= fmtAdmin($m["coste_escala"]) ?></span></div>
+                            <div class="admin-metric"><span class="admin-metric-label">Valor</span><span class="admin-metric-value">+<?= fmtAdmin($m["valor"]) ?></span></div>
+                            <div class="admin-metric"><span class="admin-metric-label">Nivel max.</span><span class="admin-metric-value"><?= $nivelMax > 0 ? $nivelMax : "0 · revisar" ?></span></div>
+                        </div>
+                        <button type="button" class="admin-small-btn js-open-mejora" style="width:100%;">Ver detalle</button>
+                        <div class="admin-mejora-detail">
+                            <div class="admin-detail-row"><span>Condicion</span><strong><?= htmlspecialchars(condicionLabel($m["condicion_tipo"] ?? "ninguna", $m["condicion_valor"] ?? "")) ?></strong></div>
+                            <div class="admin-detail-row"><span>Orden</span><strong><?= (int)($m["orden"] ?? 0) ?></strong></div>
+                            <div class="admin-detail-row"><span>Coste nivel 2</span><strong><?= fmtAdmin($coste2) ?> pts</strong></div>
+                            <div class="admin-detail-row"><span>Coste nivel max.</span><strong><?= $costeMax !== null ? fmtAdmin($costeMax) . " pts" : "No calculado" ?></strong></div>
+                            <?php if (!empty($diags)): ?><div class="admin-diagnostics"><?php foreach ($diags as $diag): ?><div class="admin-diagnostic">⚠ <?= htmlspecialchars($diag) ?></div><?php endforeach; ?></div><?php endif; ?>
+                        </div>
+                        <div class="admin-mejora-actions">
+                            <a class="btn-admin btn-admin-primary" href="editar_mejora.php?id=<?= (int)$m['id'] ?>">Editar</a>
+                            <?php if ((int)$m["activa"]): ?><a class="btn-admin btn-admin-danger" href="../PHP/mejoras_action.php?accion=desactivar&id=<?= (int)$m['id'] ?>" onclick="return confirm('Desactivar mejora <?= htmlspecialchars($m['nombre']) ?>?')">Desactivar</a><?php else: ?><a class="btn-admin btn-admin-success" href="../PHP/mejoras_action.php?accion=activar&id=<?= (int)$m['id'] ?>">Activar</a><?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            </div>
+        </section>
+    <?php endforeach; ?>
+</main>
 </div>
-
 <script>
-function toggleAdminNav() {
-    var s = document.getElementById("admin-sidebar");
-    var o = document.getElementById("admin-nav-overlay");
-    var b = document.getElementById("admin-hamburger");
-    var open = s.classList.toggle("open");
-    o.classList.toggle("visible", open);
-    b.innerHTML = open ? "&#10005;" : "&#9776;";
-}
-function cerrarAdminNav() {
-    document.getElementById("admin-sidebar").classList.remove("open");
-    document.getElementById("admin-nav-overlay").classList.remove("visible");
-    document.getElementById("admin-hamburger").innerHTML = "&#9776;";
-}
-document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll(".admin-nav-btn").forEach(function(a) {
-        a.addEventListener("click", function() {
-            if (window.innerWidth <= 700) cerrarAdminNav();
-        });
-    });
+document.addEventListener('DOMContentLoaded',function(){
+ document.querySelectorAll('[data-toggle-section]').forEach(function(head){head.addEventListener('click',function(e){var id=head.getAttribute('data-toggle-section'),body=document.getElementById(id),btn=head.querySelector('button'); if(!body)return; var open=body.style.display==='none'; body.style.display=open?'grid':'none'; if(btn)btn.textContent=open?'Cerrar':'Abrir';});});
+ document.querySelectorAll('[data-toggle-shop]').forEach(function(head){head.addEventListener('click',function(){var section=head.closest('.admin-shop-section'),btn=head.querySelector('button'); section.classList.toggle('is-closed'); if(btn)btn.textContent=section.classList.contains('is-closed')?'Abrir':'Cerrar';});});
+ document.querySelectorAll('.js-open-mejora').forEach(function(btn){btn.addEventListener('click',function(){var card=btn.closest('.admin-mejora-card'); card.classList.toggle('is-open'); btn.textContent=card.classList.contains('is-open')?'Ocultar detalle':'Ver detalle';});});
+ var sug=document.getElementById('toggle-sugerencias'); if(sug){sug.addEventListener('click',function(){document.body.classList.toggle('hide-shop-suggestions');sug.textContent=document.body.classList.contains('hide-shop-suggestions')?'Ver sugerencias':'Ocultar sugerencias';});}
 });
+function toggleAdminNav(){var s=document.getElementById('admin-sidebar'),o=document.getElementById('admin-nav-overlay'),b=document.getElementById('admin-hamburger');if(!s||!o||!b)return;var open=s.classList.toggle('open');o.classList.toggle('visible',open);b.innerHTML=open?'&#10005;':'&#9776;';}
+function cerrarAdminNav(){var s=document.getElementById('admin-sidebar'),o=document.getElementById('admin-nav-overlay'),b=document.getElementById('admin-hamburger');if(s)s.classList.remove('open');if(o)o.classList.remove('visible');if(b)b.innerHTML='&#9776;';}
 </script>
 </body>
 </html>

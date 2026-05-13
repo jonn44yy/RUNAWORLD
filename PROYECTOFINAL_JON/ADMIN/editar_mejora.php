@@ -1,165 +1,51 @@
 <?php
 session_start();
-
-if (!isset($_SESSION["idUsuario"]) || $_SESSION["rol"] !== "admin") {
-    header("Location: ../index.php");
-    exit;
-}
-
+if (!isset($_SESSION["idUsuario"]) || ($_SESSION["rol"] ?? "") !== "admin") { header("Location: ../index.php"); exit; }
 require_once "../PHP/conexion.php";
-
 $id = isset($_GET["id"]) ? (int)$_GET["id"] : 0;
 if ($id <= 0) die("ID invalido");
-
-$errores = [];
-if (isset($_SESSION["errores"])) {
-    $errores = $_SESSION["errores"];
-    unset($_SESSION["errores"]);
-}
-
+$errores = $_SESSION["errores"] ?? [];
+unset($_SESSION["errores"]);
 $stmt = $conexion->prepare("SELECT * FROM mejoras WHERE id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
-$mejora = $stmt->get_result()->fetch_assoc();
+$m = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+if (!$m) die("Mejora no encontrada");
+$tipos = [
+ "coins_seg"=>"Coins/seg", "points_seg"=>"Points/seg", "suerte"=>"Suerte",
+ "coins_seg_multi"=>"Multiplicador coins/seg", "points_seg_multi"=>"Multiplicador points/seg",
+ "bulk_normal"=>"Bulk normal", "bulk_extra"=>"Bulk extra", "desbloquear_boost_leg"=>"Desbloquear boost legendario", "desbloquear_boost_div"=>"Desbloquear boost divino",
+ "coins_seg_multi_eterno"=>"Reactor coins eterno", "points_seg_multi_eterno"=>"Reactor points eterno", "bulk"=>"Bulk eterno"
+];
+$mejoras_ref = [];
+$res = $conexion->query("SELECT id, nombre FROM mejoras ORDER BY orden ASC, id ASC");
+if ($res) { while ($r = $res->fetch_assoc()) $mejoras_ref[] = $r; }
 $conexion->close();
-
-if (!$mejora) die("Mejora no encontrada");
+include __DIR__ . "/_admin_sidebar_inline.php";
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RunaWorld — Editar Mejora</title>
-    <link rel="stylesheet" href="../CSS/admin.css">
-</head>
-<body>
-<div id="admin-layout" class="visible">
-
-    <aside id="admin-sidebar">
-        <div id="sidebar-logo">
-            <svg id="sidebar-runa" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" color="#3c78ff">
-                <circle cx="200" cy="200" r="185" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.9"/>
-                <circle cx="200" cy="200" r="80"  fill="none" stroke="currentColor" stroke-width="1" opacity="0.8"/>
-                <g stroke="currentColor" stroke-width="2.5" opacity="1" stroke-linecap="round">
-                    <line x1="200" y1="125" x2="200" y2="95"/><line x1="193" y1="110" x2="200" y2="95"/><line x1="207" y1="110" x2="200" y2="95"/>
-                    <line x1="200" y1="275" x2="200" y2="305"/><line x1="193" y1="290" x2="207" y2="290"/>
-                    <line x1="275" y1="200" x2="305" y2="200"/><line x1="290" y1="193" x2="305" y2="200"/><line x1="290" y1="207" x2="305" y2="200"/>
-                    <line x1="125" y1="200" x2="95" y2="200"/><line x1="110" y1="193" x2="95" y2="200"/><line x1="110" y1="207" x2="95" y2="200"/>
-                    <line x1="254" y1="146" x2="275" y2="125"/><line x1="146" y1="146" x2="125" y2="125"/>
-                    <line x1="254" y1="254" x2="275" y2="275"/><line x1="146" y1="254" x2="125" y2="275"/>
-                </g>
-                <g stroke="currentColor" stroke-width="1.5" opacity="0.9">
-                    <line x1="200" y1="140" x2="200" y2="260"/>
-                    <line x1="140" y1="200" x2="260" y2="200"/>
-                    <circle cx="200" cy="200" r="20" fill="none"/>
-                    <circle cx="200" cy="200" r="4" fill="currentColor"/>
-                </g>
-            </svg>
-            <div id="sidebar-logo-titulo">RunaWorld</div>
-            <div id="sidebar-logo-sub">Admin Panel</div>
-        </div>
-        <nav class="admin-nav">
-            <a href="index.php"    class="admin-nav-btn"><span class="nav-icon">⬡</span> Dashboard</a>
-            <a href="usuarios.php" class="admin-nav-btn"><span class="nav-icon">◈</span> Usuarios</a>
-            <a href="runas.php"    class="admin-nav-btn"><span class="nav-icon">◎</span> Runas</a>
-            <a href="tienda.php"   class="admin-nav-btn active"><span class="nav-icon">⟡</span> Tienda</a>
-            <a href="mensajes.php" class="admin-nav-btn"><span class="nav-icon">✉</span> Mensajes</a>
-            <div class="admin-nav-divider"></div>
-            <a href="../PHP/logout.php" class="admin-nav-btn danger"><span class="nav-icon">→</span> Cerrar Sesion</a>
-        </nav>
-    </aside>
-
-    <main id="admin-content">
-        <div class="admin-page-titulo">Editar Mejora</div>
-        <div class="admin-page-sub">
-            Modificando: <strong style="color:var(--blue-bright);"><?= htmlspecialchars($mejora["nombre"]) ?></strong>
-        </div>
-        <div class="admin-separador"></div>
-
-        <a href="tienda.php" class="btn-admin btn-admin-primary" style="margin-bottom:28px; display:inline-block;">← Volver a Tienda</a>
-
-        <?php foreach ($errores as $e): ?>
-            <p class="admin-msg-error"><?= htmlspecialchars($e) ?></p>
-        <?php endforeach; ?>
-
-        <form method="POST" action="../PHP/mejoras_action.php" class="admin-form">
-            <input type="hidden" name="accion" value="editar">
-            <input type="hidden" name="id" value="<?= $mejora["id"] ?>">
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Nombre</label>
-                <input type="text" name="nombre" class="admin-form-input"
-                       value="<?= htmlspecialchars($mejora["nombre"]) ?>" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Tipo</label>
-                <select name="tipo" class="admin-form-select" required>
-                    <optgroup label="Coins">
-                        <option value="coins_seg"               <?= $mejora["tipo"]==="coins_seg"               ?"selected":"" ?>>Coins/seg</option>
-                        <option value="coins_seg_multi"         <?= $mejora["tipo"]==="coins_seg_multi"         ?"selected":"" ?>>Multiplicador Coins/seg</option>
-                        <option value="coins_seg_multi_eterno"  <?= $mejora["tipo"]==="coins_seg_multi_eterno"  ?"selected":"" ?>>Multiplicador Coins/seg ETERNO</option>
-                    </optgroup>
-                    <optgroup label="Points">
-                        <option value="points_seg"              <?= $mejora["tipo"]==="points_seg"              ?"selected":"" ?>>Points/seg</option>
-                        <option value="points_seg_multi"        <?= $mejora["tipo"]==="points_seg_multi"        ?"selected":"" ?>>Multiplicador Points/seg</option>
-                        <option value="points_seg_multi_eterno" <?= $mejora["tipo"]==="points_seg_multi_eterno" ?"selected":"" ?>>Multiplicador Points/seg ETERNO</option>
-                    </optgroup>
-                    <optgroup label="Bulk">
-                        <option value="bulk"                    <?= $mejora["tipo"]==="bulk"                    ?"selected":"" ?>>Bulk</option>
-                        <option value="bulk_normal"             <?= $mejora["tipo"]==="bulk_normal"             ?"selected":"" ?>>Bulk normal</option>
-                        <option value="bulk_extra"              <?= $mejora["tipo"]==="bulk_extra"              ?"selected":"" ?>>Bulk extra</option>
-                    </optgroup>
-                    <optgroup label="Desbloqueo de boosts">
-                        <option value="desbloquear_boost_leg"   <?= $mejora["tipo"]==="desbloquear_boost_leg"   ?"selected":"" ?>>Desbloquear boost legendario</option>
-                        <option value="desbloquear_boost_div"   <?= $mejora["tipo"]==="desbloquear_boost_div"   ?"selected":"" ?>>Desbloquear boost divino</option>
-                    </optgroup>
-                </select>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Coste base (en points)</label>
-                <input type="number" name="coste_base" class="admin-form-input"
-                       min="1" step="1" value="<?= $mejora["coste_base"] ?>" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Escala de coste</label>
-                <input type="number" name="coste_escala" class="admin-form-input"
-                       min="1" step="0.01" value="<?= $mejora["coste_escala"] ?>" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Valor por nivel</label>
-                <input type="number" name="valor" class="admin-form-input"
-                       step="0.01" min="0" value="<?= $mejora["valor"] ?>" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Nivel maximo</label>
-                <input type="number" name="nivel_maximo" class="admin-form-input"
-                       min="1" value="<?= $mejora["nivel_maximo"] ?>" required>
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Descripcion</label>
-                <input type="text" name="descripcion" class="admin-form-input"
-                       maxlength="255" value="<?= htmlspecialchars($mejora["descripcion"] ?? "") ?>">
-            </div>
-
-            <div class="admin-form-grupo">
-                <label class="admin-form-label">Activa</label>
-                <select name="activa" class="admin-form-select">
-                    <option value="1" <?= $mejora["activa"] ? "selected" : "" ?>>Si</option>
-                    <option value="0" <?= !$mejora["activa"] ? "selected" : "" ?>>No</option>
-                </select>
-            </div>
-
-            <button type="submit" class="admin-form-submit">Guardar cambios</button>
-        </form>
-    </main>
-</div>
-</body>
-</html>
+<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RunaWorld — Editar Mejora</title><link rel="stylesheet" href="../CSS/admin.css"><?php include __DIR__ . "/_tienda_admin_styles.php"; ?></head>
+<body><div id="admin-layout" class="visible"><?php renderAdminSidebar('tienda'); ?><main id="admin-content">
+<div class="admin-page-titulo">Editar Mejora</div><div class="admin-page-sub">Modificando: <strong style="color:var(--blue-bright);"><?= htmlspecialchars($m["nombre"]) ?></strong></div><div class="admin-separador"></div>
+<a href="tienda.php" class="btn-admin btn-admin-primary" style="margin-bottom:18px;display:inline-block;">← Volver a Tienda</a>
+<?php foreach ($errores as $e): ?><p class="admin-msg-error"><?= htmlspecialchars($e) ?></p><?php endforeach; ?>
+<form method="POST" action="../PHP/mejoras_action.php" class="admin-form-layout"><input type="hidden" name="accion" value="editar"><input type="hidden" name="id" value="<?= (int)$m['id'] ?>">
+<section class="admin-form-panel"><div class="admin-form-panel-title">Datos de la mejora</div><div class="admin-form-grid">
+<div class="admin-form-grupo"><label class="admin-form-label">Nombre</label><input type="text" name="nombre" class="admin-form-input" value="<?= htmlspecialchars($m['nombre']) ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Tipo</label><select name="tipo" id="tipo" class="admin-form-select" required><?php foreach ($tipos as $v=>$label): ?><option value="<?= htmlspecialchars($v) ?>" <?= $m['tipo']===$v?'selected':'' ?>><?= htmlspecialchars($label) ?></option><?php endforeach; ?></select></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Coste base</label><input type="text" name="coste_base" id="coste_base" class="admin-form-input input-abbr" value="<?= htmlspecialchars($m['coste_base']) ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Escala de coste</label><input type="number" name="coste_escala" id="coste_escala" class="admin-form-input" min="1" step="0.01" value="<?= htmlspecialchars($m['coste_escala']) ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Valor por nivel</label><input type="text" name="valor" class="admin-form-input input-abbr" value="<?= htmlspecialchars($m['valor']) ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Nivel maximo</label><input type="number" name="nivel_maximo" id="nivel_maximo" class="admin-form-input" min="0" value="<?= htmlspecialchars($m['nivel_maximo']) ?>" required></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Orden</label><input type="number" name="orden" class="admin-form-input" value="<?= htmlspecialchars($m['orden']) ?>"></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Activa</label><select name="activa" class="admin-form-select"><option value="1" <?= (int)$m['activa'] ? 'selected' : '' ?>>Si</option><option value="0" <?= !(int)$m['activa'] ? 'selected' : '' ?>>No</option></select></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Condicion</label><select name="condicion_tipo" id="condicion_tipo" class="admin-form-select"><option value="ninguna" <?= $m['condicion_tipo']==='ninguna'?'selected':'' ?>>Ninguna</option><option value="tirar_runa_x" <?= $m['condicion_tipo']==='tirar_runa_x'?'selected':'' ?>>Tirar X runas</option><option value="comprar_mejora_id" <?= $m['condicion_tipo']==='comprar_mejora_id'?'selected':'' ?>>Comprar mejora ID</option><option value="clickar_boost_x" <?= $m['condicion_tipo']==='clickar_boost_x'?'selected':'' ?>>Clickar boost X veces</option></select></div>
+<div class="admin-form-grupo"><label class="admin-form-label">Valor condicion</label><input type="text" name="condicion_valor" id="condicion_valor" class="admin-form-input" value="<?= htmlspecialchars($m['condicion_valor'] ?? '') ?>"></div>
+<div class="admin-form-grupo full"><label class="admin-form-label">Descripcion</label><textarea name="descripcion" class="admin-form-textarea" maxlength="255"><?= htmlspecialchars($m['descripcion'] ?? '') ?></textarea></div>
+</div><div class="admin-form-actions"><button type="submit" class="admin-form-submit">Guardar cambios</button><a href="tienda.php" class="btn-admin btn-admin-danger">Cancelar</a></div></section>
+<aside class="admin-side-panel"><div class="admin-form-panel-title">Preview y diagnostico</div><div class="admin-help-block" id="condicion_help">Sin condicion: visible desde el inicio.</div><div class="admin-help-block">Si desactivas una mejora, deja de aparecer en la tienda del jugador, pero se conserva el historial existente.</div><div class="admin-preview-costs"><div class="admin-metric"><span class="admin-metric-label">Coste nivel 1</span><span class="admin-metric-value" id="prev_n1">-</span></div><div class="admin-metric"><span class="admin-metric-label">Coste nivel 2</span><span class="admin-metric-value" id="prev_n2">-</span></div><div class="admin-metric"><span class="admin-metric-label">Coste max</span><span class="admin-metric-value" id="prev_max">-</span></div><div class="admin-metric"><span class="admin-metric-label">Categoria</span><span class="admin-metric-value" id="prev_cat">-</span></div></div></aside>
+</form></main></div>
+<script src="../JS/abbr-input.js"></script>
+<script src="../JS/tienda-admin-form.js"></script>
+<script>function toggleAdminNav(){var s=document.getElementById('admin-sidebar'),o=document.getElementById('admin-nav-overlay'),b=document.getElementById('admin-hamburger');var open=s.classList.toggle('open');o.classList.toggle('visible',open);b.innerHTML=open?'&#10005;':'&#9776;';}function cerrarAdminNav(){document.getElementById('admin-sidebar').classList.remove('open');document.getElementById('admin-nav-overlay').classList.remove('visible');document.getElementById('admin-hamburger').innerHTML='&#9776;';}</script>
+</body></html>
