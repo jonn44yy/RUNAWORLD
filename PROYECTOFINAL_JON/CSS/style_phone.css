@@ -1444,3 +1444,683 @@
         font-size: 0.62rem !important;
     }
 }
+
+/* ==========================================================
+   RUNAWORLD MOBILE v8.7 — Engranajes en construcción
+   ========================================================== */
+@media (max-width: 1024px) {
+    /* En móvil el panel derecho es el drawer de runas. No se fuerza display,
+       solo se deja visible/interactivo para no romper su tamaño original. */
+    body.rw-modo-engranajes #mobile-runas-drawer,
+    body.rw-modo-engranajes #btn-menu-runas {
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    body.rw-modo-engranajes #centro {
+        overflow: hidden !important;
+    }
+
+    /* La zona Engranajes ocupa todo el espacio útil móvil:
+       debajo de la topbar y encima de la barra de stats. */
+    body.rw-modo-engranajes #seccion-engranajes.seccion-engranajes-full.activa {
+        display: block !important;
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: 60px !important;
+        bottom: 78px !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: none !important;
+        max-height: none !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        z-index: 120 !important;
+        background: #040200 !important;
+    }
+
+    body.rw-modo-engranajes #seccion-engranajes .engranajes-shell {
+        position: absolute !important;
+        inset: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: none !important;
+        max-height: none !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        aspect-ratio: auto !important;
+        overflow: hidden !important;
+        border-radius: 0 !important;
+        border: 0 !important;
+        background: #040200 !important;
+        box-shadow: none !important;
+    }
+
+    body.rw-modo-engranajes #seccion-engranajes .engranajes-iframe {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+        border: 0 !important;
+        display: block !important;
+        background: #040200 !important;
+    }
+
+    body.rw-modo-engranajes .mob-nav[data-sec="engranajes"],
+    #mobile-nav-drawer .mob-nav[data-sec="engranajes"].active {
+        color: #ffd700 !important;
+        background: rgba(255,215,0,0.06) !important;
+        border-left-color: #ffd700 !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v10.2 — iconos/stats hotfix
+   Mantiene el layout actual. Solo corrige visibilidad de iconos
+   y estilo de la barra inferior.
+   ========================================================== */
+@media (max-width: 1024px) {
+    #btn-menu-nav.mobile-topbar-btn {
+        color: #ffd700 !important;
+    }
+
+    #btn-menu-runas.mobile-topbar-btn {
+        color: rgba(180,110,255,0.96) !important;
+    }
+
+    #btn-menu-nav.mobile-topbar-btn svg,
+    #btn-menu-runas.mobile-topbar-btn svg,
+    #btn-menu-nav.mobile-topbar-btn .mobile-topbar-icon-svg,
+    #btn-menu-runas.mobile-topbar-btn .mobile-topbar-icon-svg {
+        display: block !important;
+        width: 22px !important;
+        height: 22px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        stroke: currentColor !important;
+        fill: none !important;
+    }
+
+    #mobile-stats-bar .mob-stat {
+        color: rgba(220,228,240,0.92) !important;
+    }
+
+    #mobile-stats-bar .mob-stat-coins,
+    #mobile-stats-bar .mob-stat-suerte {
+        color: #ffd700 !important;
+    }
+
+    #mobile-stats-bar .mob-icon {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-height: 26px !important;
+        line-height: 1 !important;
+        font-size: 1.2rem !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
+    #mobile-stats-bar .mob-icon svg,
+    #mobile-stats-bar .mob-icon img,
+    #mobile-stats-bar svg.stat-icon {
+        display: block !important;
+        width: 26px !important;
+        height: 26px !important;
+        max-width: 26px !important;
+        max-height: 26px !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        flex: 0 0 auto !important;
+    }
+
+    #mobile-stats-bar .mob-stat-points .mob-val,
+    #mobile-stats-bar .mob-stat-bulk .mob-val {
+        color: #dde4f0 !important;
+    }
+
+    #mobile-stats-bar .mob-stat-coins .mob-val,
+    #mobile-stats-bar .mob-stat-suerte .mob-val {
+        color: #ffd700 !important;
+    }
+
+    #mobile-stats-bar .mob-rate {
+        text-transform: none !important;
+        color: rgba(180,180,200,0.66) !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v10.3 — performance hotfix
+   No cambia el layout. Reduce repintados y evita clones constantes.
+   ========================================================== */
+@media (max-width: 1024px) {
+    #mobile-runas-drawer,
+    #mobile-nav-drawer {
+        contain: layout paint !important;
+    }
+
+    #mobile-runas-scroll {
+        contain: content !important;
+    }
+
+    #panel-mis-runas-mobile,
+    #panel-col-stats-mobile {
+        contain: content !important;
+    }
+
+    #btn-tirar {
+        touch-action: manipulation !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v10.4 — stats + bonus hotfix
+   Mantiene rendimiento: solo números en vivo y bonus por variante.
+   ========================================================== */
+@media (max-width: 1024px) {
+    /* Blindaje: en normal no se ve el bonus corrupto. En corrupta desbloqueada
+       no se ve el bonus normal. Esto aplica al bonus móvil y al que queda al
+       final de la lista. */
+    #seccion-coleccion.rw-variant-normal [data-bonus-coleccion="basica_corrupta"],
+    #seccion-coleccion.rw-variant-normal .coleccion-bonus-corrupta,
+    #seccion-coleccion.rw-variant-corrupta [data-bonus-coleccion="basica_normal"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+
+    #seccion-coleccion.rw-variant-normal [data-bonus-coleccion="basica_normal"],
+    #seccion-coleccion.rw-variant-corrupta [data-bonus-coleccion="basica_corrupta"],
+    #seccion-coleccion.rw-variant-corrupta .coleccion-bonus-corrupta {
+        display: flex !important;
+        visibility: visible !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v10.5 — drawer/stats/bonus hotfix
+   - Drawer derecho: tirada = runas; colección = stats.
+   - Bonus: solo normal o corrupto, nunca ambos.
+   - Refuerza topbar y stats sin tocar layout completo.
+   ========================================================== */
+@media (max-width: 1024px) {
+    /* Drawer derecho en modo Tirar/Tienda/Ajustes: solo MIS RUNAS */
+    #mobile-runas-drawer.rw-drawer-mode-runas #panel-col-stats-mobile {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    #mobile-runas-drawer.rw-drawer-mode-runas .mobile-runas-separator,
+    #mobile-runas-drawer.rw-drawer-mode-runas #panel-mis-runas-mobile {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    /* Drawer derecho en modo Colección: solo STATS DE RUNA */
+    #mobile-runas-drawer.rw-drawer-mode-stats .mobile-runas-separator,
+    #mobile-runas-drawer.rw-drawer-mode-stats #panel-mis-runas-mobile {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    #mobile-runas-drawer.rw-drawer-mode-stats #panel-col-stats-mobile {
+        display: block !important;
+        visibility: visible !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    /* Bonus colección: por defecto corrupto oculto. Solo se muestra en variante corrupta activa. */
+    #seccion-coleccion:not(.rw-variant-corrupta) [data-bonus-coleccion="basica_corrupta"],
+    #seccion-coleccion.rw-variant-normal [data-bonus-coleccion="basica_corrupta"],
+    #seccion-coleccion.rw-variant-corrupta [data-bonus-coleccion="basica_normal"],
+    #seccion-coleccion [data-rw-bonus-hidden] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+
+    #seccion-coleccion.rw-variant-normal [data-bonus-coleccion="basica_normal"],
+    #seccion-coleccion:not(.rw-variant-corrupta) [data-bonus-coleccion="basica_normal"] {
+        display: flex !important;
+        visibility: visible !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
+
+    #seccion-coleccion.rw-variant-corrupta [data-bonus-coleccion="basica_corrupta"]:not([data-rw-bonus-hidden]) {
+        display: flex !important;
+        visibility: visible !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+    }
+
+    /* Topbar username */
+    #mobile-topbar .topbar-user strong {
+        color: #ffd700 !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v10.6 — title removal + live points
+   ========================================================== */
+@media (max-width: 1024px) {
+    #seccion-coleccion .col-contador.rw-title-hidden,
+    #seccion-coleccion .col-contador[data-rw-title-hidden="1"],
+    #seccion-coleccion .col-contador-label.rw-title-hidden,
+    #seccion-coleccion .col-contador-label[data-rw-title-hidden="1"],
+    #panel-mis-runas-mobile .col-contador.rw-title-hidden,
+    #panel-mis-runas-mobile .col-contador[data-rw-title-hidden="1"],
+    #panel-mis-runas-mobile .col-contador-label.rw-title-hidden,
+    #panel-mis-runas-mobile .col-contador-label[data-rw-title-hidden="1"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+}
+
+/* ==========================================================
+   RUNAWORLD MOBILE v12.0 — snapshot final recuperado
+   Incluye los ajustes móviles aceptados hasta ahora:
+   - colección estable sin overflow lateral;
+   - canvas grande en colección;
+   - botones de animación sin clipping de líneas neon;
+   - lista de runas con separación superior;
+   - sin título duplicado en drawer de runas;
+   - estilo móvil para grupos "Runas Básicas";
+   - bonus desktop oculto en móvil.
+   ========================================================== */
+
+@media (max-width: 1024px) {
+    /* -------- Colección: estructura estable -------- */
+
+    #seccion-coleccion.seccion.activa,
+    #seccion-coleccion.seccion-coleccion-full.activa {
+        display: flex !important;
+        flex-direction: column !important;
+        height: calc(100dvh - 164px) !important;
+        min-height: calc(100dvh - 164px) !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    #seccion-coleccion *,
+    #seccion-coleccion *::before,
+    #seccion-coleccion *::after {
+        box-sizing: border-box !important;
+    }
+
+    #seccion-coleccion .coleccion-topbar-v71 {
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 6px 10px 8px !important;
+        position: relative !important;
+        top: auto !important;
+        z-index: 20 !important;
+        overflow: hidden !important;
+    }
+
+    #seccion-coleccion .coleccion-layout {
+        flex: 1 1 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 0 !important;
+        height: auto !important;
+        gap: 8px !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* -------- Colección: canvas grande, sin salirse a la derecha -------- */
+
+    #seccion-coleccion .coleccion-centro {
+        order: 1 !important;
+        flex: 0 0 325px !important;
+        flex-basis: 325px !important;
+        width: calc(100% - 20px) !important;
+        max-width: calc(100% - 20px) !important;
+        min-width: 0 !important;
+        height: 325px !important;
+        min-height: 325px !important;
+        max-height: 325px !important;
+        margin: 0 10px !important;
+        padding: 0 !important;
+        position: relative !important;
+        inset: auto !important;
+        transform: none !important;
+        overflow: visible !important;
+    }
+
+    #seccion-coleccion .coleccion-canvas-wrap {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 263px !important;
+        min-height: 263px !important;
+        max-height: 263px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        border-radius: 6px !important;
+    }
+
+    #seccion-coleccion #col-iframe,
+    #seccion-coleccion #col-canvas {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 263px !important;
+        min-height: 263px !important;
+        max-height: 263px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    /* -------- Botones de animación: líneas neon visibles -------- */
+
+    #seccion-coleccion #btn-anim-row {
+        order: initial !important;
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        max-height: 46px !important;
+        margin: 8px 0 0 !important;
+        padding: 5px 0 !important;
+        gap: 8px !important;
+        position: relative !important;
+        left: auto !important;
+        right: auto !important;
+        transform: none !important;
+        overflow: visible !important;
+        z-index: 20 !important;
+        background: transparent !important;
+    }
+
+    #seccion-coleccion .btn-ver-anim,
+    #seccion-coleccion .btn-toggle-anim {
+        position: relative !important;
+        z-index: 21 !important;
+        height: 36px !important;
+        min-height: 36px !important;
+        max-height: 36px !important;
+        padding: 5px 9px !important;
+        font-size: 0.58rem !important;
+        letter-spacing: 1.4px !important;
+        line-height: 1 !important;
+        min-width: 0 !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    #seccion-coleccion .btn-ver-anim {
+        flex: 1 1 auto !important;
+    }
+
+    #seccion-coleccion .btn-toggle-anim {
+        flex: 0 0 86px !important;
+        width: 86px !important;
+        max-width: 86px !important;
+    }
+
+    /* -------- Lista de runas: scroll real y separación superior -------- */
+
+    #seccion-coleccion .coleccion-columna-lista,
+    #seccion-coleccion .coleccion-grid-wrap {
+        order: 3 !important;
+        flex: 1 1 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-y !important;
+        padding: 8px 10px 132px !important;
+        margin: 12px 0 0 !important;
+    }
+
+    #seccion-coleccion .coleccion-bonus-desktop {
+        display: none !important;
+    }
+
+    /* -------- Drawer derecho: eliminar títulos duplicados -------- */
+
+    #mobile-runas-drawer > .drawer-titulo,
+    #mobile-runas-drawer .mobile-runas-separator {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* -------- Drawer derecho: modo runas / modo stats -------- */
+
+    #mobile-runas-drawer.rw-drawer-mode-runas #panel-col-stats-mobile {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    #mobile-runas-drawer.rw-drawer-mode-runas #panel-mis-runas-mobile {
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    #mobile-runas-drawer.rw-drawer-mode-stats #panel-mis-runas-mobile {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    #mobile-runas-drawer.rw-drawer-mode-stats #panel-col-stats-mobile {
+        display: block !important;
+        visibility: visible !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    /* -------- Estilo web-equivalente para grupos de Mis Runas en móvil -------- */
+
+    #panel-mis-runas-mobile .grupo-nombre {
+        width: 100% !important;
+        min-height: 42px !important;
+        height: 42px !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+
+        padding: 0 14px !important;
+        margin: 10px 0 8px !important;
+
+        font-family: 'Oswald', sans-serif !important;
+        font-size: 0.68rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 4px !important;
+        text-transform: uppercase !important;
+
+        color: rgba(255, 215, 0, 0.86) !important;
+        background: rgba(255, 215, 0, 0.035) !important;
+
+        border: 1px solid rgba(255, 215, 0, 0.34) !important;
+        border-left: 2px solid rgba(255, 215, 0, 0.65) !important;
+        border-radius: 4px !important;
+
+        box-shadow:
+            inset 0 0 18px rgba(255, 215, 0, 0.035),
+            0 0 10px rgba(255, 215, 0, 0.04) !important;
+
+        cursor: pointer !important;
+        user-select: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+
+    #panel-mis-runas-mobile .grupo-nombre:active {
+        color: #ffd700 !important;
+        border-color: rgba(255, 215, 0, 0.7) !important;
+        background: rgba(255, 215, 0, 0.07) !important;
+    }
+
+    #panel-mis-runas-mobile .grupo-runas-flecha {
+        margin-left: auto !important;
+        font-size: 0.72rem !important;
+        color: rgba(255, 215, 0, 0.8) !important;
+        line-height: 1 !important;
+        flex: 0 0 auto !important;
+    }
+
+    #panel-mis-runas-mobile .grupo-runas,
+    #panel-mis-runas-mobile .grupo-runas-lista {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* -------- Título suelto "Colección" eliminado/oculto -------- */
+
+    #seccion-coleccion .col-contador.rw-title-hidden,
+    #seccion-coleccion .col-contador[data-rw-title-hidden="1"],
+    #seccion-coleccion .col-contador-label.rw-title-hidden,
+    #seccion-coleccion .col-contador-label[data-rw-title-hidden="1"],
+    #panel-mis-runas-mobile .col-contador.rw-title-hidden,
+    #panel-mis-runas-mobile .col-contador[data-rw-title-hidden="1"],
+    #panel-mis-runas-mobile .col-contador-label.rw-title-hidden,
+    #panel-mis-runas-mobile .col-contador-label[data-rw-title-hidden="1"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+}
+
+/* Android/Chrome con menos alto útil real */
+@media (max-width: 520px) and (max-height: 900px) {
+    #seccion-coleccion .coleccion-centro {
+        flex: 0 0 281px !important;
+        flex-basis: 281px !important;
+        height: 281px !important;
+        min-height: 281px !important;
+        max-height: 281px !important;
+    }
+
+    #seccion-coleccion .coleccion-canvas-wrap {
+        height: 223px !important;
+        min-height: 223px !important;
+        max-height: 223px !important;
+    }
+
+    #seccion-coleccion #col-iframe,
+    #seccion-coleccion #col-canvas {
+        height: 223px !important;
+        min-height: 223px !important;
+        max-height: 223px !important;
+    }
+
+    #seccion-coleccion #btn-anim-row {
+        height: 44px !important;
+        min-height: 44px !important;
+        max-height: 44px !important;
+        padding: 5px 0 !important;
+    }
+
+    #seccion-coleccion .btn-ver-anim,
+    #seccion-coleccion .btn-toggle-anim {
+        height: 34px !important;
+        min-height: 34px !important;
+        max-height: 34px !important;
+        font-size: 0.54rem !important;
+        padding: 4px 7px !important;
+    }
+
+    #seccion-coleccion .coleccion-columna-lista,
+    #seccion-coleccion .coleccion-grid-wrap {
+        padding-bottom: 140px !important;
+    }
+}
